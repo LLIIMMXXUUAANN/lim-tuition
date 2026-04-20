@@ -1,29 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('limxuan520@gmail.com')
+const ALLOWED_EMAIL = 'limxuan520@gmail.com'
+
+function LoginForm() {
+  const searchParams = useSearchParams()
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(
+    searchParams.get('error') === 'invalid_link' ? 'Login link expired or invalid. Request a new one.' : ''
+  )
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     setLoading(true)
     const supabase = createClient()
-    await supabase.auth.signInWithOtp({
-      email,
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email: ALLOWED_EMAIL,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
+    if (otpError) {
+      setError('Failed to send login link. Try again.')
+      setLoading(false)
+      return
+    }
     setSent(true)
     setLoading(false)
   }
 
+  if (sent) {
+    return (
+      <p className="text-sm text-slate-600">
+        Check your email for a login link sent to <strong>{ALLOWED_EMAIL}</strong>.
+      </p>
+    )
+  }
+
+  return (
+    <form onSubmit={handleLogin} className="space-y-4">
+      <p className="text-sm text-slate-500">Signing in as <strong>{ALLOWED_EMAIL}</strong></p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? 'Sending...' : 'Send login link'}
+      </Button>
+    </form>
+  )
+}
+
+export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Card className="w-full max-w-sm">
@@ -32,27 +62,9 @@ export default function LoginPage() {
           <CardDescription>Sign in to manage your students</CardDescription>
         </CardHeader>
         <CardContent>
-          {sent ? (
-            <p className="text-sm text-slate-600">
-              Check your email for a login link sent to <strong>{email}</strong>.
-            </p>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Sending...' : 'Send login link'}
-              </Button>
-            </form>
-          )}
+          <Suspense fallback={<p className="text-sm text-slate-500">Loading...</p>}>
+            <LoginForm />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

@@ -2,11 +2,12 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import StudentCard from '@/components/StudentCard'
+import LogoutButton from '@/components/LogoutButton'
 import type { Student } from '@/lib/types'
 
 export default async function StudentsPage() {
   const supabase = await createClient()
-  const { data: students } = await supabase
+  const { data: students, error } = await supabase
     .from('students')
     .select('*')
     .eq('is_active', true)
@@ -16,12 +17,20 @@ export default async function StudentsPage() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">My Students</h1>
-        <Link href="/students/new">
-          <Button>+ Add Student</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/students/new">
+            <Button>+ Add Student</Button>
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
 
-      {!students || students.length === 0 ? (
+      {error ? (
+        <div className="text-center py-16 text-red-500">
+          <p className="text-lg">Failed to load students.</p>
+          <p className="text-sm mt-1">{error.message}</p>
+        </div>
+      ) : !students || students.length === 0 ? (
         <div className="text-center py-16 text-slate-500">
           <p className="text-lg">No students yet.</p>
           <p className="text-sm mt-1">Click &quot;Add Student&quot; to get started.</p>

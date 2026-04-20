@@ -55,6 +55,7 @@ export default function StudentForm({ student }: StudentFormProps) {
       : emptyForm
   )
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   function set<K extends keyof StudentInsert>(key: K, value: StudentInsert[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -62,6 +63,7 @@ export default function StudentForm({ student }: StudentFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     setSaving(true)
     const supabase = createClient()
     const payload: StudentUpdate = {
@@ -77,12 +79,27 @@ export default function StudentForm({ student }: StudentFormProps) {
       notes: form.notes || null,
     }
 
-    if (student) {
-      await supabase.from('students').update(payload).eq('id', student.id)
-    } else {
-      await supabase.from('students').insert(payload as StudentInsert)
+    try {
+      if (student) {
+        const { error: err } = await supabase.from('students').update(payload).eq('id', student.id)
+        if (err) throw err
+      } else {
+        const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
+        if (err) throw err
+      }
+      router.push('/students')
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
+      setSaving(false)
     }
+  }
 
+  async function handleDeactivate() {
+    if (!student) return
+    if (!confirm(`Remove ${student.name} from active students?`)) return
+    const supabase = createClient()
+    await supabase.from('students').update({ is_active: false }).eq('id', student.id)
     router.push('/students')
     router.refresh()
   }
@@ -172,13 +189,20 @@ export default function StudentForm({ student }: StudentFormProps) {
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="flex gap-3 flex-wrap">
         <Button type="submit" disabled={saving}>
           {saving ? 'Saving...' : student ? 'Save Changes' : 'Add Student'}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel
         </Button>
+        {student && (
+          <Button type="button" variant="destructive" className="ml-auto" onClick={handleDeactivate}>
+            Remove Student
+          </Button>
+        )}
       </div>
     </form>
   )
