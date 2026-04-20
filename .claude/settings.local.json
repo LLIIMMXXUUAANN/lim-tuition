@@ -18,7 +18,11 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(mv tuition-tracker/* .)",
-      "Bash(mv tuition-tracker/.[!.]* .)"
+      "Bash(mv tuition-tracker/.[!.]* .)",
+      "Bash(git *)",
+      "mcp__supabase__execute_sql",
+      "Bash(python \"C:\\\\Users\\\\HP\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"admin dashboard private tool tutor management navigation tabs\" --design-system -p \"Tuition Tracker\" -f markdown)",
+      "Bash(py \"C:\\\\Users\\\\HP\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"admin dashboard private tool tutor management navigation tabs\" --design-system -p \"Tuition Tracker\" -f markdown)"
     ]
   }
 }

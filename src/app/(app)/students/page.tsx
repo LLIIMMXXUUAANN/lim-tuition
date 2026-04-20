@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import StudentCard from '@/components/StudentCard'
-import LogoutButton from '@/components/LogoutButton'
 import type { Student, StudentStatus, WeekDay } from '@/lib/types'
 
 const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -51,12 +50,9 @@ export default async function StudentsPage({ searchParams }: Props) {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">My Students</h1>
-        <div className="flex gap-2">
-          <Link href="/students/new">
-            <Button>+ Add Student</Button>
-          </Link>
-          <LogoutButton />
-        </div>
+        <Link href="/students/new">
+          <Button>+ Add Student</Button>
+        </Link>
       </div>
 
       {/* Filter tabs */}
