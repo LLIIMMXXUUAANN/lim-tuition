@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { Student, StudentInsert, StudentUpdate } from '@/lib/types'
+import ClassScheduleEditor from '@/components/ClassScheduleEditor'
+import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
   student?: Student
@@ -18,9 +19,13 @@ interface StudentFormProps {
 const emptyForm: StudentInsert = {
   name: '',
   contact_person: '',
+  contact_phone: '',
+  student_phone: '',
   mode: 'My Python Syllabus',
   weekly_class_time: '',
+  class_schedule: [],
   google_meet_link: '',
+  google_drive_link: '',
   fee_per_hour: 60,
   payment_method: 'Monthly',
   latest_payment: '',
@@ -29,6 +34,7 @@ const emptyForm: StudentInsert = {
   lecture_progress: '',
   homework_progress: '',
   notes: '',
+  status: 'Active',
   is_active: true,
 }
 
@@ -39,9 +45,13 @@ export default function StudentForm({ student }: StudentFormProps) {
       ? {
           name: student.name,
           contact_person: student.contact_person ?? '',
+          contact_phone: student.contact_phone ?? '',
+          student_phone: student.student_phone ?? '',
           mode: student.mode,
           weekly_class_time: student.weekly_class_time ?? '',
+          class_schedule: student.class_schedule ?? [],
           google_meet_link: student.google_meet_link ?? '',
+          google_drive_link: student.google_drive_link ?? '',
           fee_per_hour: student.fee_per_hour,
           payment_method: student.payment_method,
           latest_payment: student.latest_payment ?? '',
@@ -50,6 +60,7 @@ export default function StudentForm({ student }: StudentFormProps) {
           lecture_progress: student.lecture_progress ?? '',
           homework_progress: student.homework_progress ?? '',
           notes: student.notes ?? '',
+          status: student.status ?? 'Active',
           is_active: student.is_active,
         }
       : emptyForm
@@ -69,8 +80,11 @@ export default function StudentForm({ student }: StudentFormProps) {
     const payload: StudentUpdate = {
       ...form,
       contact_person: form.contact_person || null,
+      contact_phone: form.contact_phone || null,
+      student_phone: form.student_phone || null,
       weekly_class_time: form.weekly_class_time || null,
       google_meet_link: form.google_meet_link || null,
+      google_drive_link: form.google_drive_link || null,
       latest_payment: form.latest_payment || null,
       previous_class: form.previous_class || null,
       today_homework: form.today_homework || null,
@@ -97,9 +111,9 @@ export default function StudentForm({ student }: StudentFormProps) {
 
   async function handleDeactivate() {
     if (!student) return
-    if (!confirm(`Remove ${student.name} from active students?`)) return
+    if (!confirm(`Mark ${student.name} as Completed and hide from dashboard?`)) return
     const supabase = createClient()
-    await supabase.from('students').update({ is_active: false }).eq('id', student.id)
+    await supabase.from('students').update({ status: 'Completed', is_active: false }).eq('id', student.id)
     router.push('/students')
     router.refresh()
   }
@@ -109,13 +123,38 @@ export default function StudentForm({ student }: StudentFormProps) {
       <Card>
         <CardHeader><CardTitle>Student Info</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Student Name *</Label>
-            <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+          <div className="flex gap-4">
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="name">Student Name *</Label>
+              <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+            </div>
+            <div className="space-y-2 w-36">
+              <Label>Status</Label>
+              <Select value={form.status ?? 'Active'} onValueChange={(v) => set('status', v as StudentStatus)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">🟢 Active</SelectItem>
+                  <SelectItem value="On Hold">🟡 On Hold</SelectItem>
+                  <SelectItem value="Completed">⚫ Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="contact_person">Contact Person</Label>
-            <Input id="contact_person" value={form.contact_person ?? ''} onChange={(e) => set('contact_person', e.target.value)} placeholder="e.g. Mrs. Pooi Kit" />
+          <div className="flex gap-4">
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="student_phone">Student Phone</Label>
+              <Input id="student_phone" type="tel" value={form.student_phone ?? ''} onChange={(e) => set('student_phone', e.target.value)} placeholder="e.g. 012-3456789" />
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="contact_person">Contact Person</Label>
+              <Input id="contact_person" value={form.contact_person ?? ''} onChange={(e) => set('contact_person', e.target.value)} placeholder="e.g. Mrs. Pooi Kit" />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="contact_phone">Contact Phone</Label>
+              <Input id="contact_phone" type="tel" value={form.contact_phone ?? ''} onChange={(e) => set('contact_phone', e.target.value)} placeholder="e.g. 012-3456789" />
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Mode *</Label>
@@ -129,12 +168,19 @@ export default function StudentForm({ student }: StudentFormProps) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="weekly_class_time">Weekly Class Time</Label>
-            <Input id="weekly_class_time" value={form.weekly_class_time ?? ''} onChange={(e) => set('weekly_class_time', e.target.value)} placeholder="e.g. Monday 2:30pm-4:30pm" />
+            <Label>Class Schedule</Label>
+            <ClassScheduleEditor
+              value={form.class_schedule ?? []}
+              onChange={(slots) => set('class_schedule', slots)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="google_meet_link">Google Meet Link</Label>
             <Input id="google_meet_link" value={form.google_meet_link ?? ''} onChange={(e) => set('google_meet_link', e.target.value)} placeholder="https://meet.google.com/..." />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_drive_link">Google Drive Link</Label>
+            <Input id="google_drive_link" value={form.google_drive_link ?? ''} onChange={(e) => set('google_drive_link', e.target.value)} placeholder="https://drive.google.com/..." />
           </div>
         </CardContent>
       </Card>
@@ -152,7 +198,7 @@ export default function StudentForm({ student }: StudentFormProps) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Monthly">Monthly</SelectItem>
-                <SelectItem value="Per Class">Per Class</SelectItem>
+                <SelectItem value="Weekly">Weekly</SelectItem>
               </SelectContent>
             </Select>
           </div>
