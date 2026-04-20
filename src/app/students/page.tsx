@@ -20,7 +20,10 @@ interface Props {
 
 export default async function StudentsPage({ searchParams }: Props) {
   const { status } = await searchParams
-  const activeTab: StudentStatus | 'All' = (status as StudentStatus | 'All') || 'Active'
+  const VALID_STATUSES: (StudentStatus | 'All')[] = ['All', 'Active', 'On Hold', 'Completed']
+  const activeTab: StudentStatus | 'All' = VALID_STATUSES.includes(status as StudentStatus | 'All')
+    ? (status as StudentStatus | 'All')
+    : 'Active'
 
   const supabase = await createClient()
   let query = supabase.from('students').select('*').order('name')
@@ -87,20 +90,18 @@ export default async function StudentsPage({ searchParams }: Props) {
         </div>
       ) : (
         <div className="space-y-8">
-          {byDay.map(({ day, entries }) => (
+          {byDay.filter(({ entries }) => entries.length > 0).map(({ day, entries }) => (
             <section key={day}>
               <h2 className="text-base font-semibold text-slate-700 mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
                 {day}
                 <span className="text-slate-400 font-normal text-sm">({entries.length})</span>
               </h2>
-              {entries.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {entries.map(({ student, slot }, i) => (
-                    <StudentCard key={`${student.id}-${i}`} student={student} slot={slot} />
-                  ))}
-                </div>
-              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {entries.map(({ student, slot }, i) => (
+                  <StudentCard key={`${student.id}-${i}`} student={student} slot={slot} />
+                ))}
+              </div>
             </section>
           ))}
 

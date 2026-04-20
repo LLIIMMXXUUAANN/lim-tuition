@@ -113,7 +113,8 @@ export default function StudentForm({ student }: StudentFormProps) {
     if (!student) return
     if (!confirm(`Mark ${student.name} as Completed and hide from dashboard?`)) return
     const supabase = createClient()
-    await supabase.from('students').update({ status: 'Completed', is_active: false }).eq('id', student.id)
+    const { error: err } = await supabase.from('students').update({ status: 'Completed', is_active: false }).eq('id', student.id)
+    if (err) { setError(`Failed to remove student: ${err.message}`); return }
     router.push('/students')
     router.refresh()
   }
