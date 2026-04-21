@@ -42,12 +42,18 @@ export default function StudentCard({ student, slot }: StudentCardProps) {
         </CardHeader>
         <CardContent className="text-sm">
           {slot ? (
-            <p className="text-slate-600">🕐 {formatTime(slot.start)} – {formatTime(slot.end)}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-slate-600">🕐 {formatTime(slot.start)} – {formatTime(slot.end)}</p>
+              <p className="text-slate-400 text-xs">💳 {student.payment_method}</p>
+            </div>
           ) : student.class_schedule?.length > 0 ? (
             <div className="text-slate-600 space-y-0.5">
               {student.class_schedule.map((s, i) => (
                 <p key={i}>📅 {s.day} {formatTime(s.start)} – {formatTime(s.end)}</p>
               ))}
+              <div className="flex justify-end">
+                <p className="text-slate-400 text-xs">💳 {student.payment_method}</p>
+              </div>
             </div>
           ) : (
             <p className="text-slate-400 italic">No schedule set</p>
