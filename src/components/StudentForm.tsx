@@ -92,7 +92,7 @@ export default function StudentForm({ student }: StudentFormProps) {
         const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
         if (err) throw err
       }
-      router.push('/students')
+      router.push('/admin/students')
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
@@ -106,7 +106,7 @@ export default function StudentForm({ student }: StudentFormProps) {
     const supabase = createClient()
     const { error: err } = await supabase.from('students').update({ status: 'Completed', is_active: false }).eq('id', student.id)
     if (err) { setError(`Failed to remove student: ${err.message}`); return }
-    router.push('/students')
+    router.push('/admin/students')
     router.refresh()
   }
 

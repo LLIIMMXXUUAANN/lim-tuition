@@ -31,7 +31,6 @@ export default async function StudentsPage({ searchParams }: Props) {
   const { data: students, error } = await query
   const list = (students ?? []) as Student[]
 
-  // Group: for each day, find students with a slot on that day (sorted by start time)
   const byDay = DAYS.map((day) => {
     const entries = list
       .flatMap((s) =>
@@ -43,24 +42,22 @@ export default async function StudentsPage({ searchParams }: Props) {
     return { day, entries }
   })
 
-  // Students with no schedule at all
   const unscheduled = list.filter((s) => !s.class_schedule || s.class_schedule.length === 0)
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">My Students</h1>
-        <Link href="/students/new">
+        <Link href="/admin/students/new">
           <Button>+ Add Student</Button>
         </Link>
       </div>
 
-      {/* Filter tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {TABS.map((tab) => (
           <Link
             key={tab.value}
-            href={tab.value === 'Active' ? '/students' : `/students?status=${encodeURIComponent(tab.value)}`}
+            href={tab.value === 'Active' ? '/admin/students' : `/admin/students?status=${encodeURIComponent(tab.value)}`}
           >
             <button className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               activeTab === tab.value

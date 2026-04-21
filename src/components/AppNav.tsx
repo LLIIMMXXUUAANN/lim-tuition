@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation'
 import LogoutButton from '@/components/LogoutButton'
 
 const NAV_LINKS = [
-  { label: 'Students', href: '/students' },
-  { label: 'Templates', href: '/templates' },
+  { label: 'Students', href: '/admin/students' },
+  { label: 'Templates', href: '/admin/templates' },
 ]
 
 export default function AppNav() {

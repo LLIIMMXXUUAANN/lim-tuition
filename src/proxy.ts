@@ -31,17 +31,17 @@ export async function proxy(request: NextRequest) {
 
   const isPublic =
     pathname === '/' ||
-    pathname === '/login' ||
-    pathname === '/portal/login' ||
+    pathname === '/admin/login' ||
+    pathname === '/student/login' ||
     pathname.startsWith('/auth')
 
   // Not logged in
   if (!user) {
     if (isPublic) return supabaseResponse
-    if (pathname.startsWith('/portal')) {
-      return NextResponse.redirect(new URL('/portal/login', request.url))
+    if (pathname.startsWith('/student')) {
+      return NextResponse.redirect(new URL('/student/login', request.url))
     }
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/admin/login', request.url))
   }
 
   const { data: isAdmin, error: rpcError } = await supabase.rpc('is_tutor')
@@ -49,18 +49,18 @@ export async function proxy(request: NextRequest) {
 
   // Admin: redirect away from login, allow everything else
   if (isAdmin) {
-    if (pathname === '/login') {
-      return NextResponse.redirect(new URL('/students', request.url))
+    if (pathname === '/admin/login') {
+      return NextResponse.redirect(new URL('/admin/students', request.url))
     }
     return supabaseResponse
   }
 
-  // Student (non-admin): block admin routes and API, redirect away from both login pages
-  if (pathname.startsWith('/students') || pathname.startsWith('/templates') || pathname.startsWith('/api')) {
-    return NextResponse.redirect(new URL('/portal', request.url))
+  // Student (non-admin): block admin routes and API, redirect away from student login
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api')) {
+    return NextResponse.redirect(new URL('/student', request.url))
   }
-  if (pathname === '/portal/login') {
-    return NextResponse.redirect(new URL('/portal', request.url))
+  if (pathname === '/student/login') {
+    return NextResponse.redirect(new URL('/student', request.url))
   }
   return supabaseResponse
 }

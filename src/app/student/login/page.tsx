@@ -29,7 +29,7 @@ export default function StudentLoginPage() {
     const origin = window.location.origin
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: normalised,
-      options: { emailRedirectTo: `${origin}/auth/callback?next=/portal` },
+      options: { emailRedirectTo: `${origin}/auth/callback?next=/student` },
     })
     if (otpError) {
       setError('Failed to send login link. Please try again.')

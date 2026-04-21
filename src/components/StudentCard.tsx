@@ -22,7 +22,7 @@ const statusBadge: Record<string, string> = {
 
 export default function StudentCard({ student, slot }: StudentCardProps) {
   return (
-    <Link href={`/students/${student.id}`}>
+    <Link href={`/admin/students/${student.id}`}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">

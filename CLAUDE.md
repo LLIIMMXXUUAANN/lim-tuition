@@ -82,3 +82,4 @@ POST route handler. No external AI — pure JS date arithmetic:
 - `StudentDetail` and template cards both use the same view/edit toggle pattern to prevent accidental edits.
 - The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
 - The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.
+- Times are stored as `"HH:MM"` strings in Supabase but displayed in 12-hour format. Use `formatTime` from `src/lib/utils.ts` for all display. Do **not** apply it to `ClassScheduleEditor` inputs or `PaymentGenerator` (those need raw `HH:MM`).

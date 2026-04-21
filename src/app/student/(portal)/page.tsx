@@ -7,7 +7,7 @@ export default async function PortalPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user?.email) redirect('/portal/login')
+  if (!user?.email) redirect('/student/login')
 
   const { data: student } = await supabase
     .from('students')

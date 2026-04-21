@@ -11,7 +11,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             Lim's Programming Tuition
           </Link>
           <div className="flex-1" />
-          <LogoutButton redirectTo="/portal/login" />
+          <LogoutButton redirectTo="/student/login" />
         </div>
       </nav>
       <main>{children}</main>

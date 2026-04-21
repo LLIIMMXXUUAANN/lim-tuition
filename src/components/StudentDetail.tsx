@@ -45,7 +45,7 @@ export default function StudentDetail({ student }: { student: Student }) {
     <div className="max-w-2xl mx-auto px-6 pt-6 pb-12 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/students">
+        <Link href="/admin/students">
           <Button variant="ghost" size="sm">← Back</Button>
         </Link>
         <h1 className="text-2xl font-bold flex-1">{student.name}</h1>
