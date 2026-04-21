@@ -23,7 +23,7 @@ Run the dev server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the public landing page. Click **Admin** in the navbar (or go to `/login`), enter your email, and a magic link will be sent to your inbox.
+Open [http://localhost:3000](http://localhost:3000) to see the public landing page. Click **Admin** in the navbar (or go to `/admin/login`), enter your email, and a magic link will be sent to your inbox.
 
 ## Features
 
@@ -31,11 +31,15 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Landing page** — publicly accessible at `/`; sections: Hero, About, What I Offer, How Lessons Work, Student Backgrounds & Languages, Pricing, Scheduling, Payment Methods, Communication Platforms, Other Details, Testimonials
 
 ### Admin (authenticated only)
-- **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes)
+- **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes, portal access emails)
 - **Schedule view** — dashboard groups students by day of week based on their class slots
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests)
 - **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
+
+### Student portal (authenticated students/parents)
+- **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links
+- Access is controlled per student via `access_emails` array — admin adds emails in the student edit form
 
 ## Deployment
 
