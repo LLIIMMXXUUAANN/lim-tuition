@@ -9,15 +9,6 @@ export interface ClassSlot {
   end: string   // "16:30"
 }
 
-export type SlotType = 'preferred' | 'normal'
-
-export interface AvailabilitySlot {
-  id: string
-  day: WeekDay
-  time_slot: string  // "08:00", "08:30", ... "21:30"
-  slot_type: SlotType
-}
-
 export interface Student {
   id: string
   access_emails: string[] | null
