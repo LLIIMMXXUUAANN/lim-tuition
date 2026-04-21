@@ -56,7 +56,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Student (non-admin): block admin routes and API, redirect away from student login
-  if (pathname.startsWith('/admin') || pathname.startsWith('/api')) {
+  if ((pathname.startsWith('/admin') && pathname !== '/admin/login') || pathname.startsWith('/api')) {
     return NextResponse.redirect(new URL('/student', request.url))
   }
   if (pathname === '/student/login') {
