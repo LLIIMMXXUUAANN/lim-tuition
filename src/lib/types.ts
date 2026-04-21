@@ -23,10 +23,7 @@ export interface Student {
   fee_per_hour: number
   payment_method: PaymentMethod
   latest_payment: string | null
-  previous_class: string | null
   today_homework: string | null
-  lecture_progress: string | null
-  homework_progress: string | null
   notes: string | null
   status: StudentStatus
   is_active: boolean

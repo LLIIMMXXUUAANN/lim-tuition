@@ -29,10 +29,7 @@ const emptyForm: StudentInsert = {
   fee_per_hour: 60,
   payment_method: 'Monthly',
   latest_payment: '',
-  previous_class: '',
   today_homework: '',
-  lecture_progress: '',
-  homework_progress: '',
   notes: '',
   status: 'Active',
   is_active: true,
@@ -55,10 +52,7 @@ export default function StudentForm({ student }: StudentFormProps) {
           fee_per_hour: student.fee_per_hour,
           payment_method: student.payment_method,
           latest_payment: student.latest_payment ?? '',
-          previous_class: student.previous_class ?? '',
           today_homework: student.today_homework ?? '',
-          lecture_progress: student.lecture_progress ?? '',
-          homework_progress: student.homework_progress ?? '',
           notes: student.notes ?? '',
           status: student.status ?? 'Active',
           is_active: student.is_active,
@@ -86,10 +80,7 @@ export default function StudentForm({ student }: StudentFormProps) {
       google_meet_link: form.google_meet_link || null,
       google_drive_link: form.google_drive_link || null,
       latest_payment: form.latest_payment || null,
-      previous_class: form.previous_class || null,
       today_homework: form.today_homework || null,
-      lecture_progress: form.lecture_progress || null,
-      homework_progress: form.homework_progress || null,
       notes: form.notes || null,
     }
 
@@ -214,20 +205,8 @@ export default function StudentForm({ student }: StudentFormProps) {
         <CardHeader><CardTitle>Progress</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="previous_class">Previous Class</Label>
-            <Input id="previous_class" value={form.previous_class ?? ''} onChange={(e) => set('previous_class', e.target.value)} placeholder="e.g. Topic 6 Slide 1 to Slide 5" />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="today_homework">Today&apos;s Homework</Label>
             <Input id="today_homework" value={form.today_homework ?? ''} onChange={(e) => set('today_homework', e.target.value)} placeholder="e.g. Topic 6 Q1-3" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="lecture_progress">Lecture Progress</Label>
-            <Input id="lecture_progress" value={form.lecture_progress ?? ''} onChange={(e) => set('lecture_progress', e.target.value)} placeholder="e.g. Until T6 Slide 5" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="homework_progress">Homework Progress</Label>
-            <Input id="homework_progress" value={form.homework_progress ?? ''} onChange={(e) => set('homework_progress', e.target.value)} placeholder="e.g. Until Topic 5 Q20" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>

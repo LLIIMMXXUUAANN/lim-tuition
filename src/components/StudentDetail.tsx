@@ -111,10 +111,7 @@ export default function StudentDetail({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <Row label="Previous Class" value={student.previous_class} />
           <Row label="Today's Homework" value={student.today_homework} />
-          <Row label="Lecture Progress" value={student.lecture_progress} />
-          <Row label="Homework Progress" value={student.homework_progress} />
           {student.notes && (
             <div className="pt-1">
               <p className="text-slate-500 mb-1">Notes</p>
