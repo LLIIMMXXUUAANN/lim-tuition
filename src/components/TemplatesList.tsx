@@ -11,8 +11,8 @@ const TEMPLATE_META: { id: string; title: string; description: string }[] = [
   { id: 'payment2', title: 'Payment Request 2', description: 'Monthly fee reminder with carried-over sessions.' },
   { id: 'review_request1', title: 'Review Request 1', description: 'For students tutored directly.' },
   { id: 'review_request2', title: 'Review Request 2', description: 'For students tutored through a parent.' },
-  { id: 'review', title: 'Progress Review', description: 'End-of-month update to share with parents.' },
-  { id: 'recommendation', title: 'Recommendation Letter', description: 'Reference letter for university or scholarship applications.' },
+  { id: 'recommendation_request1', title: 'Recommendation Request 1', description: 'For students tutored directly.' },
+  { id: 'recommendation_request2', title: 'Recommendation Request 2', description: 'For students tutored through a parent.' },
 ]
 
 function TemplateCard({
@@ -86,7 +86,7 @@ function TemplateCard({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="text-sm leading-relaxed font-sans resize-y"
-            rows={id.startsWith('payment') || id.startsWith('review_request') ? 3 : 10}
+            rows={id.startsWith('payment') ? 3 : 5}
             autoFocus
           />
         ) : (
