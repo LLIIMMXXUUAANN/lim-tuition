@@ -23,17 +23,25 @@ function TemplateCard({
   description: string
   initialContent: string
 }) {
+  const [saved, setSaved] = useState(initialContent)
   const [content, setContent] = useState(initialContent)
+  const [editing, setEditing] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [copied, setCopied] = useState(false)
 
-  async function handleBlur() {
-    if (content === initialContent) return
+  async function handleSave() {
     setSaveState('saving')
     const supabase = createClient()
     await supabase.from('templates').upsert({ id, content })
+    setSaved(content)
     setSaveState('saved')
+    setEditing(false)
     setTimeout(() => setSaveState('idle'), 2000)
+  }
+
+  function handleCancel() {
+    setContent(saved)
+    setEditing(false)
   }
 
   async function handleCopy() {
@@ -53,20 +61,34 @@ function TemplateCard({
           <div className="flex items-center gap-2 shrink-0">
             {saveState === 'saving' && <span className="text-xs text-slate-400">Saving…</span>}
             {saveState === 'saved' && <span className="text-xs text-slate-400">Saved</span>}
-            <Button size="sm" variant={copied ? 'outline' : 'default'} onClick={handleCopy}>
-              {copied ? 'Copied!' : 'Copy'}
-            </Button>
+            {editing ? (
+              <>
+                <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+                <Button size="sm" onClick={handleSave} disabled={saveState === 'saving'}>Save</Button>
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
+                <Button size="sm" variant={copied ? 'outline' : 'default'} onClick={handleCopy}>
+                  {copied ? 'Copied!' : 'Copy'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onBlur={handleBlur}
-          className="text-sm leading-relaxed font-sans resize-y"
-          rows={id === 'payment' ? 2 : 10}
-        />
+        {editing ? (
+          <Textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="text-sm leading-relaxed font-sans resize-y"
+            rows={id === 'payment' ? 2 : 10}
+            autoFocus
+          />
+        ) : (
+          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{content}</p>
+        )}
       </CardContent>
     </Card>
   )
