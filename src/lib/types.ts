@@ -16,7 +16,6 @@ export interface Student {
   contact_phone: string | null
   student_phone: string | null
   mode: StudentMode
-  weekly_class_time: string | null
   class_schedule: ClassSlot[]
   google_meet_link: string | null
   google_drive_link: string | null
