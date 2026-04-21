@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import TemplatesList from '@/components/TemplatesList'
-import PaymentGenerator from '@/components/PaymentGenerator'
-import TimetableSection from '@/components/TimetableSection'
+import TemplatesTabs from '@/components/TemplatesTabs'
 import type { Student, AvailabilitySlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -24,10 +22,10 @@ export default async function TemplatesPage() {
     )
   }
 
-  const byId = Object.fromEntries(
+  const templates = Object.fromEntries(
     (templatesResult.data ?? []).map((t) => [t.id, t.content])
   )
-  const activeStudents = studentsResult.error
+  const students = studentsResult.error
     ? []
     : (studentsResult.data ?? []) as Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
 
@@ -40,11 +38,7 @@ export default async function TemplatesPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Templates</h1>
       </div>
-      <div className="space-y-6">
-        <PaymentGenerator students={activeStudents} />
-        <TemplatesList initialData={byId} />
-        <TimetableSection initialAvailability={availability} students={activeStudents} />
-      </div>
+      <TemplatesTabs templates={templates} students={students} availability={availability} />
     </div>
   )
 }
