@@ -5,11 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 
 const ALLOWED_EMAIL = 'limxuan520@gmail.com'
 
 function LoginForm() {
   const searchParams = useSearchParams()
+  const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(
@@ -19,6 +21,12 @@ function LoginForm() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+
+    if (email.trim().toLowerCase() !== ALLOWED_EMAIL) {
+      setError('Unauthorized user.')
+      return
+    }
+
     setLoading(true)
     const supabase = createClient()
     const { error: otpError } = await supabase.auth.signInWithOtp({
@@ -44,7 +52,13 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
-      <p className="text-sm text-slate-500">Signing in as <strong>{ALLOWED_EMAIL}</strong></p>
+      <Input
+        type="email"
+        placeholder="Enter your email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? 'Sending...' : 'Send login link'}
@@ -59,7 +73,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Tuition Tracker</CardTitle>
+            <CardTitle>Admin Portal</CardTitle>
             <CardDescription>Sign in to manage your students</CardDescription>
           </CardHeader>
           <CardContent>
