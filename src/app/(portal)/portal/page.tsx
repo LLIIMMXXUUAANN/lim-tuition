@@ -13,15 +13,14 @@ export default async function PortalPage() {
     .from('students')
     .select('*')
     .contains('access_emails', [user.email])
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   if (!student) {
     return (
       <div className="max-w-2xl mx-auto px-6 pt-16 text-center space-y-3">
         <p className="text-lg font-semibold text-slate-700">No student record found</p>
-        <p className="text-slate-500 text-sm">
-          Your account ({user.email}) is not linked to any student. Please contact your tutor.
-        </p>
+        <p className="text-slate-500 text-sm">Your email is not linked to any student. Please contact your tutor.</p>
       </div>
     )
   }

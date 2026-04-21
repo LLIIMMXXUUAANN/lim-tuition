@@ -44,7 +44,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  const { data: isAdmin } = await supabase.rpc('is_tutor')
+  const { data: isAdmin, error: rpcError } = await supabase.rpc('is_tutor')
+  if (rpcError) return supabaseResponse
 
   // Admin: redirect away from login, allow everything else
   if (isAdmin) {
@@ -54,8 +55,8 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Student (non-admin): block admin routes, redirect away from both login pages
-  if (pathname.startsWith('/students') || pathname.startsWith('/templates')) {
+  // Student (non-admin): block admin routes and API, redirect away from both login pages
+  if (pathname.startsWith('/students') || pathname.startsWith('/templates') || pathname.startsWith('/api')) {
     return NextResponse.redirect(new URL('/portal', request.url))
   }
   if (pathname === '/login' || pathname === '/portal/login') {

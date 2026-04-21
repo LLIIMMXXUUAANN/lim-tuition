@@ -9,29 +9,35 @@ import { Input } from '@/components/ui/input'
 export default function StudentLoginPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setLoading(true)
+    const normalised = email.trim().toLowerCase()
     const supabase = createClient()
 
-    const { data: hasAccess, error: rpcError } = await supabase.rpc('check_portal_access', { p_email: email })
+    const { data: hasAccess, error: rpcError } = await supabase.rpc('check_portal_access', { p_email: normalised })
     if (rpcError || !hasAccess) {
       setError('No access. Your email is not registered. Please contact your tutor.')
+      setLoading(false)
       return
     }
 
     const origin = window.location.origin
     const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
+      email: normalised,
       options: { emailRedirectTo: `${origin}/auth/callback?next=/portal` },
     })
     if (otpError) {
       setError('Failed to send login link. Please try again.')
+      setLoading(false)
       return
     }
     setSent(true)
+    setLoading(false)
   }
 
   if (sent) {
@@ -64,7 +70,7 @@ export default function StudentLoginPage() {
             required
           />
           {error && <p className="text-red-600 text-sm">{error}</p>}
-          <Button type="submit" className="w-full">Send Login Link</Button>
+          <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Checking...' : 'Send Login Link'}</Button>
         </form>
         <Link href="/" className="text-sm text-slate-400 hover:underline block text-center">
           ← Back to home
