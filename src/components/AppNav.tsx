@@ -16,7 +16,7 @@ export default function AppNav() {
     <nav className="border-b bg-white sticky top-0 z-10">
       <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
         <Link href="/students" className="font-semibold text-slate-800 mr-2 shrink-0">
-          Tuition Tracker
+          Lim&apos;s Tuition
         </Link>
         <div className="flex gap-1 flex-1">
           {NAV_LINKS.map(({ label, href }) => {
