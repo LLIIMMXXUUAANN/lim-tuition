@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
 const TEMPLATE_META: { id: string; title: string; description: string }[] = [
-  { id: 'payment', title: 'Payment Request', description: 'Monthly fee reminder to send to parents.' },
+  { id: 'payment', title: 'Payment Request 1', description: 'Monthly fee reminder (standard).' },
+  { id: 'payment2', title: 'Payment Request 2', description: 'Monthly fee reminder with carried-over sessions.' },
   { id: 'review', title: 'Progress Review', description: 'End-of-month update to share with parents.' },
   { id: 'recommendation', title: 'Recommendation Letter', description: 'Reference letter for university or scholarship applications.' },
 ]
@@ -83,7 +84,7 @@ function TemplateCard({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="text-sm leading-relaxed font-sans resize-y"
-            rows={id === 'payment' ? 2 : 10}
+            rows={id === 'payment' || id === 'payment2' ? 3 : 10}
             autoFocus
           />
         ) : (
