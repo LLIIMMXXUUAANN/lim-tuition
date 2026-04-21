@@ -1,0 +1,63 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatTime } from '@/lib/utils'
+import type { Student } from '@/lib/types'
+
+const statusBadge: Record<string, string> = {
+  'Active': 'bg-green-100 text-green-700',
+  'On Hold': 'bg-yellow-100 text-yellow-700',
+  'Completed': 'bg-slate-100 text-slate-500',
+}
+
+export default function StudentPortalView({ student }: { student: Student }) {
+  const schedule = student.class_schedule ?? []
+
+  return (
+    <div className="max-w-2xl mx-auto px-6 pt-6 pb-12 space-y-4">
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold flex-1">{student.name}</h1>
+        <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusBadge[student.status] ?? 'bg-slate-100 text-slate-500'}`}>
+          {student.status}
+        </span>
+      </div>
+
+      {(student.google_meet_link || student.google_drive_link) && (
+        <div className="flex gap-4">
+          {student.google_meet_link && (
+            <a href={student.google_meet_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+              Join Google Meet →
+            </a>
+          )}
+          {student.google_drive_link && (
+            <a href={student.google_drive_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+              Open Drive →
+            </a>
+          )}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Class Schedule</CardTitle></CardHeader>
+        <CardContent className="text-sm">
+          {schedule.length === 0 ? (
+            <p className="text-slate-400 italic">No schedule set</p>
+          ) : (
+            <div className="space-y-1">
+              {schedule.map((slot, i) => (
+                <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {student.today_homework && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Today&apos;s Homework</CardTitle></CardHeader>
+          <CardContent className="text-sm">
+            <p className="text-slate-700 whitespace-pre-wrap">{student.today_homework}</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}

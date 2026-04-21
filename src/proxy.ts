@@ -1,7 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const ADMIN_EMAIL = 'limxuan520@gmail.com'
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -27,19 +31,38 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isAuthRoute =
-    request.nextUrl.pathname === '/' ||
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/auth')
+  const isPublic =
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/portal/login' ||
+    pathname.startsWith('/auth')
 
-  if (!user && !isAuthRoute) {
+  // Not logged in
+  if (!user) {
+    if (isPublic) return supabaseResponse
+    if (pathname.startsWith('/portal')) {
+      return NextResponse.redirect(new URL('/portal/login', request.url))
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && request.nextUrl.pathname === '/login') {
-    return NextResponse.redirect(new URL('/students', request.url))
+  const isAdmin = user.email === ADMIN_EMAIL
+
+  // Admin: redirect away from login, allow everything else
+  if (isAdmin) {
+    if (pathname === '/login') {
+      return NextResponse.redirect(new URL('/students', request.url))
+    }
+    return supabaseResponse
   }
 
+  // Student (non-admin): block admin routes, block admin login
+  if (pathname.startsWith('/students') || pathname.startsWith('/templates')) {
+    return NextResponse.redirect(new URL('/portal', request.url))
+  }
+  if (pathname === '/login') {
+    return NextResponse.redirect(new URL('/portal', request.url))
+  }
   return supabaseResponse
 }
 

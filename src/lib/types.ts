@@ -11,6 +11,7 @@ export interface ClassSlot {
 
 export interface Student {
   id: string
+  email?: string | null
   name: string
   contact_person: string | null
   contact_phone: string | null
