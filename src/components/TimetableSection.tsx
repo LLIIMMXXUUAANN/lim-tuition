@@ -14,23 +14,16 @@ for (let h = 8; h < 22; h++) {
   TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)
 }
 
-const LABEL_W = 52
-const CELL_W = 80
-const HEADER_H = 28
-const CELL_H = 20
-const CANVAS_W = LABEL_W + CELL_W * 7
-const CANVAS_H = HEADER_H + CELL_H * TIME_SLOTS.length
-
-const DRAW_COLORS = {
-  booked:      '#fca5a5',
-  preferred:   '#86efac',
-  normal:      '#fde68a',
-  unavailable: '#f8fafc',
-  border:      '#e2e8f0',
-  headerBg:    '#f1f5f9',
-  text:        '#334155',
-  timeLabel:   '#94a3b8',
-}
+// PNG layout constants
+const PNG_PAD      = 20
+const PNG_LABEL_W  = 56
+const PNG_CELL_W   = 86
+const PNG_CELL_H   = 22
+const PNG_TITLE_H  = 44
+const PNG_HEADER_H = 30
+const PNG_LEGEND_H = 56
+const PNG_W = PNG_PAD + PNG_LABEL_W + PNG_CELL_W * 7 + PNG_PAD
+const PNG_H = PNG_PAD + PNG_TITLE_H + PNG_HEADER_H + PNG_CELL_H * TIME_SLOTS.length + PNG_LEGEND_H + PNG_PAD
 
 const CELL_CLASSES: Record<string, string> = {
   booked:    'bg-red-200 cursor-default',
@@ -61,48 +54,100 @@ function cycleType(current: SlotType | undefined): SlotType | null {
 
 function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule: ClassSlot[] }[]) {
   const canvas = document.createElement('canvas')
-  canvas.width = CANVAS_W
-  canvas.height = CANVAS_H
+  canvas.width = PNG_W
+  canvas.height = PNG_H
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  ctx.fillStyle = DRAW_COLORS.headerBg
-  ctx.fillRect(0, 0, CANVAS_W, HEADER_H)
+  const gridX = PNG_PAD + PNG_LABEL_W
+  const gridY = PNG_PAD + PNG_TITLE_H + PNG_HEADER_H
 
-  ctx.fillStyle = DRAW_COLORS.text
-  ctx.font = 'bold 12px system-ui, sans-serif'
+  // White background
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, PNG_W, PNG_H)
+
+  // Title
+  ctx.fillStyle = '#0f2942'
+  ctx.font = 'bold 16px system-ui, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('Weekly Availability', gridX, PNG_PAD + PNG_TITLE_H / 2)
+
+  // Day header bar (navy)
+  ctx.fillStyle = '#0f2942'
+  ctx.fillRect(gridX, PNG_PAD + PNG_TITLE_H, PNG_CELL_W * 7, PNG_HEADER_H)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 11px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   DAY_SHORT.forEach((d, i) => {
-    ctx.fillText(d, LABEL_W + i * CELL_W + CELL_W / 2, HEADER_H / 2)
+    ctx.fillText(d, gridX + i * PNG_CELL_W + PNG_CELL_W / 2, PNG_PAD + PNG_TITLE_H + PNG_HEADER_H / 2)
   })
 
+  // Grid cells
   TIME_SLOTS.forEach((ts, row) => {
-    const y = HEADER_H + row * CELL_H
+    const y = gridY + row * PNG_CELL_H
+
+    // Alternating row tint
+    if (row % 2 === 0) {
+      ctx.fillStyle = '#f8fafc'
+      ctx.fillRect(PNG_PAD, y, PNG_LABEL_W + PNG_CELL_W * 7, PNG_CELL_H)
+    }
+
+    // Hour label
     if (ts.endsWith(':00')) {
-      ctx.fillStyle = DRAW_COLORS.timeLabel
-      ctx.font = '10px system-ui, sans-serif'
+      ctx.fillStyle = '#64748b'
+      ctx.font = '11px system-ui, sans-serif'
       ctx.textAlign = 'right'
       ctx.textBaseline = 'middle'
-      ctx.fillText(ts, LABEL_W - 4, y + CELL_H / 2)
+      ctx.fillText(ts, gridX - 6, y + PNG_CELL_H / 2)
     }
+
     DAYS.forEach((day, col) => {
-      const x = LABEL_W + col * CELL_W
-      let fill = DRAW_COLORS.unavailable
-      if (checkBooked(day, ts, students)) {
-        fill = DRAW_COLORS.unavailable
-      } else {
+      const x = gridX + col * PNG_CELL_W
+      let fill = '#f1f5f9'
+      if (!checkBooked(day, ts, students)) {
         const t = grid.get(`${day}|${ts}`)
-        if (t === 'preferred') fill = DRAW_COLORS.preferred
-        else if (t === 'normal') fill = DRAW_COLORS.normal
+        if (t === 'preferred') fill = '#4ade80'
+        else if (t === 'normal') fill = '#fde047'
       }
       ctx.fillStyle = fill
-      ctx.fillRect(x, y, CELL_W, CELL_H)
-      ctx.strokeStyle = DRAW_COLORS.border
+      ctx.fillRect(x, y, PNG_CELL_W, PNG_CELL_H)
+      ctx.strokeStyle = '#e2e8f0'
       ctx.lineWidth = 0.5
-      ctx.strokeRect(x, y, CELL_W, CELL_H)
+      ctx.strokeRect(x, y, PNG_CELL_W, PNG_CELL_H)
     })
   })
+
+  // Outer grid border
+  ctx.strokeStyle = '#cbd5e1'
+  ctx.lineWidth = 1
+  ctx.strokeRect(gridX, gridY, PNG_CELL_W * 7, PNG_CELL_H * TIME_SLOTS.length)
+
+  // Legend
+  const legendY = gridY + PNG_CELL_H * TIME_SLOTS.length + 16
+  const legendItems = [
+    { color: '#4ade80', label: 'Preferred available' },
+    { color: '#fde047', label: 'Available (normal)' },
+    { color: '#f1f5f9', label: 'Unavailable', border: '#cbd5e1' },
+  ]
+  ctx.font = '11px system-ui, sans-serif'
+  ctx.textBaseline = 'middle'
+  let lx = gridX
+  for (const item of legendItems) {
+    ctx.fillStyle = item.color
+    ctx.fillRect(lx, legendY, 14, 14)
+    if (item.border) {
+      ctx.strokeStyle = item.border
+      ctx.lineWidth = 1
+      ctx.strokeRect(lx, legendY, 14, 14)
+    }
+    ctx.fillStyle = '#475569'
+    ctx.textAlign = 'left'
+    ctx.fillText(item.label, lx + 18, legendY + 7)
+    lx += 18 + ctx.measureText(item.label).width + 28
+  }
 
   const link = document.createElement('a')
   link.download = 'timetable.png'
