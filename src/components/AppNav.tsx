@@ -7,6 +7,7 @@ import LogoutButton from '@/components/LogoutButton'
 const NAV_LINKS = [
   { label: 'Students', href: '/admin/students' },
   { label: 'Templates', href: '/admin/templates' },
+  { label: 'Timetable', href: '/admin/timetable' },
 ]
 
 export default function AppNav() {
