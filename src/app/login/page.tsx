@@ -56,17 +56,25 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Tuition Tracker</CardTitle>
-          <CardDescription>Sign in to manage your students</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<p className="text-sm text-slate-500">Loading...</p>}>
-            <LoginForm />
-          </Suspense>
-        </CardContent>
-      </Card>
+      <div className="w-full max-w-sm space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Tuition Tracker</CardTitle>
+            <CardDescription>Sign in to manage your students</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<p className="text-sm text-slate-500">Loading...</p>}>
+              <LoginForm />
+            </Suspense>
+          </CardContent>
+        </Card>
+        <p className="text-center text-sm text-slate-500">
+          Not the admin?{' '}
+          <a href="/" className="text-slate-700 underline underline-offset-4 hover:text-slate-900">
+            Back to landing page
+          </a>
+        </p>
+      </div>
     </div>
   )
 }
