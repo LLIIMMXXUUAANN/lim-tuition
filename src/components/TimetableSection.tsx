@@ -39,10 +39,17 @@ const CELL_CLASSES: Record<string, string> = {
   empty:     'bg-slate-100 hover:bg-slate-200 cursor-pointer',
 }
 
+function addMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = h * 60 + m + mins
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 function checkBooked(day: WeekDay, ts: string, students: { class_schedule: ClassSlot[] }[]) {
+  const tsEnd = addMinutes(ts, 30)
   for (const s of students)
     for (const slot of s.class_schedule)
-      if (slot.day === day && ts >= slot.start && ts < slot.end) return true
+      if (slot.day === day && ts < slot.end && tsEnd > slot.start) return true
   return false
 }
 
