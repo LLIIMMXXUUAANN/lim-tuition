@@ -90,7 +90,7 @@ function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule
       const x = LABEL_W + col * CELL_W
       let fill = DRAW_COLORS.unavailable
       if (checkBooked(day, ts, students)) {
-        fill = DRAW_COLORS.booked
+        fill = DRAW_COLORS.unavailable
       } else {
         const t = grid.get(`${day}|${ts}`)
         if (t === 'preferred') fill = DRAW_COLORS.preferred
