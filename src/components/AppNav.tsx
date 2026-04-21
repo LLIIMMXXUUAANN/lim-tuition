@@ -15,8 +15,8 @@ export default function AppNav() {
   return (
     <nav className="border-b bg-white sticky top-0 z-10">
       <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-slate-800 hover:text-accentGold transition-colors mr-2 shrink-0">
-          <span className="text-slate-900">&lt;/&gt;</span>
+        <Link href="/" className="group flex items-center gap-2 font-semibold text-slate-800 hover:text-accentGold transition-colors mr-2 shrink-0">
+          <span className="text-slate-900 group-hover:text-accentGold transition-colors">&lt;/&gt;</span>
           Lim&apos;s Programming Tuition
         </Link>
         <div className="flex gap-1 flex-1">
