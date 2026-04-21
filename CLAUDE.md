@@ -54,9 +54,19 @@ Supabase clients:
 - **`StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
 - **`ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
 - **`TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
+- **`PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
+
+### Payment generator (`src/app/api/generate-payment/route.ts`)
+
+POST route handler. No external AI — pure JS date arithmetic:
+- Groups `class_schedule` slots by day, finds all occurrences of each weekday in the given month
+- Fee = `fee_per_hour × duration_hours × session_count` per day, summed across all days
+- Template 2 (carryover): deducts `carryover × avg_fee_per_session` from the total (tutor owes student those sessions)
+- `formatFee` rounds to 2 d.p. before integer check to avoid floating-point noise
 
 ### Patterns
 
 - Pages that need auth data are Server Components fetching via the server Supabase client; interactive state lives in client components passed data as props.
 - `StudentDetail` and template cards both use the same view/edit toggle pattern to prevent accidental edits.
 - The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
+- The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.

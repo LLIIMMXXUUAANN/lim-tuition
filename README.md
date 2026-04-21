@@ -31,6 +31,16 @@ Open [http://localhost:3000](http://localhost:3000). You'll be redirected to the
 - **Schedule view** — dashboard groups students by day of week based on their class slots
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests)
+- **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
+
+## Deployment
+
+Deployed on Vercel at `https://tuition-tracker-ten.vercel.app`. Push to `main` to redeploy automatically.
+
+After deploying, add the Vercel URL to Supabase → Authentication → Redirect URLs:
+```
+https://tuition-tracker-ten.vercel.app/**
+```
 
 ## Commands
 
