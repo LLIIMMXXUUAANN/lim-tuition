@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 
 ### Admin (authenticated only)
 - **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes, portal access emails)
-- **Schedule view** — dashboard groups students by day of week based on their class slots
+- **Schedule view** — dashboard groups students by day of week; each card shows payment method (Weekly/Monthly) at the bottom right
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests)
 - **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
