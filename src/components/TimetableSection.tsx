@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import type { ClassSlot, WeekDay } from '@/lib/types'
 
 type SlotType = 'preferred' | 'normal'
@@ -116,17 +116,36 @@ interface Props {
 
 export default function TimetableSection({ students }: Props) {
   const [grid, setGrid] = useState<Map<string, SlotType>>(new Map())
+  const isDragging = useRef(false)
+  const paintType = useRef<SlotType | null>(null)
 
-  function toggle(day: WeekDay, ts: string) {
-    if (checkBooked(day, ts, students)) return
-    const key = `${day}|${ts}`
-    const next = cycleType(grid.get(key))
+  useEffect(() => {
+    const stop = () => { isDragging.current = false }
+    window.addEventListener('mouseup', stop)
+    return () => window.removeEventListener('mouseup', stop)
+  }, [])
+
+  function applyPaint(day: WeekDay, ts: string, paint: SlotType | null) {
     setGrid(prev => {
       const m = new Map(prev)
-      if (next === null) m.delete(key)
-      else m.set(key, next)
+      if (paint === null) m.delete(`${day}|${ts}`)
+      else m.set(`${day}|${ts}`, paint)
       return m
     })
+  }
+
+  function handleMouseDown(e: React.MouseEvent, day: WeekDay, ts: string) {
+    if (checkBooked(day, ts, students)) return
+    e.preventDefault() // prevent text selection while dragging
+    const paint = cycleType(grid.get(`${day}|${ts}`))
+    paintType.current = paint
+    isDragging.current = true
+    applyPaint(day, ts, paint)
+  }
+
+  function handleMouseEnter(day: WeekDay, ts: string) {
+    if (!isDragging.current || checkBooked(day, ts, students)) return
+    applyPaint(day, ts, paintType.current)
   }
 
   return (
@@ -145,7 +164,7 @@ export default function TimetableSection({ students }: Props) {
           Download PNG
         </button>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto select-none">
         <div style={{ display: 'grid', gridTemplateColumns: '52px repeat(7, 70px)', gap: 1 }}>
           <div />
           {DAY_SHORT.map(d => (
@@ -162,7 +181,8 @@ export default function TimetableSection({ students }: Props) {
                 return (
                   <div
                     key={`${day}-${ts}`}
-                    onClick={() => toggle(day, ts)}
+                    onMouseDown={e => handleMouseDown(e, day, ts)}
+                    onMouseEnter={() => handleMouseEnter(day, ts)}
                     className={`h-5 rounded-sm transition-colors ${CELL_CLASSES[cellKey]}`}
                   />
                 )
@@ -171,7 +191,7 @@ export default function TimetableSection({ students }: Props) {
           ))}
         </div>
       </div>
-      <p className="text-xs text-slate-400">Click free slots to toggle: unavailable → preferred → normal → unavailable</p>
+      <p className="text-xs text-slate-400">Click or drag to paint: unavailable → preferred → normal → unavailable</p>
     </div>
   )
 }
