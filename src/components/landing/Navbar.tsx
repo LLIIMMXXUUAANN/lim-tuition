@@ -13,7 +13,7 @@ export default function Navbar() {
           <a href="#pricing" className="hover:text-accentGold">Pricing</a>
           <a href="#testimonials" className="hover:text-accentGold">Testimonials</a>
           <a href="/portal/login" className="text-xs border border-slate-400 text-slate-200 px-3 py-1 rounded-md hover:border-accentGold hover:text-accentGold transition-colors">Student Portal</a>
-          <a href="/login" className="text-xs border border-accentGold text-accentGold px-3 py-1 rounded-md hover:bg-accentGold/10 transition-colors">Admin</a>
+          <a href="/login" className="text-xs border border-slate-400 text-slate-200 px-3 py-1 rounded-md hover:border-accentGold hover:text-accentGold transition-colors">Admin</a>
         </nav>
       </div>
     </header>
