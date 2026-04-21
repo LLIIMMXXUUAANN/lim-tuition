@@ -1,12 +1,12 @@
-# Lim's Tuition
+# Lim's Programming Tuition
 
-Private admin dashboard for tracking tuition students, class schedules, payments, and message templates.
+Public landing page + private admin dashboard for managing tuition students, class schedules, payments, and message templates.
 
 ## Stack
 
 - **Next.js 16** (App Router) + TypeScript
 - **Supabase** — Postgres database + magic link auth
-- **Tailwind CSS v4** + shadcn/ui
+- **Tailwind CSS v4** + shadcn/ui + @heroicons/react
 
 ## Getting Started
 
@@ -23,10 +23,14 @@ Run the dev server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). You'll be redirected to the login page — enter your email to receive a magic link.
+Open [http://localhost:3000](http://localhost:3000) to see the public landing page. Click **Admin** in the navbar (or go to `/login`) to sign in with a magic link.
 
 ## Features
 
+### Public
+- **Landing page** — publicly accessible at `/`; sections: Hero, About, What I Offer, How Lessons Work, Student Backgrounds & Languages, Pricing, Scheduling, Payment Methods, Communication Platforms, Other Details, Testimonials
+
+### Admin (authenticated only)
 - **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes)
 - **Schedule view** — dashboard groups students by day of week based on their class slots
 - **Status filter** — filter students by Active / On Hold / Completed
@@ -35,11 +39,11 @@ Open [http://localhost:3000](http://localhost:3000). You'll be redirected to the
 
 ## Deployment
 
-Deployed on Vercel at `https://tuition-tracker-ten.vercel.app`. Push to `main` to redeploy automatically.
+Deployed on Vercel at `https://lim-tuition.vercel.app`. Push to `main` to redeploy automatically.
 
 After deploying, add the Vercel URL to Supabase → Authentication → Redirect URLs:
 ```
-https://tuition-tracker-ten.vercel.app/**
+https://lim-tuition.vercel.app/**
 ```
 
 ## Commands

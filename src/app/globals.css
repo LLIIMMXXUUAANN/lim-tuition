@@ -2,6 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@theme {
+  --color-navy: #0A1A2F;
+  --color-navyLight: #1F2A44;
+  --color-accentGold: #C6A667;
+  --color-softBg: #F0F3F7;
+  --color-cardBg: #FFFFFF;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -126,5 +134,6 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
   }
 }

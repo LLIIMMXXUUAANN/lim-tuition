@@ -22,13 +22,14 @@ No test suite. Use `npm run build` to verify type correctness before committing.
 
 - Magic link login to a single hardcoded email (`limxuan520@gmail.com`)
 - Route protection is in `src/proxy.ts` — **not** `middleware.ts`. Next.js 16 renamed the middleware file and export: the file is `proxy.ts` and exports `proxy()` instead of `middleware()`.
-- Unauthenticated users are redirected to `/login`; authenticated users on `/login` are redirected to `/students`
+- `/` and `/login` and `/auth/*` are public; everything else requires auth.
+- Unauthenticated users hitting protected routes are redirected to `/login`; authenticated users on `/login` are redirected to `/students`.
 
 ### Route structure
 
 ```
 src/app/
-  page.tsx                  → redirect to /students
+  page.tsx                  → public landing page (all 13 sections)
   login/page.tsx            → magic link login form
   auth/callback/route.ts    → Supabase auth code exchange
   (app)/                    → route group: all authenticated pages share AppNav layout
@@ -48,9 +49,13 @@ Supabase clients:
 - `src/lib/supabase/client.ts` — browser client (used in `'use client'` components)
 - `src/lib/supabase/server.ts` — server client with cookie handling (used in Server Components and Route Handlers)
 
+### Landing page (`src/components/landing/`)
+
+13 static TSX components migrated from a separate Vite project. Custom Tailwind colors (`navy`, `navyLight`, `accentGold`, `softBg`, `cardBg`) are declared in `globals.css` via `@theme {}` (Tailwind v4 — not `tailwind.config.js`). Uses `@heroicons/react` for icons.
+
 ### Key components
 
-- **`AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting)
+- **`AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
 - **`StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
 - **`ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
 - **`TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
