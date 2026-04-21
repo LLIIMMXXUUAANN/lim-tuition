@@ -6,6 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
+const TEMPLATE_ROWS: Record<string, number> = {
+  payment: 3,
+  payment2: 3,
+  review_request1: 5,
+  review_request2: 5,
+  recommendation_request1: 5,
+  recommendation_request2: 6,
+}
+
 const TEMPLATE_META: { id: string; title: string; description: string }[] = [
   { id: 'payment', title: 'Payment Request 1', description: 'Monthly fee reminder (standard).' },
   { id: 'payment2', title: 'Payment Request 2', description: 'Monthly fee reminder with carried-over sessions.' },
@@ -29,13 +38,18 @@ function TemplateCard({
   const [saved, setSaved] = useState(initialContent)
   const [content, setContent] = useState(initialContent)
   const [editing, setEditing] = useState(false)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [copied, setCopied] = useState(false)
 
   async function handleSave() {
     setSaveState('saving')
     const supabase = createClient()
-    await supabase.from('templates').upsert({ id, content })
+    const { error } = await supabase.from('templates').upsert({ id, content })
+    if (error) {
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 3000)
+      return
+    }
     setSaved(content)
     setSaveState('saved')
     setEditing(false)
@@ -63,7 +77,8 @@ function TemplateCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {saveState === 'saving' && <span className="text-xs text-slate-400">Saving…</span>}
-            {saveState === 'saved' && <span className="text-xs text-slate-400">Saved</span>}
+            {saveState === 'saved' && <span className="text-xs text-green-600">Saved</span>}
+            {saveState === 'error' && <span className="text-xs text-red-500">Save failed</span>}
             {editing ? (
               <>
                 <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
@@ -86,7 +101,7 @@ function TemplateCard({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="text-sm leading-relaxed font-sans resize-y"
-            rows={id.startsWith('payment') ? 3 : 5}
+            rows={TEMPLATE_ROWS[id] ?? 5}
             autoFocus
           />
         ) : (
