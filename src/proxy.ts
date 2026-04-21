@@ -56,11 +56,11 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Student (non-admin): block admin routes, block admin login
+  // Student (non-admin): block admin routes, redirect away from both login pages
   if (pathname.startsWith('/students') || pathname.startsWith('/templates')) {
     return NextResponse.redirect(new URL('/portal', request.url))
   }
-  if (pathname === '/login') {
+  if (pathname === '/login' || pathname === '/portal/login') {
     return NextResponse.redirect(new URL('/portal', request.url))
   }
   return supabaseResponse
