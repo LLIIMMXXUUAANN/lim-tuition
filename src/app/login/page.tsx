@@ -24,7 +24,7 @@ function LoginForm() {
 
     const { data: isTutor, error: rpcError } = await supabase.rpc('check_tutor_access', { p_email: email.trim().toLowerCase() })
     if (rpcError || !isTutor) {
-      setError('Unauthorized user.')
+      setError('No access.')
       setLoading(false)
       return
     }
