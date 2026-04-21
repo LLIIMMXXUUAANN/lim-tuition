@@ -59,7 +59,7 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/students') || pathname.startsWith('/templates') || pathname.startsWith('/api')) {
     return NextResponse.redirect(new URL('/portal', request.url))
   }
-  if (pathname === '/login' || pathname === '/portal/login') {
+  if (pathname === '/portal/login') {
     return NextResponse.redirect(new URL('/portal', request.url))
   }
   return supabaseResponse
