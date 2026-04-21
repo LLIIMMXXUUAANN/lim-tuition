@@ -51,6 +51,7 @@ src/app/
       layout.tsx                  → renders <AppNav> + <main>
       students/                   → student list (grouped by day), detail, new form
       templates/                  → Supabase-backed editable message templates
+      timetable/                  → weekly availability grid + PNG export
   student/
     login/page.tsx                → student portal magic link login
     (portal)/                     → route group: portal pages share portal nav layout
@@ -87,6 +88,11 @@ Supabase clients:
 - **`ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
 - **`TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
 - **`PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
+- **`TimetableSection`** — client component on the Timetable page; interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots). Booked slots (from active students' `class_schedule`) are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. "Download PNG" renders an offscreen 2× canvas and saves `slot_availability.png`. No DB persistence — state is ephemeral.
+
+### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
+
+Server Component that fetches active students' `name` and `class_schedule`, then passes them to `TimetableSection`. No extra tables — booked slots are derived from existing student data at render time. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
 
 ### Payment generator (`src/app/api/generate-payment/route.ts`)
 

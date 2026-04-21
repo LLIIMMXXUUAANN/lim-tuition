@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { ClassSlot, WeekDay } from '@/lib/types'
 
 type SlotType = 'preferred' | 'normal'
+type CellKey = 'booked' | 'preferred' | 'normal' | 'empty'
 
 const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -15,17 +16,18 @@ for (let h = 8; h < 22; h++) {
 }
 
 // PNG layout constants
-const PNG_PAD      = 20
+const PNG_PAD      = 24
 const PNG_LABEL_W  = 56
 const PNG_CELL_W   = 86
 const PNG_CELL_H   = 22
-const PNG_TITLE_H  = 44
+const PNG_TITLE_H  = 32
+const PNG_LEGEND_H = 30
+const PNG_GAP      = 12
 const PNG_HEADER_H = 30
-const PNG_LEGEND_H = 56
 const PNG_W = PNG_PAD + PNG_LABEL_W + PNG_CELL_W * 7 + PNG_PAD
-const PNG_H = PNG_PAD + PNG_TITLE_H + PNG_HEADER_H + PNG_CELL_H * TIME_SLOTS.length + PNG_LEGEND_H + PNG_PAD
+const PNG_H = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H + PNG_GAP + PNG_HEADER_H + PNG_CELL_H * TIME_SLOTS.length + PNG_PAD
 
-const CELL_CLASSES: Record<string, string> = {
+const CELL_CLASSES: Record<CellKey, string> = {
   booked:    'bg-red-200 cursor-default',
   preferred: 'bg-green-300 hover:bg-green-400 cursor-pointer',
   normal:    'bg-yellow-200 hover:bg-yellow-300 cursor-pointer',
@@ -38,12 +40,17 @@ function addMinutes(time: string, mins: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-function checkBooked(day: WeekDay, ts: string, students: { class_schedule: ClassSlot[] }[]) {
-  const tsEnd = addMinutes(ts, 30)
-  for (const s of students)
-    for (const slot of s.class_schedule)
-      if (slot.day === day && ts < slot.end && tsEnd > slot.start) return true
-  return false
+function buildBookedSet(students: { class_schedule: ClassSlot[] }[]): Set<string> {
+  const s = new Set<string>()
+  for (const student of students)
+    for (const slot of student.class_schedule)
+      for (const ts of TIME_SLOTS) {
+        const tsEnd = addMinutes(ts, 30)
+        if (slot.day === ts.slice(0, 0) || true) // always check
+          if (ts < slot.end && tsEnd > slot.start)
+            s.add(`${slot.day}|${ts}`)
+      }
+  return s
 }
 
 function cycleType(current: SlotType | undefined): SlotType | null {
@@ -52,7 +59,7 @@ function cycleType(current: SlotType | undefined): SlotType | null {
   return null
 }
 
-function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule: ClassSlot[] }[]) {
+function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
   const SCALE = 2
   const canvas = document.createElement('canvas')
   canvas.width = PNG_W * SCALE
@@ -61,8 +68,9 @@ function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule
   if (!ctx) return
   ctx.scale(SCALE, SCALE)
 
-  const gridX = PNG_PAD + PNG_LABEL_W
-  const gridY = PNG_PAD + PNG_TITLE_H + PNG_HEADER_H
+  const gridX   = PNG_PAD + PNG_LABEL_W
+  const headerY = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H + PNG_GAP
+  const gridY   = headerY + PNG_HEADER_H
 
   // White background
   ctx.fillStyle = '#ffffff'
@@ -75,19 +83,52 @@ function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule
   ctx.textBaseline = 'middle'
   ctx.fillText('Weekly Availability', gridX, PNG_PAD + PNG_TITLE_H / 2)
 
-  // Day header bar (navy)
+  // Legend row (top, below title)
+  const LEGEND_ITEMS = [
+    { color: '#4ade80', label: 'Preferred available' },
+    { color: '#fde047', label: 'Available (normal)' },
+    { color: '#f1f5f9', label: 'Unavailable', border: '#cbd5e1' },
+  ]
+  const swatchSize = 13
+  const swatchRadius = 4
+  const legendMidY = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H / 2
+  ctx.font = '11px system-ui, sans-serif'
+  ctx.textBaseline = 'middle'
+  let lx = gridX
+  for (const item of LEGEND_ITEMS) {
+    ctx.fillStyle = item.color
+    ctx.beginPath()
+    ctx.roundRect(lx, legendMidY - swatchSize / 2, swatchSize, swatchSize, swatchRadius)
+    ctx.fill()
+    if (item.border) {
+      ctx.strokeStyle = item.border
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.roundRect(lx, legendMidY - swatchSize / 2, swatchSize, swatchSize, swatchRadius)
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#475569'
+    ctx.textAlign = 'left'
+    ctx.fillText(item.label, lx + swatchSize + 5, legendMidY)
+    lx += swatchSize + 5 + ctx.measureText(item.label).width + 22
+  }
+
+  // Day header bar (navy, rounded top corners)
   ctx.fillStyle = '#0f2942'
-  ctx.fillRect(gridX, PNG_PAD + PNG_TITLE_H, PNG_CELL_W * 7, PNG_HEADER_H)
+  ctx.beginPath()
+  ctx.roundRect(gridX, headerY, PNG_CELL_W * 7, PNG_HEADER_H, [6, 6, 0, 0])
+  ctx.fill()
 
   ctx.fillStyle = '#ffffff'
   ctx.font = 'bold 11px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   DAY_SHORT.forEach((d, i) => {
-    ctx.fillText(d, gridX + i * PNG_CELL_W + PNG_CELL_W / 2, PNG_PAD + PNG_TITLE_H + PNG_HEADER_H / 2)
+    ctx.fillText(d, gridX + i * PNG_CELL_W + PNG_CELL_W / 2, headerY + PNG_HEADER_H / 2)
   })
 
   // Grid cells
+  const CELL_RADIUS = 6
   TIME_SLOTS.forEach((ts, row) => {
     const y = gridY + row * PNG_CELL_H
 
@@ -109,47 +150,17 @@ function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule
     DAYS.forEach((day, col) => {
       const x = gridX + col * PNG_CELL_W
       let fill = '#f1f5f9'
-      if (!checkBooked(day, ts, students)) {
+      if (!bookedSet.has(`${day}|${ts}`)) {
         const t = grid.get(`${day}|${ts}`)
         if (t === 'preferred') fill = '#4ade80'
         else if (t === 'normal') fill = '#fde047'
       }
       ctx.fillStyle = fill
-      ctx.fillRect(x, y, PNG_CELL_W, PNG_CELL_H)
-      ctx.strokeStyle = '#e2e8f0'
-      ctx.lineWidth = 0.5
-      ctx.strokeRect(x, y, PNG_CELL_W, PNG_CELL_H)
+      ctx.beginPath()
+      ctx.roundRect(x + 1, y + 1, PNG_CELL_W - 2, PNG_CELL_H - 2, CELL_RADIUS)
+      ctx.fill()
     })
   })
-
-  // Outer grid border
-  ctx.strokeStyle = '#cbd5e1'
-  ctx.lineWidth = 1
-  ctx.strokeRect(gridX, gridY, PNG_CELL_W * 7, PNG_CELL_H * TIME_SLOTS.length)
-
-  // Legend
-  const legendY = gridY + PNG_CELL_H * TIME_SLOTS.length + 16
-  const legendItems = [
-    { color: '#4ade80', label: 'Preferred available' },
-    { color: '#fde047', label: 'Available (normal)' },
-    { color: '#f1f5f9', label: 'Unavailable', border: '#cbd5e1' },
-  ]
-  ctx.font = '11px system-ui, sans-serif'
-  ctx.textBaseline = 'middle'
-  let lx = gridX
-  for (const item of legendItems) {
-    ctx.fillStyle = item.color
-    ctx.fillRect(lx, legendY, 14, 14)
-    if (item.border) {
-      ctx.strokeStyle = item.border
-      ctx.lineWidth = 1
-      ctx.strokeRect(lx, legendY, 14, 14)
-    }
-    ctx.fillStyle = '#475569'
-    ctx.textAlign = 'left'
-    ctx.fillText(item.label, lx + 18, legendY + 7)
-    lx += 18 + ctx.measureText(item.label).width + 28
-  }
 
   const link = document.createElement('a')
   link.download = 'slot_availability.png'
@@ -165,6 +176,8 @@ export default function TimetableSection({ students }: Props) {
   const [grid, setGrid] = useState<Map<string, SlotType>>(new Map())
   const isDragging = useRef(false)
   const paintType = useRef<SlotType | null>(null)
+
+  const bookedSet = useMemo(() => buildBookedSet(students), [students])
 
   useEffect(() => {
     const stop = () => { isDragging.current = false }
@@ -182,8 +195,8 @@ export default function TimetableSection({ students }: Props) {
   }
 
   function handleMouseDown(e: React.MouseEvent, day: WeekDay, ts: string) {
-    if (checkBooked(day, ts, students)) return
-    e.preventDefault() // prevent text selection while dragging
+    if (bookedSet.has(`${day}|${ts}`)) return
+    e.preventDefault()
     const paint = cycleType(grid.get(`${day}|${ts}`))
     paintType.current = paint
     isDragging.current = true
@@ -191,7 +204,7 @@ export default function TimetableSection({ students }: Props) {
   }
 
   function handleMouseEnter(day: WeekDay, ts: string) {
-    if (!isDragging.current || checkBooked(day, ts, students)) return
+    if (!isDragging.current || bookedSet.has(`${day}|${ts}`)) return
     applyPaint(day, ts, paintType.current)
   }
 
@@ -205,7 +218,7 @@ export default function TimetableSection({ students }: Props) {
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-slate-100 border border-slate-200 rounded-sm" /> Unavailable</span>
         </div>
         <button
-          onClick={() => drawAndDownload(grid, students)}
+          onClick={() => drawAndDownload(grid, bookedSet)}
           className="px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
         >
           Download PNG
@@ -223,8 +236,7 @@ export default function TimetableSection({ students }: Props) {
                 {ts.endsWith(':00') ? ts : ''}
               </div>
               {DAYS.map(day => {
-                const booked = checkBooked(day, ts, students)
-                const cellKey = booked ? 'booked' : (grid.get(`${day}|${ts}`) ?? 'empty')
+                const cellKey: CellKey = bookedSet.has(`${day}|${ts}`) ? 'booked' : (grid.get(`${day}|${ts}`) ?? 'empty')
                 return (
                   <div
                     key={`${day}-${ts}`}
@@ -238,7 +250,7 @@ export default function TimetableSection({ students }: Props) {
           ))}
         </div>
       </div>
-      <p className="text-xs text-slate-400">Click or drag to paint: unavailable → preferred → normal → unavailable</p>
+      <p className="text-xs text-slate-400">Click or drag to cycle: unavailable → preferred → normal → unavailable</p>
     </div>
   )
 }

@@ -13,6 +13,7 @@ export default async function TimetablePage() {
     .eq('status', 'Active')
     .order('name')
 
+  if (error) console.error('[TimetablePage] failed to load students:', error.message)
   const students = error ? [] : (data ?? []) as Pick<Student, 'name' | 'class_schedule'>[]
 
   return (

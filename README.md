@@ -36,6 +36,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests)
 - **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
+- **Timetable** — weekly availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; exports a HD PNG (`slot_availability.png`) with legend and colour-coded cells
 
 ### Student portal (authenticated students/parents)
 - **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links
