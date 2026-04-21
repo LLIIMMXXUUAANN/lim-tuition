@@ -23,7 +23,7 @@ Run the dev server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the public landing page. Click **Admin** in the navbar (or go to `/login`) to sign in with a magic link.
+Open [http://localhost:3000](http://localhost:3000) to see the public landing page. Click **Admin** in the navbar (or go to `/login`), enter your email, and a magic link will be sent to your inbox.
 
 ## Features
 

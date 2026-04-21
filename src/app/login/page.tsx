@@ -45,7 +45,7 @@ function LoginForm() {
   if (sent) {
     return (
       <p className="text-sm text-slate-600">
-        Check your email for a login link sent to <strong>{ALLOWED_EMAIL}</strong>.
+        Check your inbox for a login link.
       </p>
     )
   }

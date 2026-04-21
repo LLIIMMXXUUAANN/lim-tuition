@@ -25,6 +25,13 @@ No test suite. Use `npm run build` to verify type correctness before committing.
 - `/` and `/login` and `/auth/*` are public; everything else requires auth.
 - Unauthenticated users hitting protected routes are redirected to `/login`; authenticated users on `/login` are redirected to `/students`.
 
+### Login page (`src/app/login/page.tsx`)
+
+- User types their email — if it matches `ALLOWED_EMAIL` the OTP is sent; otherwise shows "Unauthorized user."
+- `ALLOWED_EMAIL` is a client-side constant (visible in the JS bundle) — this is a UX guard only, not a security boundary. Security is enforced server-side: the OTP is always sent to the hardcoded email regardless of user input.
+- Success state shows "Check your inbox" without revealing the email address.
+- Favicon is `src/app/icon.svg` (Next.js App Router convention) — navy background with gold `</>`. A copy also lives at `public/favicon.svg`; keep them in sync if updated.
+
 ### Route structure
 
 ```
