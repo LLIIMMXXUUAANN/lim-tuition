@@ -53,11 +53,13 @@ function cycleType(current: SlotType | undefined): SlotType | null {
 }
 
 function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule: ClassSlot[] }[]) {
+  const SCALE = 2
   const canvas = document.createElement('canvas')
-  canvas.width = PNG_W
-  canvas.height = PNG_H
+  canvas.width = PNG_W * SCALE
+  canvas.height = PNG_H * SCALE
   const ctx = canvas.getContext('2d')
   if (!ctx) return
+  ctx.scale(SCALE, SCALE)
 
   const gridX = PNG_PAD + PNG_LABEL_W
   const gridY = PNG_PAD + PNG_TITLE_H + PNG_HEADER_H
@@ -150,7 +152,7 @@ function drawAndDownload(grid: Map<string, SlotType>, students: { class_schedule
   }
 
   const link = document.createElement('a')
-  link.download = 'timetable.png'
+  link.download = 'slot_availability.png'
   link.href = canvas.toDataURL('image/png')
   link.click()
 }
