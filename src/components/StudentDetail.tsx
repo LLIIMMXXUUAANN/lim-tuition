@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { formatTime } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import StudentForm from '@/components/StudentForm'
 import type { Student } from '@/lib/types'
@@ -90,7 +91,7 @@ export default function StudentDetail({ student }: { student: Student }) {
           ) : (
             <div className="space-y-1">
               {schedule.map((slot, i) => (
-                <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {slot.start} – {slot.end}</p>
+                <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
               ))}
             </div>
           )}

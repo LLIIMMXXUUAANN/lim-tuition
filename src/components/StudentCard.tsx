@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Student, ClassSlot } from '@/lib/types'
+import { formatTime } from '@/lib/utils'
 
 interface StudentCardProps {
   student: Student
@@ -41,11 +42,11 @@ export default function StudentCard({ student, slot }: StudentCardProps) {
         </CardHeader>
         <CardContent className="text-sm">
           {slot ? (
-            <p className="text-slate-600">🕐 {slot.start} – {slot.end}</p>
+            <p className="text-slate-600">🕐 {formatTime(slot.start)} – {formatTime(slot.end)}</p>
           ) : student.class_schedule?.length > 0 ? (
             <div className="text-slate-600 space-y-0.5">
               {student.class_schedule.map((s, i) => (
-                <p key={i}>📅 {s.day} {s.start}–{s.end}</p>
+                <p key={i}>📅 {s.day} {formatTime(s.start)} – {formatTime(s.end)}</p>
               ))}
             </div>
           ) : (
