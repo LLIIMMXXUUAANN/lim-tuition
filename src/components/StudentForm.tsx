@@ -18,6 +18,7 @@ interface StudentFormProps {
 
 const emptyForm: StudentInsert = {
   name: '',
+  access_emails: [],
   contact_person: '',
   contact_phone: '',
   student_phone: '',
@@ -40,6 +41,7 @@ export default function StudentForm({ student }: StudentFormProps) {
     student
       ? {
           name: student.name,
+          access_emails: student.access_emails ?? [],
           contact_person: student.contact_person ?? '',
           contact_phone: student.contact_phone ?? '',
           student_phone: student.student_phone ?? '',
@@ -71,6 +73,7 @@ export default function StudentForm({ student }: StudentFormProps) {
     const supabase = createClient()
     const payload: StudentUpdate = {
       ...form,
+      access_emails: (form.access_emails ?? []).filter(e => e.trim() !== ''),
       contact_person: form.contact_person || null,
       contact_phone: form.contact_phone || null,
       student_phone: form.student_phone || null,
@@ -170,6 +173,43 @@ export default function StudentForm({ student }: StudentFormProps) {
           <div className="space-y-2">
             <Label htmlFor="google_drive_link">Google Drive Link</Label>
             <Input id="google_drive_link" value={form.google_drive_link ?? ''} onChange={(e) => set('google_drive_link', e.target.value)} placeholder="https://drive.google.com/..." />
+          </div>
+          <div className="space-y-2">
+            <Label>Portal Access Emails</Label>
+            <p className="text-xs text-slate-500">Anyone with these emails can log in to the student portal and view this student&apos;s info.</p>
+            <div className="space-y-2">
+              {(form.access_emails ?? []).map((email, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      const updated = [...(form.access_emails ?? [])]
+                      updated[i] = e.target.value
+                      set('access_emails', updated)
+                    }}
+                    placeholder="email@example.com"
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => set('access_emails', (form.access_emails ?? []).filter((_, j) => j !== i))}
+                    className="text-slate-400 hover:text-red-500 text-lg leading-none px-1"
+                    aria-label="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => set('access_emails', [...(form.access_emails ?? []), ''])}
+              >
+                + Add email
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

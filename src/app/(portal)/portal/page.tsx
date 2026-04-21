@@ -12,7 +12,7 @@ export default async function PortalPage() {
   const { data: student } = await supabase
     .from('students')
     .select('*')
-    .eq('email', user.email)
+    .contains('access_emails', [user.email])
     .single()
 
   if (!student) {

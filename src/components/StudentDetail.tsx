@@ -79,6 +79,16 @@ export default function StudentDetail({ student }: { student: Student }) {
           <Row label="Student Phone" value={student.student_phone} />
           <Row label="Contact Person" value={student.contact_person} />
           <Row label="Contact Phone" value={student.contact_phone} />
+          {student.access_emails && student.access_emails.length > 0 && (
+            <div className="flex gap-2">
+              <span className="text-slate-500 w-40 flex-shrink-0">Portal Access</span>
+              <div className="space-y-0.5">
+                {student.access_emails.map((email, i) => (
+                  <p key={i} className="text-slate-800">{email}</p>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
