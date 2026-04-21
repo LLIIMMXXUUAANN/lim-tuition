@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
-const ALLOWED_EMAIL = 'limxuan520@gmail.com'
-
 function LoginForm() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -21,16 +19,18 @@ function LoginForm() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setLoading(true)
+    const supabase = createClient()
 
-    if (email.trim().toLowerCase() !== ALLOWED_EMAIL) {
+    const { data: isTutor, error: rpcError } = await supabase.rpc('check_tutor_access', { p_email: email.trim().toLowerCase() })
+    if (rpcError || !isTutor) {
       setError('Unauthorized user.')
+      setLoading(false)
       return
     }
 
-    setLoading(true)
-    const supabase = createClient()
     const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: ALLOWED_EMAIL,
+      email: email.trim().toLowerCase(),
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
     if (otpError) {

@@ -1,8 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const ADMIN_EMAIL = 'limxuan520@gmail.com'
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -46,7 +44,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  const isAdmin = user.email === ADMIN_EMAIL
+  const { data: isAdmin } = await supabase.rpc('is_tutor')
 
   // Admin: redirect away from login, allow everything else
   if (isAdmin) {
