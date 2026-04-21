@@ -8,6 +8,16 @@ const statusBadge: Record<string, string> = {
   'Completed': 'bg-slate-100 text-slate-500',
 }
 
+function Row({ label, value }: { label: string; value?: string | number | null }) {
+  if (!value && value !== 0) return null
+  return (
+    <div className="flex gap-2">
+      <span className="text-slate-500 w-40 flex-shrink-0">{label}</span>
+      <span className="text-slate-800">{value}</span>
+    </div>
+  )
+}
+
 export default function StudentPortalView({ student }: { student: Student }) {
   const schedule = student.class_schedule ?? []
 
@@ -36,6 +46,16 @@ export default function StudentPortalView({ student }: { student: Student }) {
       )}
 
       <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Student Info</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <Row label="Mode" value={student.mode} />
+          <Row label="Student Phone" value={student.student_phone} />
+          <Row label="Contact Person" value={student.contact_person} />
+          <Row label="Contact Phone" value={student.contact_phone} />
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Class Schedule</CardTitle></CardHeader>
         <CardContent className="text-sm">
           {schedule.length === 0 ? (
@@ -50,14 +70,27 @@ export default function StudentPortalView({ student }: { student: Student }) {
         </CardContent>
       </Card>
 
-      {student.today_homework && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Today&apos;s Homework</CardTitle></CardHeader>
-          <CardContent className="text-sm">
-            <p className="text-slate-700 whitespace-pre-wrap">{student.today_homework}</p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Fees &amp; Payment</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <Row label="Fee Per Hour" value={`RM${student.fee_per_hour}`} />
+          <Row label="Payment Method" value={student.payment_method} />
+          <Row label="Latest Payment" value={student.latest_payment} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <Row label="Today's Homework" value={student.today_homework} />
+          {student.notes && (
+            <div className="pt-1">
+              <p className="text-slate-500 mb-1">Notes</p>
+              <p className="text-slate-800 whitespace-pre-wrap">{student.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
