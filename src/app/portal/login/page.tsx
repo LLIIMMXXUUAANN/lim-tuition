@@ -15,6 +15,13 @@ export default function StudentLoginPage() {
     e.preventDefault()
     setError('')
     const supabase = createClient()
+
+    const { data: hasAccess, error: rpcError } = await supabase.rpc('check_portal_access', { p_email: email })
+    if (rpcError || !hasAccess) {
+      setError('No access. Your email is not registered. Please contact your tutor.')
+      return
+    }
+
     const origin = window.location.origin
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email,
