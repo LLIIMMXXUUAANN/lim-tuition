@@ -76,19 +76,31 @@ Supabase clients:
 - `src/lib/supabase/client.ts` — browser client (used in `'use client'` components)
 - `src/lib/supabase/server.ts` — server client with cookie handling (used in Server Components and Route Handlers)
 
+### Component structure
+
+```
+src/components/
+  shared/       → AppNav, LogoutButton, StudentPortalView   (used across multiple routes)
+  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor
+  templates/    → TemplatesList, PaymentGenerator
+  timetable/    → TimetableSection
+  landing/      → 13 static sections for the public landing page
+  ui/           → shadcn/ui primitives (Button, Input, Card, Select, etc.)
+```
+
 ### Landing page (`src/components/landing/`)
 
 13 static TSX components migrated from a separate Vite project. Custom Tailwind colors (`navy`, `navyLight`, `accentGold`, `softBg`, `cardBg`) are declared in `globals.css` via `@theme {}` (Tailwind v4 — not `tailwind.config.js`). Uses `@heroicons/react` for icons.
 
 ### Key components
 
-- **`StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
-- **`AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
-- **`StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
-- **`ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
-- **`TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
-- **`PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
-- **`TimetableSection`** — client component on the Timetable page; interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots). Booked slots (from active students' `class_schedule`) are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. "Download PNG" renders an offscreen 2× canvas and saves `slot_availability.png`. No DB persistence — state is ephemeral.
+- **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
+- **`shared/AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
+- **`students/StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
+- **`students/ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
+- **`templates/TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
+- **`templates/PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
+- **`timetable/TimetableSection`** — client component on the Timetable page; interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots). Booked slots (from active students' `class_schedule`) are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. "Download PNG" renders an offscreen 2× canvas and saves `slot_availability.png`. No DB persistence — state is ephemeral.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 

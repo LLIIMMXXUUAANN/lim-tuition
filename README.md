@@ -51,6 +51,34 @@ After deploying, add the Vercel URL to Supabase → Authentication → Redirect 
 https://lim-tuition.vercel.app/**
 ```
 
+## Project structure
+
+```
+src/
+  app/
+    page.tsx                      → public landing page
+    admin/login/                  → admin magic link login
+    admin/(app)/students/         → student list, detail, new form
+    admin/(app)/templates/        → message templates + payment generator
+    admin/(app)/timetable/        → weekly availability grid
+    student/login/                → student portal login
+    student/(portal)/             → student dashboard
+    api/generate-payment/         → fee calculation API route
+    auth/callback/                → Supabase auth code exchange
+  components/
+    shared/     → AppNav, LogoutButton, StudentPortalView
+    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor
+    templates/  → TemplatesList, PaymentGenerator
+    timetable/  → TimetableSection
+    landing/    → 13 public landing page sections
+    ui/         → shadcn/ui primitives
+  lib/
+    supabase/   → browser + server Supabase clients
+    types.ts    → shared TypeScript types
+    utils.ts    → formatTime, cn
+  proxy.ts      → Next.js middleware (auth + route protection)
+```
+
 ## Commands
 
 ```bash
