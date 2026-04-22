@@ -29,6 +29,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 
 ### Public
 - **Landing page** — publicly accessible at `/`; sections: Hero, About, What I Offer, How Lessons Work, Student Backgrounds & Languages, Pricing, Scheduling, Payment Methods, Communication Platforms, Other Details, Testimonials
+- **Hero** — full-width atmospheric background image (`public/landing_page_4k.png`) with left-aligned content, stacked CSS gradient overlay for text legibility, and a mobile dark overlay for readability; responsive navbar with hamburger menu on mobile
 
 ### Admin (authenticated only)
 - **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes, portal access emails)

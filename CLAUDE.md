@@ -92,6 +92,10 @@ src/components/
 
 13 static TSX components migrated from a separate Vite project. Custom Tailwind colors (`navy`, `navyLight`, `accentGold`, `softBg`, `cardBg`) are declared in `globals.css` via `@theme {}` (Tailwind v4 — not `tailwind.config.js`). Uses `@heroicons/react` for icons.
 
+**Hero (`landing/Hero.tsx`)** — full-width atmospheric section using `public/landing_page_4k.png` as a CSS background image (inline `style` — Tailwind v4 cannot parse `url()` in arbitrary classes). A stacked gradient (`linear-gradient` + `url()` in one `backgroundImage` value) keeps left-side text legible while the robot/flowchart graphic stays visible on the right. `bg-black` is the fallback color (matches the image's dark bottom). A mobile-only `absolute inset-0 bg-black/65 md:hidden` overlay ensures text stays readable when the layout stacks. `backgroundAttachment` is left at the CSS default (`scroll`) — do not set it to `fixed` as that breaks iOS Safari.
+
+**Navbar (`landing/Navbar.tsx`)** — `"use client"` component. Desktop: hidden-on-mobile flex nav. Mobile: hamburger toggle (`Bars3Icon`/`XMarkIcon`) with a dropdown nav, `aria-expanded`, `aria-controls`, and an `Escape` key handler via `useEffect`. The static `NAV_LINKS` array is defined outside the component.
+
 ### Key components
 
 - **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.

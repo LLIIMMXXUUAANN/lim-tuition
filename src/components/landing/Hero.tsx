@@ -3,45 +3,87 @@ import { StarIcon } from "@heroicons/react/24/solid";
 
 export default function Hero() {
   return (
-    <section id="hero" className="bg-gradient-to-b from-navy via-navyLight to-softBg text-slate-100 pt-20 pb-24">
-      <div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="text-3xl md:text-5xl font-semibold leading-tight mb-6">
-          Empowering Students Through
-          <br className="hidden md:block" />
-          Personalized Programming Lessons
-        </h1>
-        <p className="text-base md:text-lg text-slate-200 max-w-2xl mx-auto mb-10">
-          Master Python, C, C++, Java, or JavaScript through clear explanations,
-          hands-on coding, and a structured learning plan tailored to your goals.
-        </p>
-        <div className="flex items-center justify-center mt-6">
-          <div className="flex items-center space-x-1 text-accentGold">
-            <StarIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.5)]" />
-            <StarIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.5)]" />
-            <StarIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.5)]" />
-            <StarIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.5)]" />
-            <StarIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.5)]" />
+    <section
+      id="hero"
+      className="relative flex items-start bg-black"
+      style={{
+        backgroundImage: `
+          linear-gradient(to right,
+            rgba(0,0,0,0.82) 0%,
+            rgba(0,0,0,0.60) 38%,
+            rgba(0,0,0,0.12) 72%,
+            transparent 100%
+          ),
+          url('/landing_page_4k.png')
+        `,
+        backgroundSize: "auto, auto 100%",
+        backgroundPosition: "center top, right top",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      {/* Mobile-only dark overlay so text stays readable */}
+      <div className="absolute inset-0 bg-black/65 md:hidden" />
+
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 pt-10 pb-20">
+        <div className="max-w-2xl">
+
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 bg-black/50 border border-slate-600 rounded-full px-3 py-1 mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-accentGold flex-shrink-0" />
+            <span className="text-accentGold text-[10px] font-semibold uppercase tracking-widest">
+              1-to-1 Online Programming Lessons
+            </span>
           </div>
-          <span className="text-slate-300 text-sm ml-3">
-            Trusted by 25+ students with consistent 5-star reviews.
-          </span>
-        </div>
-        <div className="w-16 h-px bg-slate-500/40 mx-auto my-6"></div>
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-sm md:text-base">
-          <div className="flex items-center space-x-3">
-            <CheckCircleIcon className="h-8 w-8 text-accentGold" />
-            <span>1-to-1 online lessons designed around your pace</span>
+
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mb-5 text-white">
+            Empowering Students
+            <br />
+            Through
+            <br />
+            <span className="text-accentGold">Personalized</span>
+            <br />
+            Programming Lessons
+          </h1>
+
+          <div className="max-w-md">
+            <p className="text-sm md:text-base text-slate-300 mb-6 leading-relaxed">
+              Master Python, C, C++, Java, or JavaScript through clear
+              explanations, hands-on coding, and a structured learning
+              plan tailored to your goals.
+            </p>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-0.5 text-accentGold" aria-label="5 stars">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <StarIcon key={i} className="h-4 w-4 drop-shadow-[0_0_4px_rgba(198,166,103,0.7)]" />
+                ))}
+              </div>
+              <span className="text-slate-300 text-xs">
+                Trusted by 25+ students with consistent 5-star reviews.
+              </span>
+            </div>
+
+            <div className="w-10 h-px bg-slate-500/60 mb-5" />
+
+            <div className="flex flex-col gap-2.5 text-sm text-slate-200">
+              <div className="flex items-center gap-2.5">
+                <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
+                <span>1-to-1 online lessons designed around your pace</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
+                <span>Beginner-friendly approach with real problem-solving</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
+                <span>Suitable for school, university, and adult learners</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <CheckCircleIcon className="h-8 w-8 text-accentGold" />
-            <span>Beginner-friendly approach with real problem-solving</span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <CheckCircleIcon className="h-8 w-8 text-accentGold" />
-            <span>Suitable for school, university, and adult learners</span>
-          </div>
+
         </div>
       </div>
+
     </section>
   );
 }
