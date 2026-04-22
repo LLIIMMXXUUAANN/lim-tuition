@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import TemplatesList from '@/components/TemplatesList'
-import PaymentGenerator from '@/components/PaymentGenerator'
+import TemplatesList from '@/components/templates/TemplatesList'
+import PaymentGenerator from '@/components/templates/PaymentGenerator'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import LogoutButton from '@/components/LogoutButton'
+import LogoutButton from '@/components/shared/LogoutButton'
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
-import StudentCard from '@/components/StudentCard'
+import StudentCard from '@/components/students/StudentCard'
 import type { Student, StudentStatus, WeekDay } from '@/lib/types'
 
 const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']

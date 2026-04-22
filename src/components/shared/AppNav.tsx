@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import LogoutButton from '@/components/LogoutButton'
+import LogoutButton from '@/components/shared/LogoutButton'
 
 const NAV_LINKS = [
   { label: 'Students', href: '/admin/students' },

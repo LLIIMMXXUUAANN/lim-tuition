@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import TimetableSection from '@/components/TimetableSection'
+import TimetableSection from '@/components/timetable/TimetableSection'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'

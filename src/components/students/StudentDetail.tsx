@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { formatTime } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import StudentForm from '@/components/StudentForm'
+import StudentForm from '@/components/students/StudentForm'
 import type { Student } from '@/lib/types'
 
 const statusBadge: Record<string, string> = {
