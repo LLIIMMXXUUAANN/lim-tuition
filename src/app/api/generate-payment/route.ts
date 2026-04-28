@@ -128,18 +128,19 @@ export async function POST(request: NextRequest) {
 
   const dateList = oxfordList(allDates.map(ordinal))
   const monthName = MONTH_NAMES[month - 1]
-  const recipient = student.contact_person ?? student.name
+  const cp = student.contact_person?.trim()
+  const recipient = (!cp || cp === '-') ? student.name : cp
   const sessionCount = allDates.length
 
   let message: string
   if (templateType === 1) {
-    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}), bringing the total to RM${formatFee(sessionFeeTotal)}. Thank you 😃`
+    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}), bringing the total to RM${formatFee(sessionFeeTotal)}. Thank you 😄`
   } else {
     const co = carryover ?? 0
     const coFee = co * (sessionFeeTotal / sessionCount)
     const total = sessionFeeTotal - coFee
     const coLabel = `${co} session${co === 1 ? '' : 's'}`
-    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(total)}. Thank you. 😃`
+    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(total)}. Thank you. 😄`
   }
 
   return Response.json({ message })
