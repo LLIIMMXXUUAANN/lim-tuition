@@ -14,6 +14,7 @@ import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib
 
 interface StudentFormProps {
   student?: Student
+  onSaved?: () => void
 }
 
 const emptyForm: StudentInsert = {
@@ -35,7 +36,7 @@ const emptyForm: StudentInsert = {
   is_active: true,
 }
 
-export default function StudentForm({ student }: StudentFormProps) {
+export default function StudentForm({ student, onSaved }: StudentFormProps) {
   const router = useRouter()
   const [form, setForm] = useState<StudentInsert>(
     student
@@ -88,12 +89,14 @@ export default function StudentForm({ student }: StudentFormProps) {
       if (student) {
         const { error: err } = await supabase.from('students').update(payload).eq('id', student.id)
         if (err) throw err
+        onSaved?.()
+        router.refresh()
       } else {
         const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
         if (err) throw err
+        router.push('/admin/students')
+        router.refresh()
       }
-      router.push(student ? `/admin/students/${student.id}` : '/admin/students')
-      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
       setSaving(false)

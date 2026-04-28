@@ -34,7 +34,7 @@ export default function StudentDetail({ student }: { student: Student }) {
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>← Cancel</Button>
           <h1 className="text-2xl font-bold">Editing: {student.name}</h1>
         </div>
-        <StudentForm student={student} />
+        <StudentForm student={student} onSaved={() => setEditing(false)} />
       </div>
     )
   }
