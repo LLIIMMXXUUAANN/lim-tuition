@@ -5,7 +5,7 @@ export default function Hero() {
   return (
     <section
       id="hero"
-      className="relative flex items-start bg-black"
+      className="relative flex items-start bg-black min-h-[520px] md:min-h-[600px]"
       style={{
         backgroundImage: `
           linear-gradient(to right,

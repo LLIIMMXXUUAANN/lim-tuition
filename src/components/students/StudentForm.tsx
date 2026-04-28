@@ -92,7 +92,7 @@ export default function StudentForm({ student }: StudentFormProps) {
         const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
         if (err) throw err
       }
-      router.push('/admin/students')
+      router.push(student ? `/admin/students/${student.id}` : '/admin/students')
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
