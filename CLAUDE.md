@@ -61,11 +61,12 @@ src/app/
 
 ### Data layer
 
-Three Supabase tables in the `public` schema:
+Four Supabase tables in the `public` schema:
 
 - **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
-- **`templates`** — one row per template, keyed by text `id` (e.g. `payment`, `review_request1`). `content` is edited in-place from the UI and upserted on Save.
+- **`templates`** — one row per template, keyed by text `id` (e.g. `payment`, `review_request1`, `first_approach`). `content` is edited in-place from the UI and upserted on Save.
 - **`tutors`** — one row per tutor email. RLS enabled (no direct access); accessed only via SECURITY DEFINER functions.
+- **`settings`** — key/value store for server-side config. Currently stores `google_refresh_token`. RLS: tutor-only via `is_tutor()`.
 
 Supabase SECURITY DEFINER functions:
 - `is_tutor()` — returns true if `auth.email()` is in `tutors` (used in `proxy.ts` and RLS policy)
@@ -81,7 +82,7 @@ Supabase clients:
 ```
 src/components/
   shared/       → AppNav, LogoutButton, StudentPortalView   (used across multiple routes)
-  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor
+  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
   landing/      → 13 static sections for the public landing page
@@ -109,6 +110,21 @@ src/components/
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 
 Server Component that fetches active students' `name` and `class_schedule`, then passes them to `TimetableSection`. No extra tables — booked slots are derived from existing student data at render time. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
+
+### Google Drive integration (`src/lib/google/`, `src/app/api/google/`)
+
+Admin-only feature for creating a student's Google Drive folder structure automatically.
+
+- **`src/lib/google/auth.ts`** — `getOAuth2Client()`: reads refresh token from `settings` table, returns configured OAuth2 client
+- **`src/lib/google/drive.ts`** — `createStudentDriveFolder(auth, studentName)`: creates root folder in `GOOGLE_STUDENTS_FOLDER_ID`, creates 4 subfolders with content (Teaching Slides shortcut, 2× empty `.ipynb`, blank Google Doc), sets anyone-with-link viewer permission. Atomic: deletes root folder on any failure so retries don't create duplicates.
+- **`src/app/api/google/auth/route.ts`** — One-time OAuth setup: redirects admin to Google consent screen (tutor-only)
+- **`src/app/api/google/callback/route.ts`** — OAuth callback: exchanges code for tokens, saves refresh token to `settings` table (tutor-only)
+- **`src/app/api/google/create-student-folder/route.ts`** — POST `{ name }`: creates the full Drive folder structure, returns `{ url }` (tutor-only)
+- **`src/components/students/CreateDriveFolderButton.tsx`** — client button in `StudentForm`; on success auto-fills the `google_drive_link` field
+
+**Required env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_STUDENTS_FOLDER_ID`, `GOOGLE_LEC_TOPIC1_FILE_ID`
+
+**One-time setup:** visit `/api/google/auth` as admin to store the refresh token. OAuth app must be in Google Cloud with the admin email added as a test user.
 
 ### Payment generator (`src/app/api/generate-payment/route.ts`)
 
