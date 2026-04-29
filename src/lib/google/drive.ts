@@ -55,6 +55,10 @@ export async function createStudentDriveFolder(auth: OAuth2Client, studentName: 
 
   // Root student folder
   const rootId = await createFolder(drive, studentName, studentsFolderId)
+  await drive.permissions.create({
+    fileId: rootId,
+    requestBody: { role: 'reader', type: 'anyone' },
+  })
 
   // 1. Teaching Slides — shortcut to Topic_1.pptx
   const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
