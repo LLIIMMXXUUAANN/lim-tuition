@@ -77,7 +77,7 @@ async function createMeetDoc(
     `<p><br></p>`,
     `<p>${slotLines}</p>`,
     `<p><br></p>`,
-    `<p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}">${safeLink}</a></p>`,
+    `<p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}" style="color:#1155CC">${safeLink}</a></p>`,
     footer,
   ].join('')
   await drive.files.create({
