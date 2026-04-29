@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ClassScheduleEditor from '@/components/students/ClassScheduleEditor'
+import CreateDriveFolderButton from '@/components/students/CreateDriveFolderButton'
 import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -176,6 +177,10 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           <div className="space-y-2">
             <Label htmlFor="google_drive_link">Google Drive Link</Label>
             <Input id="google_drive_link" value={form.google_drive_link ?? ''} onChange={(e) => set('google_drive_link', e.target.value)} placeholder="https://drive.google.com/..." />
+            <CreateDriveFolderButton
+              name={form.name}
+              onSuccess={(url) => set('google_drive_link', url)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Portal Access Emails</Label>
