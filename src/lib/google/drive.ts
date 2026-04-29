@@ -79,6 +79,9 @@ export async function createStudentDriveFolder(auth: OAuth2Client, studentName: 
     // 4. Homework Sample Answers — empty ipynb
     const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
     await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
+
+    // Google Meet Link — blank doc in root folder
+    await createBlankDoc(drive, 'Google Meet Link', rootId)
   } catch (err) {
     // Clean up root folder so a retry doesn't create duplicates
     await drive.files.delete({ fileId: rootId }).catch(() => null)
