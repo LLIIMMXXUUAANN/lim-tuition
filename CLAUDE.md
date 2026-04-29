@@ -82,7 +82,7 @@ Supabase clients:
 ```
 src/components/
   shared/       → AppNav, LogoutButton, StudentPortalView   (used across multiple routes)
-  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton
+  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
   landing/      → 13 static sections for the public landing page
@@ -111,20 +111,25 @@ src/components/
 
 Server Component that fetches active students' `name` and `class_schedule`, then passes them to `TimetableSection`. No extra tables — booked slots are derived from existing student data at render time. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
 
-### Google Drive integration (`src/lib/google/`, `src/app/api/google/`)
+### Google Drive + Calendar integration (`src/lib/google/`, `src/app/api/google/`)
 
-Admin-only feature for creating a student's Google Drive folder structure automatically.
+Admin-only features for creating a student's Google Drive folder and weekly recurring Google Calendar event.
 
 - **`src/lib/google/auth.ts`** — `getOAuth2Client()`: reads refresh token from `settings` table, returns configured OAuth2 client
-- **`src/lib/google/drive.ts`** — `createStudentDriveFolder(auth, studentName)`: creates root folder in `GOOGLE_STUDENTS_FOLDER_ID`, creates 4 subfolders with content (Teaching Slides shortcut, 2× empty `.ipynb`, blank Google Doc), sets anyone-with-link viewer permission. Atomic: deletes root folder on any failure so retries don't create duplicates.
-- **`src/app/api/google/auth/route.ts`** — One-time OAuth setup: redirects admin to Google consent screen (tutor-only)
+- **`src/lib/google/drive.ts`** — `createStudentDriveFolder(auth, studentName, meetLink, classSchedule)`: creates root folder in `GOOGLE_STUDENTS_FOLDER_ID`, creates 4 subfolders with content (Teaching Slides shortcut, 2× empty `.ipynb`, blank Google Doc), writes a pre-filled "Google Meet Link" Google Doc (student name, schedule, timezone, Meet link), sets anyone-with-link viewer permission. Atomic: deletes root folder on any failure so retries don't create duplicates.
+- **`src/lib/google/calendar.ts`** — `createWeeklyClassEvents(auth, studentName, schedule)`: creates a weekly recurring event for each class slot in `GOOGLE_CALENDAR_ID`. First slot gets a Google Meet conference (one Meet link per student); subsequent slots reference the same link in their description. Datetime strings are formatted as naive `YYYY-MM-DDTHH:MM:SS` (no Z) with `timeZone: Asia/Kuala_Lumpur` so Google Calendar interprets them as MYT regardless of server timezone.
+- **`src/app/api/google/auth/route.ts`** — One-time OAuth setup: redirects admin to Google consent screen with Drive + Calendar scopes (tutor-only)
 - **`src/app/api/google/callback/route.ts`** — OAuth callback: exchanges code for tokens, saves refresh token to `settings` table (tutor-only)
-- **`src/app/api/google/create-student-folder/route.ts`** — POST `{ name }`: creates the full Drive folder structure, returns `{ url }` (tutor-only)
-- **`src/components/students/CreateDriveFolderButton.tsx`** — client button in `StudentForm`; on success auto-fills the `google_drive_link` field
+- **`src/app/api/google/create-student-folder/route.ts`** — POST `{ name, meet_link, class_schedule }`: creates the full Drive folder structure, returns `{ url }` (tutor-only). Requires `meet_link` to be set so the "Google Meet Link" doc is fully populated.
+- **`src/app/api/google/create-class-event/route.ts`** — POST `{ name, class_schedule }`: creates weekly recurring Calendar events, returns `{ meetLink, eventCount }` (tutor-only)
+- **`src/components/students/CreateDriveFolderButton.tsx`** — client button in `StudentForm`; disabled until both student name and Google Meet link are filled; on success auto-fills `google_drive_link`
+- **`src/components/students/CreateCalendarEventButton.tsx`** — client button in `StudentForm`; disabled until student name and class schedule are filled; on success auto-fills `google_meet_link`
 
-**Required env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_STUDENTS_FOLDER_ID`, `GOOGLE_LEC_TOPIC1_FILE_ID`
+**Intended flow in student form:** fill name + schedule → click **Create Calendar Event** (Meet link auto-fills) → click **Create Drive Folder** (doc written with actual Meet link).
 
-**One-time setup:** visit `/api/google/auth` as admin to store the refresh token. OAuth app must be in Google Cloud with the admin email added as a test user.
+**Required env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_STUDENTS_FOLDER_ID`, `GOOGLE_LEC_TOPIC1_FILE_ID`, `GOOGLE_CALENDAR_ID`
+
+**One-time setup:** visit `/api/google/auth` as admin to store the refresh token with Drive + Calendar scopes. OAuth app must have Drive API + Calendar API enabled in Google Cloud, with the admin email added as a test user.
 
 ### Payment generator (`src/app/api/generate-payment/route.ts`)
 

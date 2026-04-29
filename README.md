@@ -37,7 +37,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests, first approach outreach)
 - **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
-- **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc) and sets anyone-with-link viewer access
+- **Google Calendar event creation** — "Create Google Calendar Event" button on the new student form; creates a weekly recurring event in the Superprof calendar for each class slot, auto-generates a Google Meet link, and auto-fills the `google_meet_link` field
+- **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Timetable** — weekly availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; exports a HD PNG (`slot_availability.png`) with legend and colour-coded cells
 
 ### Student portal (authenticated students/parents)
@@ -66,18 +67,18 @@ src/
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
-    api/google/                   → Google OAuth setup + Drive folder creation
+    api/google/                   → Google OAuth setup, Drive folder creation, Calendar event creation
     auth/callback/                → Supabase auth code exchange
   components/
     shared/     → AppNav, LogoutButton, StudentPortalView
-    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton
+    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
     supabase/   → browser + server Supabase clients
-    google/     → Google OAuth2 client + Drive folder creation helpers
+    google/     → Google OAuth2 client, Drive folder creation, Calendar event creation
     types.ts    → shared TypeScript types
     utils.ts    → formatTime, cn
   proxy.ts      → Next.js middleware (auth + route protection)
