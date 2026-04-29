@@ -69,9 +69,7 @@ async function createMeetDoc(
 ) {
   const slotLines = schedule.map(s => `${esc(s.day)} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
   const safeLink = esc(meetLink)
-  const footer = schedule.length > 1
-    ? '<p><br></p><p>The same link will be used for the other time as well.</p>'
-    : ''
+  const footer = '<p><br></p><p>The same link will be used for the other time as well.</p>'
   const html = [
     `<p>${esc(studentName)}</p>`,
     `<p><br></p>`,
