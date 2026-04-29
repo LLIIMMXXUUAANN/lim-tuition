@@ -42,6 +42,9 @@ export default function CreateCalendarEventButton({ name, classSchedule, onSucce
 
   const disabled = !name.trim() || classSchedule.length === 0 || state === 'loading' || state === 'done'
 
+  const missingName = !name.trim()
+  const missingSchedule = classSchedule.length === 0
+
   return (
     <div className="flex items-center gap-3">
       <Button
@@ -57,6 +60,11 @@ export default function CreateCalendarEventButton({ name, classSchedule, onSucce
           ? `✓ ${eventCount} event${eventCount !== 1 ? 's' : ''} created`
           : 'Create Google Calendar Event'}
       </Button>
+      {state === 'idle' && (missingName || missingSchedule) && (
+        <span className="text-xs text-slate-400">
+          Requires {[missingName && 'student name', missingSchedule && 'class schedule'].filter(Boolean).join(' and ')}
+        </span>
+      )}
       {state === 'error' && <span className="text-xs text-red-500">{errorMsg}</span>}
     </div>
   )

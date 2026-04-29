@@ -42,6 +42,7 @@ export default function CreateDriveFolderButton({ name, onSuccess }: Props) {
       >
         {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : 'Create Google Drive Folder (Python Syllabus)'}
       </Button>
+      {!name.trim() && state === 'idle' && <span className="text-xs text-slate-400">Requires student name</span>}
       {state === 'error' && <span className="text-xs text-red-500">{errorMsg}</span>}
     </div>
   )
