@@ -40,7 +40,7 @@ export default function CreateDriveFolderButton({ name, onSuccess }: Props) {
         onClick={handleClick}
         disabled={!name.trim() || state === 'loading' || state === 'done'}
       >
-        {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : 'Create Drive Folder'}
+        {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : 'Create Student Folder (Python Syllabus)'}
       </Button>
       {state === 'error' && <span className="text-xs text-red-500">{errorMsg}</span>}
     </div>
