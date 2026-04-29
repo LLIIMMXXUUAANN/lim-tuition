@@ -17,7 +17,10 @@ export async function GET() {
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: ['https://www.googleapis.com/auth/drive'],
+    scope: [
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/calendar',
+    ],
   })
   return NextResponse.redirect(url)
 }
