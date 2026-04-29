@@ -1,11 +1,12 @@
 import { google } from 'googleapis'
+import { Readable } from 'stream'
 import type { OAuth2Client } from 'google-auth-library'
 
 const EMPTY_IPYNB = JSON.stringify({
   cells: [{ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: [] }],
   metadata: {
     kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
-    language_info: { name: 'python', version: '3.8.0' },
+    language_info: { name: 'python', version: '3.12.0' },
   },
   nbformat: 4,
   nbformat_minor: 4,
@@ -31,7 +32,6 @@ async function createShortcut(drive: ReturnType<typeof google.drive>, targetId: 
 }
 
 async function uploadIpynb(drive: ReturnType<typeof google.drive>, name: string, parentId: string) {
-  const { Readable } = await import('stream')
   await drive.files.create({
     requestBody: { name: `${name}.ipynb`, parents: [parentId] },
     media: { mimeType: 'application/x-ipynb+json', body: Readable.from([EMPTY_IPYNB]) },
@@ -49,9 +49,12 @@ async function createBlankDoc(drive: ReturnType<typeof google.drive>, name: stri
 }
 
 export async function createStudentDriveFolder(auth: OAuth2Client, studentName: string): Promise<string> {
+  const studentsFolderId = process.env.GOOGLE_STUDENTS_FOLDER_ID
+  const lecTopic1FileId = process.env.GOOGLE_LEC_TOPIC1_FILE_ID
+  if (!studentsFolderId) throw new Error('GOOGLE_STUDENTS_FOLDER_ID env var is not set')
+  if (!lecTopic1FileId) throw new Error('GOOGLE_LEC_TOPIC1_FILE_ID env var is not set')
+
   const drive = google.drive({ version: 'v3', auth })
-  const studentsFolderId = process.env.GOOGLE_STUDENTS_FOLDER_ID!
-  const lecTopic1FileId = process.env.GOOGLE_LEC_TOPIC1_FILE_ID!
 
   // Root student folder
   const rootId = await createFolder(drive, studentName, studentsFolderId)
@@ -60,21 +63,27 @@ export async function createStudentDriveFolder(auth: OAuth2Client, studentName: 
     requestBody: { role: 'reader', type: 'anyone' },
   })
 
-  // 1. Teaching Slides — shortcut to Topic_1.pptx
-  const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
-  await createShortcut(drive, lecTopic1FileId, teachingId, 'Topic_1.pptx')
+  try {
+    // 1. Teaching Slides — shortcut to Topic_1.pptx
+    const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
+    await createShortcut(drive, lecTopic1FileId, teachingId, 'Topic_1.pptx')
 
-  // 2. In-Class Coding Examples — empty ipynb
-  const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
-  await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
+    // 2. In-Class Coding Examples — empty ipynb
+    const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
+    await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
 
-  // 3. Homework Questions — blank Google Doc
-  const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
-  await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
+    // 3. Homework Questions — blank Google Doc
+    const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
+    await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
 
-  // 4. Homework Sample Answers — empty ipynb
-  const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
-  await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
+    // 4. Homework Sample Answers — empty ipynb
+    const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
+    await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
+  } catch (err) {
+    // Clean up root folder so a retry doesn't create duplicates
+    await drive.files.delete({ fileId: rootId }).catch(() => null)
+    throw err
+  }
 
   return `https://drive.google.com/drive/folders/${rootId}`
 }

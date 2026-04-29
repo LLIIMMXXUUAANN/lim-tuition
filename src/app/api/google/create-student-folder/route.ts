@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
   const { data: isTutor } = await supabase.rpc('is_tutor')
   if (!isTutor) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { name } = await req.json() as { name: string }
+  const body = await req.json().catch(() => ({})) as { name?: string }
+  const { name } = body
   if (!name?.trim()) return NextResponse.json({ error: 'name is required' }, { status: 400 })
 
   try {
