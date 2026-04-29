@@ -185,6 +185,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
             <Input id="google_drive_link" value={form.google_drive_link ?? ''} onChange={(e) => set('google_drive_link', e.target.value)} placeholder="https://drive.google.com/..." />
             <CreateDriveFolderButton
               name={form.name}
+              meetLink={form.google_meet_link ?? ''}
+              classSchedule={form.class_schedule ?? []}
               onSuccess={(url) => set('google_drive_link', url)}
             />
           </div>

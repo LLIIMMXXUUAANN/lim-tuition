@@ -3,12 +3,20 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 
+interface ClassSlot {
+  day: string
+  start: string
+  end: string
+}
+
 interface Props {
   name: string
+  meetLink: string
+  classSchedule: ClassSlot[]
   onSuccess: (url: string) => void
 }
 
-export default function CreateDriveFolderButton({ name, onSuccess }: Props) {
+export default function CreateDriveFolderButton({ name, meetLink, classSchedule, onSuccess }: Props) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -19,7 +27,7 @@ export default function CreateDriveFolderButton({ name, onSuccess }: Props) {
       const res = await fetch('/api/google/create-student-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, meet_link: meetLink, class_schedule: classSchedule }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
@@ -38,11 +46,15 @@ export default function CreateDriveFolderButton({ name, onSuccess }: Props) {
         variant="outline"
         size="sm"
         onClick={handleClick}
-        disabled={!name.trim() || state === 'loading' || state === 'done'}
+        disabled={!name.trim() || !meetLink.trim() || state === 'loading' || state === 'done'}
       >
         {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : 'Create Google Drive Folder (Python Syllabus)'}
       </Button>
-      {!name.trim() && state === 'idle' && <span className="text-xs text-slate-400">Requires student name</span>}
+      {state === 'idle' && (!name.trim() || !meetLink.trim()) && (
+        <span className="text-xs text-slate-400">
+          Requires {[!name.trim() && 'student name', !meetLink.trim() && 'Google Meet link'].filter(Boolean).join(' and ')}
+        </span>
+      )}
       {state === 'error' && <span className="text-xs text-red-500">{errorMsg}</span>}
     </div>
   )

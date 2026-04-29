@@ -48,7 +48,37 @@ async function createBlankDoc(drive: ReturnType<typeof google.drive>, name: stri
   })
 }
 
-export async function createStudentDriveFolder(auth: OAuth2Client, studentName: string): Promise<string> {
+interface ClassSlot { day: string; start: string; end: string }
+
+function fmt(time: string): string {
+  const [h, m] = time.split(':').map(Number)
+  const period = h >= 12 ? 'pm' : 'am'
+  const hour = h % 12 || 12
+  return m === 0 ? `${hour}${period}` : `${hour}:${m.toString().padStart(2, '0')}${period}`
+}
+
+async function createMeetDoc(
+  drive: ReturnType<typeof google.drive>,
+  parentId: string,
+  studentName: string,
+  schedule: ClassSlot[],
+  meetLink: string,
+) {
+  const slotLines = schedule.map(s => `${s.day} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
+  const footer = schedule.length > 1 ? '<p>The same link will be used for the other time as well.</p>' : ''
+  const html = `<p><b>${studentName}</b></p><p>${slotLines}</p><p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${meetLink}">${meetLink}</a></p>${footer}`
+  await drive.files.create({
+    requestBody: { name: 'Google Meet Link', mimeType: 'application/vnd.google-apps.document', parents: [parentId] },
+    media: { mimeType: 'text/html', body: Readable.from([html]) },
+  })
+}
+
+export async function createStudentDriveFolder(
+  auth: OAuth2Client,
+  studentName: string,
+  meetLink: string,
+  classSchedule: ClassSlot[],
+): Promise<string> {
   const studentsFolderId = process.env.GOOGLE_STUDENTS_FOLDER_ID
   const lecTopic1FileId = process.env.GOOGLE_LEC_TOPIC1_FILE_ID
   if (!studentsFolderId) throw new Error('GOOGLE_STUDENTS_FOLDER_ID env var is not set')
@@ -80,8 +110,8 @@ export async function createStudentDriveFolder(auth: OAuth2Client, studentName: 
     const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
     await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
 
-    // Google Meet Link — blank doc in root folder
-    await createBlankDoc(drive, 'Google Meet Link', rootId)
+    // Google Meet Link — doc with student info and meet link
+    await createMeetDoc(drive, rootId, studentName, classSchedule, meetLink)
   } catch (err) {
     // Clean up root folder so a retry doesn't create duplicates
     await drive.files.delete({ fileId: rootId }).catch(() => null)
