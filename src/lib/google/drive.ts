@@ -68,9 +68,18 @@ async function createMeetDoc(
   meetLink: string,
 ) {
   const slotLines = schedule.map(s => `${esc(s.day)} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
-  const footer = schedule.length > 1 ? '<p>The same link will be used for the other time as well.</p>' : ''
   const safeLink = esc(meetLink)
-  const html = `<p><b>${esc(studentName)}</b></p><p>${slotLines}</p><p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}">${safeLink}</a></p>${footer}`
+  const footer = schedule.length > 1
+    ? '<p><br></p><p>The same link will be used for the other time as well.</p>'
+    : ''
+  const html = [
+    `<p>${esc(studentName)}</p>`,
+    `<p><br></p>`,
+    `<p>${slotLines}</p>`,
+    `<p><br></p>`,
+    `<p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}">${safeLink}</a></p>`,
+    footer,
+  ].join('')
   await drive.files.create({
     requestBody: { name: 'Google Meet Link', mimeType: 'application/vnd.google-apps.document', parents: [parentId] },
     media: { mimeType: 'text/html', body: Readable.from([html]) },
