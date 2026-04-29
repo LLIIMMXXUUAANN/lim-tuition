@@ -13,6 +13,7 @@ const TEMPLATE_ROWS: Record<string, number> = {
   review_request2: 5,
   recommendation_request1: 5,
   recommendation_request2: 6,
+  first_approach: 5,
 }
 
 const TEMPLATE_META: { id: string; title: string; description: string }[] = [
@@ -22,6 +23,7 @@ const TEMPLATE_META: { id: string; title: string; description: string }[] = [
   { id: 'review_request2', title: 'Review Request 2', description: 'For students tutored through a parent.' },
   { id: 'recommendation_request1', title: 'Recommendation Request 1', description: 'For students tutored directly.' },
   { id: 'recommendation_request2', title: 'Recommendation Request 2', description: 'For students tutored through a parent.' },
+  { id: 'first_approach', title: 'First Approach', description: 'Initial outreach to prospective students via Superprof.' },
 ]
 
 function TemplateCard({
