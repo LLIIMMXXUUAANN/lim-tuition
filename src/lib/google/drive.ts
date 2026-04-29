@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import type { OAuth2Client } from 'google-auth-library'
+import type { ClassSlot } from '@/lib/types'
 
 const EMPTY_IPYNB = JSON.stringify({
   cells: [{ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: [] }],
@@ -48,7 +49,9 @@ async function createBlankDoc(drive: ReturnType<typeof google.drive>, name: stri
   })
 }
 
-interface ClassSlot { day: string; start: string; end: string }
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
 
 function fmt(time: string): string {
   const [h, m] = time.split(':').map(Number)
@@ -64,9 +67,10 @@ async function createMeetDoc(
   schedule: ClassSlot[],
   meetLink: string,
 ) {
-  const slotLines = schedule.map(s => `${s.day} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
+  const slotLines = schedule.map(s => `${esc(s.day)} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
   const footer = schedule.length > 1 ? '<p>The same link will be used for the other time as well.</p>' : ''
-  const html = `<p><b>${studentName}</b></p><p>${slotLines}</p><p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${meetLink}">${meetLink}</a></p>${footer}`
+  const safeLink = esc(meetLink)
+  const html = `<p><b>${esc(studentName)}</b></p><p>${slotLines}</p><p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}">${safeLink}</a></p>${footer}`
   await drive.files.create({
     requestBody: { name: 'Google Meet Link', mimeType: 'application/vnd.google-apps.document', parents: [parentId] },
     media: { mimeType: 'text/html', body: Readable.from([html]) },

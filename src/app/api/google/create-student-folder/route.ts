@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createStudentDriveFolder } from '@/lib/google/drive'
+import type { ClassSlot } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const auth = await getOAuth2Client()
-    const folderUrl = await createStudentDriveFolder(auth, name.trim(), meet_link.trim(), class_schedule ?? [])
+    const folderUrl = await createStudentDriveFolder(auth, name.trim(), meet_link.trim(), (class_schedule ?? []) as ClassSlot[])
     return NextResponse.json({ url: folderUrl })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to create Drive folder'
