@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ClassScheduleEditor from '@/components/students/ClassScheduleEditor'
 import CreateDriveFolderButton from '@/components/students/CreateDriveFolderButton'
+import CreateCalendarEventButton from '@/components/students/CreateCalendarEventButton'
 import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -173,6 +174,11 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           <div className="space-y-2">
             <Label htmlFor="google_meet_link">Google Meet Link</Label>
             <Input id="google_meet_link" value={form.google_meet_link ?? ''} onChange={(e) => set('google_meet_link', e.target.value)} placeholder="https://meet.google.com/..." />
+            <CreateCalendarEventButton
+              name={form.name}
+              classSchedule={form.class_schedule ?? []}
+              onSuccess={(meetLink) => set('google_meet_link', meetLink)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="google_drive_link">Google Drive Link</Label>
