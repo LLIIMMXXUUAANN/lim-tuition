@@ -17,9 +17,20 @@ const TIMEZONE = 'Asia/Kuala_Lumpur'
 // Returns "YYYY-MM-DDTHH:MM:SS" with no Z suffix so Google Calendar treats it
 // as local MYT time (via the timeZone field). Operates entirely in MYT to avoid
 // UTC offset errors on servers where process timezone is UTC.
+function nowInTimezone(tz: string): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const g = (t: string) => parts.find(p => p.type === t)!.value
+  return new Date(`${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}:${g('second')}`)
+}
+
 function nextOccurrenceDateTimeStr(day: string, time: string): string {
   const [hours, minutes] = time.split(':').map(Number)
-  const nowMYT = new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }))
+  const nowMYT = nowInTimezone(TIMEZONE)
   const result = new Date(nowMYT)
   result.setHours(hours, minutes, 0, 0)
   const daysUntil = (DAY_INDEX[day] - nowMYT.getDay() + 7) % 7
@@ -81,7 +92,7 @@ export async function createWeeklyClassEvents(
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${firstByDay}`],
       conferenceData: {
         createRequest: {
-          requestId: `${studentName}-${firstSlot.day}-${Date.now()}`,
+          requestId: `${studentName}-${firstSlot.day}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       },
