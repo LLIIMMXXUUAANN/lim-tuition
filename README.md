@@ -37,8 +37,10 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests, first approach outreach)
 - **Payment generator** — auto-calculates session dates and fees for a given student and month; supports carryover session deductions
-- **Google Calendar event creation** — "Create Google Calendar Event" button on the new student form; creates a weekly recurring event in the Superprof calendar for each class slot, auto-generates a Google Meet link, and auto-fills the `google_meet_link` field
+- **Google Calendar event creation** — "Create Google Calendar Event" button on the new student form; creates a weekly recurring event in the Superprof calendar for each class slot, auto-generates a Google Meet link, and auto-fills the `google_meet_link` field. Event IDs are stored per-slot so the same Meet link can be reused on reschedule.
+- **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
+- **Backfill banner** — if existing students have a Meet link but no stored event IDs, a banner appears at the top of the students list with a "Sync Event IDs" button; it searches Calendar by student name, stores the IDs, and dismisses once done
 - **Timetable** — weekly availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; exports a HD PNG (`slot_availability.png`) with legend and colour-coded cells
 
 ### Student portal (authenticated students/parents)
@@ -80,18 +82,18 @@ src/
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
-    api/google/                   → Google OAuth setup, Drive folder creation, Calendar event creation
+    api/google/                   → Google OAuth setup, Drive folder creation, Calendar event creation/update/backfill
     auth/callback/                → Supabase auth code exchange
   components/
     shared/     → AppNav, LogoutButton, StudentPortalView
-    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton
+    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
     supabase/   → browser + server Supabase clients
-    google/     → Google OAuth2 client, Drive folder creation, Calendar event creation
+    google/     → Google OAuth2 client, Drive folder creation/update, Calendar event creation/update
     types.ts    → shared TypeScript types
     utils.ts    → formatTime, cn
   proxy.ts      → Next.js middleware (auth + route protection)

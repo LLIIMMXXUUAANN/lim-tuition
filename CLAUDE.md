@@ -67,7 +67,7 @@ src/app/
 
 Four Supabase tables in the `public` schema:
 
-- **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
+- **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. `calendar_event_ids text[]` stores one Google Calendar event ID per class slot, positionally matched to `class_schedule` (index 0 = event that owns the Meet conference). RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
 - **`templates`** — one row per template, keyed by text `id` (e.g. `payment`, `review_request1`, `first_approach`). `content` is edited in-place from the UI and upserted on Save.
 - **`tutors`** — one row per tutor email. RLS enabled (no direct access); accessed only via SECURITY DEFINER functions.
 - **`settings`** — key/value store for server-side config. Currently stores `google_refresh_token`. RLS: tutor-only via `is_tutor()`.
@@ -86,7 +86,7 @@ Supabase clients:
 ```
 src/components/
   shared/       → AppNav, LogoutButton, StudentPortalView   (used across multiple routes)
-  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton
+  students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
   landing/      → 13 static sections for the public landing page
@@ -106,7 +106,9 @@ src/components/
 - **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
 - **`shared/AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
 - **`students/StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
+- **`students/StudentForm`** — on Save, if the student already has `calendar_event_ids` and the schedule changed, automatically calls `update-class-event` before the DB upsert; patches Calendar events (preserving Meet link) and rewrites the Drive "Google Meet Link" doc; Drive errors shown as amber warning but don't block the save
 - **`students/ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
+- **`students/BackfillEventIdsButton`** — banner on the students list; visible when active students have a Meet link but missing `calendar_event_ids`; calls backfill API, shows per-student results, dismissed with `router.refresh()`
 - **`templates/TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
 - **`templates/PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
 - **`timetable/TimetableSection`** — client component on the Timetable page; interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots). Booked slots (from active students' `class_schedule`) are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. "Download PNG" renders an offscreen 2× canvas and saves `slot_availability.png`. No DB persistence — state is ephemeral.
@@ -120,16 +122,19 @@ Server Component that fetches active students' `name` and `class_schedule`, then
 Admin-only features for creating a student's Google Drive folder and weekly recurring Google Calendar event.
 
 - **`src/lib/google/auth.ts`** — `getOAuth2Client()`: reads refresh token from `settings` table, returns configured OAuth2 client
-- **`src/lib/google/drive.ts`** — `createStudentDriveFolder(auth, studentName, meetLink, classSchedule)`: creates root folder in `GOOGLE_STUDENTS_FOLDER_ID`, creates 4 subfolders with content (Teaching Slides shortcut, 2× empty `.ipynb`, blank Google Doc), writes a pre-filled "Google Meet Link" Google Doc (student name, schedule, timezone, Meet link), sets anyone-with-link viewer permission. Atomic: deletes root folder on any failure so retries don't create duplicates.
-- **`src/lib/google/calendar.ts`** — `createWeeklyClassEvents(auth, studentName, schedule)`: creates a weekly recurring event for each class slot in `GOOGLE_CALENDAR_ID`. First slot gets a Google Meet conference (one Meet link per student); subsequent slots reference the same link in their description. Datetime strings are formatted as naive `YYYY-MM-DDTHH:MM:SS` (no Z) with `timeZone: Asia/Kuala_Lumpur` so Google Calendar interprets them as MYT regardless of server timezone.
+- **`src/lib/google/drive.ts`** — `createStudentDriveFolder(auth, studentName, meetLink, classSchedule)`: creates root folder in `GOOGLE_STUDENTS_FOLDER_ID`, creates 4 subfolders with content (Teaching Slides shortcut, 2× empty `.ipynb`, blank Google Doc), writes a pre-filled "Google Meet Link" Google Doc (student name, schedule, timezone, Meet link), sets anyone-with-link viewer permission. Atomic: deletes root folder on any failure so retries don't create duplicates. `updateStudentMeetDoc(auth, driveFolderUrl, studentName, schedule, meetLink)`: parses folder ID from the stored Drive URL, finds the "Google Meet Link" doc by name, and rewrites its HTML content via `drive.files.update` — called automatically on reschedule.
+- **`src/lib/google/calendar.ts`** — `createWeeklyClassEvents(auth, studentName, schedule)`: creates a weekly recurring event for each class slot in `GOOGLE_CALENDAR_ID`; returns `{ meetLink, eventCount, eventIds }`. First slot gets a Google Meet conference (one Meet link per student); subsequent slots reference the same link in their description. Datetime strings are formatted as naive `YYYY-MM-DDTHH:MM:SS` (no Z) with `timeZone: Asia/Kuala_Lumpur` so Google Calendar interprets them as MYT regardless of server timezone. `updateWeeklyClassEvents(auth, studentName, schedule, existingEventIds, meetLink)`: patches existing events positionally (`existingEventIds[i]` → `schedule[i]`) using `events.patch` so `conferenceData` is untouched and the Meet link is preserved; creates new events for added slots and deletes events for removed slots; all ops run in parallel via `Promise.all`.
 - **`src/app/api/google/auth/route.ts`** — One-time OAuth setup: redirects admin to Google consent screen with Drive + Calendar scopes (tutor-only)
 - **`src/app/api/google/callback/route.ts`** — OAuth callback: exchanges code for tokens, saves refresh token to `settings` table (tutor-only)
 - **`src/app/api/google/create-student-folder/route.ts`** — POST `{ name, meet_link, class_schedule }`: creates the full Drive folder structure, returns `{ url }` (tutor-only). Requires `meet_link` to be set so the "Google Meet Link" doc is fully populated.
-- **`src/app/api/google/create-class-event/route.ts`** — POST `{ name, class_schedule }`: creates weekly recurring Calendar events, returns `{ meetLink, eventCount }` (tutor-only)
+- **`src/app/api/google/create-class-event/route.ts`** — POST `{ name, class_schedule }`: creates weekly recurring Calendar events, returns `{ meetLink, eventCount, eventIds }` (tutor-only)
+- **`src/app/api/google/update-class-event/route.ts`** — POST `{ name, class_schedule, event_ids, meet_link, drive_folder_url? }`: patches existing Calendar events via `updateWeeklyClassEvents` (Meet link preserved), then optionally rewrites the Drive "Google Meet Link" doc via `updateStudentMeetDoc`. Calendar failure → 500; Drive failure → non-fatal `driveDocError` in response. Called automatically by `StudentForm` on Save when the schedule has changed.
+- **`src/app/api/google/backfill-event-ids/route.ts`** — GET, tutor-only: finds active students that have a Meet link but no `calendar_event_ids`, searches Calendar for their recurring events by exact name match, sorts by creation time (oldest = index 0 = Meet conference owner), and writes the IDs to the DB. Surfaced via `BackfillEventIdsButton` on the students list page.
 - **`src/components/students/CreateDriveFolderButton.tsx`** — client button in `StudentForm`; disabled until both student name and Google Meet link are filled; on success auto-fills `google_drive_link`
-- **`src/components/students/CreateCalendarEventButton.tsx`** — client button in `StudentForm`; disabled until student name and class schedule are filled; on success auto-fills `google_meet_link`
+- **`src/components/students/CreateCalendarEventButton.tsx`** — client button in `StudentForm`; disabled until student name and class schedule are filled; on success auto-fills both `google_meet_link` and `calendar_event_ids`
+- **`src/components/students/BackfillEventIdsButton.tsx`** — shown at the top of the students list when active students have a Meet link but no event IDs; calls the backfill route, shows per-student results, and "Dismiss" triggers `router.refresh()` to revalidate and hide the banner
 
-**Intended flow in student form:** fill name + schedule → click **Create Calendar Event** (Meet link auto-fills) → click **Create Drive Folder** (doc written with actual Meet link).
+**Intended flow in student form:** fill name + schedule → click **Create Calendar Event** (Meet link + event IDs auto-fill) → click **Create Drive Folder** (doc written with actual Meet link). On subsequent edits, changing the schedule and clicking **Save Changes** automatically patches the Calendar events and rewrites the Drive doc (amber warning shown if Drive update fails, but save still proceeds).
 
 **Required env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_STUDENTS_FOLDER_ID`, `GOOGLE_LEC_TOPIC1_FILE_ID`, `GOOGLE_CALENDAR_ID`
 
