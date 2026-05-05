@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { updateWeeklyClassEvents } from '@/lib/google/calendar'
+import { updateStudentMeetDoc } from '@/lib/google/drive'
 import type { ClassSlot } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
@@ -16,8 +17,9 @@ export async function POST(req: NextRequest) {
     class_schedule?: { day: string; start: string; end: string }[]
     event_ids?: string[]
     meet_link?: string
+    drive_folder_url?: string
   }
-  const { name, class_schedule, event_ids, meet_link } = body
+  const { name, class_schedule, event_ids, meet_link, drive_folder_url } = body
   if (!name?.trim()) return NextResponse.json({ error: 'name is required' }, { status: 400 })
   if (!class_schedule?.length) return NextResponse.json({ error: 'class_schedule is required and must not be empty' }, { status: 400 })
   if (!event_ids?.length) return NextResponse.json({ error: 'event_ids is required and must not be empty' }, { status: 400 })
@@ -34,7 +36,17 @@ export async function POST(req: NextRequest) {
       event_ids,
       meet_link.trim(),
     )
-    return NextResponse.json({ eventIds })
+
+    let driveDocError: string | null = null
+    if (drive_folder_url?.trim()) {
+      try {
+        await updateStudentMeetDoc(auth, drive_folder_url.trim(), name.trim(), class_schedule as ClassSlot[], meet_link.trim())
+      } catch (driveErr: unknown) {
+        driveDocError = driveErr instanceof Error ? driveErr.message : 'Failed to update Drive doc'
+      }
+    }
+
+    return NextResponse.json({ eventIds, driveDocError })
   } catch (err: unknown) {
     const raw = err instanceof Error ? err.message : 'Failed to update calendar events'
     const message = raw.toLowerCase().includes('insufficient') || raw.includes('403')

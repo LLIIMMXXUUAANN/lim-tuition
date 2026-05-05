@@ -104,11 +104,13 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
               class_schedule: form.class_schedule,
               event_ids: form.calendar_event_ids,
               meet_link: form.google_meet_link,
+              drive_folder_url: form.google_drive_link || undefined,
             }),
           })
           const data = await res.json()
           if (res.ok) {
             payload.calendar_event_ids = data.eventIds
+            if (data.driveDocError) setCalendarWarning(`Calendar updated. Drive doc not updated: ${data.driveDocError}`)
           } else {
             setCalendarWarning(`Calendar not updated: ${data.error ?? 'unknown error'}`)
           }

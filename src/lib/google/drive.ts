@@ -60,6 +60,19 @@ function fmt(time: string): string {
   return m === 0 ? `${hour}${period}` : `${hour}:${m.toString().padStart(2, '0')}${period}`
 }
 
+function buildMeetDocHtml(studentName: string, schedule: ClassSlot[], meetLink: string): string {
+  const slotLines = schedule.map(s => `${esc(s.day)} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
+  const safeLink = esc(meetLink)
+  return [
+    `<p>${esc(studentName)}</p>`,
+    `<p><br></p>`,
+    `<p>${slotLines}</p>`,
+    `<p><br></p>`,
+    `<p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}" style="color:#1155CC">${safeLink}</a></p>`,
+    `<p><br></p><p>The same link will be used for the other time as well.</p>`,
+  ].join('')
+}
+
 async function createMeetDoc(
   drive: ReturnType<typeof google.drive>,
   parentId: string,
@@ -67,20 +80,35 @@ async function createMeetDoc(
   schedule: ClassSlot[],
   meetLink: string,
 ) {
-  const slotLines = schedule.map(s => `${esc(s.day)} · ${fmt(s.start)} – ${fmt(s.end)}`).join('<br>')
-  const safeLink = esc(meetLink)
-  const footer = '<p><br></p><p>The same link will be used for the other time as well.</p>'
-  const html = [
-    `<p>${esc(studentName)}</p>`,
-    `<p><br></p>`,
-    `<p>${slotLines}</p>`,
-    `<p><br></p>`,
-    `<p>Time zone: Asia/Kuala_Lumpur<br>Google Meet joining info<br>Video call link: <a href="${safeLink}" style="color:#1155CC">${safeLink}</a></p>`,
-    footer,
-  ].join('')
   await drive.files.create({
     requestBody: { name: 'Google Meet Link', mimeType: 'application/vnd.google-apps.document', parents: [parentId] },
-    media: { mimeType: 'text/html', body: Readable.from([html]) },
+    media: { mimeType: 'text/html', body: Readable.from([buildMeetDocHtml(studentName, schedule, meetLink)]) },
+  })
+}
+
+export async function updateStudentMeetDoc(
+  auth: OAuth2Client,
+  driveFolderUrl: string,
+  studentName: string,
+  schedule: ClassSlot[],
+  meetLink: string,
+): Promise<void> {
+  const folderId = driveFolderUrl.split('/folders/')[1]?.split('?')[0]
+  if (!folderId) throw new Error('Could not parse folder ID from Drive URL')
+
+  const drive = google.drive({ version: 'v3', auth })
+  const search = await drive.files.list({
+    q: `'${folderId}' in parents and name = 'Google Meet Link' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
+    fields: 'files(id)',
+    pageSize: 1,
+  })
+  const docId = search.data.files?.[0]?.id
+  if (!docId) throw new Error('Google Meet Link doc not found in student Drive folder')
+
+  await drive.files.update({
+    fileId: docId,
+    requestBody: {},
+    media: { mimeType: 'text/html', body: Readable.from([buildMeetDocHtml(studentName, schedule, meetLink)]) },
   })
 }
 
