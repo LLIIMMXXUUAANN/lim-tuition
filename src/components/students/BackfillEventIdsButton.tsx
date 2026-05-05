@@ -24,7 +24,6 @@ export default function BackfillEventIdsButton({ count }: { count: number }) {
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       setResults(data.results ?? [])
       setState('done')
-      router.refresh()
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
       setState('error')
@@ -38,15 +37,21 @@ export default function BackfillEventIdsButton({ count }: { count: number }) {
           <span className="font-semibold text-slate-800">{count} {count !== 1 ? 'students' : 'student'}</span>
           {' '}missing calendar event IDs — sync them so rescheduling works.
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleClick}
-          disabled={state === 'loading' || state === 'done'}
-          className="shrink-0"
-        >
-          {state === 'loading' ? 'Syncing…' : state === 'done' ? '✓ Done' : 'Sync Event IDs'}
-        </Button>
+        {state === 'done' ? (
+          <Button variant="outline" size="sm" onClick={() => router.refresh()} className="shrink-0">
+            Dismiss
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClick}
+            disabled={state === 'loading'}
+            className="shrink-0"
+          >
+            {state === 'loading' ? 'Syncing…' : 'Sync Event IDs'}
+          </Button>
+        )}
       </div>
 
       {state === 'error' && (
