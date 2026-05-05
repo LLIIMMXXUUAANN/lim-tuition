@@ -37,6 +37,7 @@ export default async function StudentsPage({ searchParams }: Props) {
     .select('id', { count: 'exact', head: true })
     .not('google_meet_link', 'is', null)
     .is('calendar_event_ids', null)
+    .eq('is_active', true)
 
   const byDay = DAYS.map((day) => {
     const entries = list

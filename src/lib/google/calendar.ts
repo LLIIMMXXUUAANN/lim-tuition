@@ -148,7 +148,9 @@ export async function updateWeeklyClassEvents(
     if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
 
     if (existingEventIds[i]) {
-      // Patch existing event — conferenceData stays untouched, Meet link preserved
+      // Positional match: existingEventIds[i] corresponds to schedule[i].
+      // Index 0 always owns the Meet conference regardless of reordering — patching
+      // only updates time/recurrence, conferenceData is untouched so Meet link is preserved.
       const res = await calendar.events.patch({
         calendarId,
         eventId: existingEventIds[i],
@@ -178,9 +180,12 @@ export async function updateWeeklyClassEvents(
     }
   }
 
-  // Delete events for removed slots
+  // Delete events for removed slots. Failures are logged but non-fatal — an
+  // orphaned recurring event is a minor annoyance, not a data correctness issue.
   for (const eventId of existingEventIds.slice(schedule.length)) {
-    await calendar.events.delete({ calendarId, eventId }).catch(() => {})
+    await calendar.events.delete({ calendarId, eventId }).catch((err: unknown) => {
+      console.error(`Failed to delete calendar event ${eventId}:`, err)
+    })
   }
 
   return { eventIds: newEventIds }

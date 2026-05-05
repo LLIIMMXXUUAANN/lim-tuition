@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
 interface Result {
@@ -10,6 +11,7 @@ interface Result {
 }
 
 export default function BackfillEventIdsButton({ count }: { count: number }) {
+  const router = useRouter()
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [results, setResults] = useState<Result[]>([])
   const [errorMsg, setErrorMsg] = useState('')
@@ -22,6 +24,7 @@ export default function BackfillEventIdsButton({ count }: { count: number }) {
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       setResults(data.results ?? [])
       setState('done')
+      router.refresh()
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
       setState('error')
