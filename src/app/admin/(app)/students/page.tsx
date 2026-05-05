@@ -27,7 +27,7 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const supabase = await createClient()
   let query = supabase.from('students').select('*').order('name')
-  if (activeTab !== 'All') query = query.eq('status', activeTab as string)
+  if (activeTab !== 'All') query = query.eq('status', activeTab)
 
   const { data: students, error } = await query
   const list = (students ?? []) as Student[]
@@ -37,7 +37,7 @@ export default async function StudentsPage({ searchParams }: Props) {
     .select('id', { count: 'exact', head: true })
     .not('google_meet_link', 'is', null)
     .is('calendar_event_ids', null)
-    .eq('is_active', true)
+    .eq('status', 'Active')
 
   const byDay = DAYS.map((day) => {
     const entries = list

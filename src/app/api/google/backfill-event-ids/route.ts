@@ -18,7 +18,7 @@ export async function GET() {
     .select('id, name, google_meet_link')
     .not('google_meet_link', 'is', null)
     .is('calendar_event_ids', null)
-    .eq('is_active', true)
+    .eq('status', 'Active')
 
   if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
   if (!students?.length) return NextResponse.json({ message: 'All students already have event IDs — nothing to backfill.', updated: 0 })

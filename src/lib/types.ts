@@ -27,7 +27,6 @@ export interface Student {
   today_homework: string | null
   notes: string | null
   status: StudentStatus
-  is_active: boolean
   created_at: string
   updated_at: string
 }

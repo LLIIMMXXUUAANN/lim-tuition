@@ -36,7 +36,6 @@ const emptyForm: StudentInsert = {
   today_homework: '',
   notes: '',
   status: 'Active',
-  is_active: true,
 }
 
 export default function StudentForm({ student, onSaved }: StudentFormProps) {
@@ -60,7 +59,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           today_homework: student.today_homework ?? '',
           notes: student.notes ?? '',
           status: student.status ?? 'Active',
-          is_active: student.is_active,
         }
       : emptyForm
   )
@@ -142,7 +140,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     if (!student) return
     if (!confirm(`Mark ${student.name} as Completed and hide from dashboard?`)) return
     const supabase = createClient()
-    const { error: err } = await supabase.from('students').update({ status: 'Completed', is_active: false }).eq('id', student.id)
+    const { error: err } = await supabase.from('students').update({ status: 'Completed' }).eq('id', student.id)
     if (err) { setError(`Failed to remove student: ${err.message}`); return }
     router.push('/admin/students')
     router.refresh()

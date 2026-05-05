@@ -67,7 +67,7 @@ src/app/
 
 Four Supabase tables in the `public` schema:
 
-- **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. `calendar_event_ids text[]` stores one Google Calendar event ID per class slot, positionally matched to `class_schedule` (index 0 = event that owns the Meet conference). RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
+- **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. `calendar_event_ids text[]` stores one Google Calendar event ID per class slot, positionally matched to `class_schedule` (index 0 = event that owns the Meet conference). `status` (`Active` | `On Hold` | `Completed`) is the sole active/inactive flag — filter active students with `.eq('status', 'Active')`. `today_homework` is a `text` column (multi-line). RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
 - **`templates`** — one row per template, keyed by text `id` (e.g. `payment`, `review_request1`, `first_approach`). `content` is edited in-place from the UI and upserted on Save.
 - **`tutors`** — one row per tutor email. RLS enabled (no direct access); accessed only via SECURITY DEFINER functions.
 - **`settings`** — key/value store for server-side config. Currently stores `google_refresh_token`. RLS: tutor-only via `is_tutor()`.
@@ -103,7 +103,7 @@ src/components/
 
 ### Key components
 
-- **`shared/student-fields`** — shared display primitives used by `StudentDetail` and `StudentPortalView`: `Row` (inline label + value), `BlockField` (stacked label + `whitespace-pre-wrap` value for multi-line text), `statusBadge` (status → Tailwind class lookup). Import from here instead of redefining locally.
+- **`shared/student-fields`** — shared display primitives used by `StudentDetail`, `StudentPortalView`, and `StudentCard`: `Row` (inline label + value), `BlockField` (stacked label + `whitespace-pre-wrap` value for multi-line text), `statusBadge` (status → Tailwind class lookup). Import from here instead of redefining locally.
 - **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
 - **`shared/AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
 - **`students/StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
