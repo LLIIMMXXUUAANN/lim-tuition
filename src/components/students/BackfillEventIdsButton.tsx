@@ -29,29 +29,38 @@ export default function BackfillEventIdsButton({ count }: { count: number }) {
   }
 
   return (
-    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-amber-800">
-          <span className="font-medium">{count} student{count !== 1 ? 's' : ''}</span> have calendar events but no stored event IDs — reschedule won&apos;t work for them until backfilled.
+    <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">{count} {count !== 1 ? 'students' : 'student'}</span>
+          {' '}missing calendar event IDs — sync them so rescheduling works.
         </p>
         <Button
           variant="outline"
           size="sm"
           onClick={handleClick}
           disabled={state === 'loading' || state === 'done'}
-          className="shrink-0 ml-4"
+          className="shrink-0"
         >
-          {state === 'loading' ? 'Running…' : state === 'done' ? '✓ Done' : 'Backfill Event IDs'}
+          {state === 'loading' ? 'Syncing…' : state === 'done' ? '✓ Done' : 'Sync Event IDs'}
         </Button>
       </div>
 
-      {state === 'error' && <p className="text-xs text-red-600">{errorMsg}</p>}
+      {state === 'error' && (
+        <p className="mt-2 text-xs text-red-600">{errorMsg}</p>
+      )}
 
       {state === 'done' && results.length > 0 && (
-        <ul className="text-xs space-y-1">
+        <ul className="mt-3 space-y-1 border-t border-slate-200 pt-3">
           {results.map((r) => (
-            <li key={r.name} className={r.status === 'updated' ? 'text-green-700' : 'text-slate-500'}>
-              <span className="font-medium">{r.name}</span> — {r.status === 'updated' ? `${r.found} event${r.found !== 1 ? 's' : ''} saved` : r.status}
+            <li key={r.name} className="flex items-center gap-2 text-xs">
+              <span className={r.status === 'updated' ? 'text-green-600' : 'text-slate-400'}>
+                {r.status === 'updated' ? '✓' : '–'}
+              </span>
+              <span className="font-medium text-slate-700">{r.name}</span>
+              <span className="text-slate-400">
+                {r.status === 'updated' ? `${r.found} event${r.found !== 1 ? 's' : ''} synced` : r.status}
+              </span>
             </li>
           ))}
         </ul>
