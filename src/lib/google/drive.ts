@@ -86,6 +86,13 @@ async function createMeetDoc(
   })
 }
 
+export function parseDriveFolderId(driveFolderUrl: string): string {
+  const rawId = driveFolderUrl.split('/folders/')[1]?.split('?')[0]?.split('/')[0]
+  if (!rawId) throw new Error('Could not parse folder ID from Drive URL')
+  if (!/^[a-zA-Z0-9_-]+$/.test(rawId)) throw new Error('Invalid folder ID in Drive URL')
+  return rawId
+}
+
 export async function updateStudentMeetDoc(
   auth: OAuth2Client,
   driveFolderUrl: string,
@@ -93,10 +100,7 @@ export async function updateStudentMeetDoc(
   schedule: ClassSlot[],
   meetLink: string,
 ): Promise<void> {
-  const rawId = driveFolderUrl.split('/folders/')[1]?.split('?')[0]?.split('/')[0]
-  if (!rawId) throw new Error('Could not parse folder ID from Drive URL')
-  if (!/^[a-zA-Z0-9_-]+$/.test(rawId)) throw new Error('Invalid folder ID in Drive URL')
-  const folderId = rawId
+  const folderId = parseDriveFolderId(driveFolderUrl)
 
   const drive = google.drive({ version: 'v3', auth })
   const search = await drive.files.list({

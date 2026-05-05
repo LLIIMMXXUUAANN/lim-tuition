@@ -65,6 +65,9 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [calendarWarning, setCalendarWarning] = useState('')
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteGoogleError, setDeleteGoogleError] = useState('')
 
   function set<K extends keyof StudentInsert>(key: K, value: StudentInsert[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -136,17 +139,59 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     }
   }
 
-  async function handleDeactivate() {
-    if (!student) return
-    if (!confirm(`Mark ${student.name} as Completed and hide from dashboard?`)) return
-    const supabase = createClient()
-    const { error: err } = await supabase.from('students').update({ status: 'Completed' }).eq('id', student.id)
-    if (err) { setError(`Failed to remove student: ${err.message}`); return }
+  function navigateAfterDelete() {
     router.push('/admin/students')
     router.refresh()
   }
 
+  async function handleDelete() {
+    if (!student) return
+    setDeleting(true)
+    setError('')
+    setDeleteGoogleError('')
+
+    try {
+      let googleError = ''
+      if (student.google_drive_link || student.calendar_event_ids?.length) {
+        try {
+          const res = await fetch('/api/google/delete-student', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drive_folder_url: student.google_drive_link,
+              calendar_event_ids: student.calendar_event_ids,
+            }),
+          })
+          const data = await res.json()
+          if (data.driveError || data.calendarError) {
+            googleError = [data.driveError, data.calendarError].filter(Boolean).join(' | ')
+          }
+        } catch {
+          googleError = 'Google cleanup failed — check Drive and Calendar manually.'
+        }
+      }
+
+      const supabase = createClient()
+      const { error: err } = await supabase.from('students').delete().eq('id', student.id)
+      if (err) {
+        setError(`Failed to delete student: ${err.message}`)
+        setShowDeleteDialog(false)
+        return
+      }
+
+      if (googleError) {
+        setDeleteGoogleError(googleError)
+        return
+      }
+
+      navigateAfterDelete()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
+  <>
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto p-6">
       <Card>
         <CardHeader><CardTitle>Student Info</CardTitle></CardHeader>
@@ -313,11 +358,56 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           Cancel
         </Button>
         {student && (
-          <Button type="button" variant="destructive" className="ml-auto" onClick={handleDeactivate}>
+          <Button type="button" variant="destructive" className="ml-auto" onClick={() => setShowDeleteDialog(true)}>
             Remove Student
           </Button>
         )}
       </div>
+
     </form>
+
+    {student && showDeleteDialog && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900">Delete Student?</h2>
+          {deleteGoogleError ? (
+            <>
+              <p className="text-sm text-green-700">Student deleted successfully.</p>
+              <p className="text-sm text-amber-600">Google cleanup had issues: {deleteGoogleError}</p>
+              <div className="flex justify-end">
+                <Button type="button" onClick={navigateAfterDelete}>
+                  Close
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                This will permanently delete <strong>{student.name}</strong>&apos;s Google Drive folder, Calendar events, and all student data. This cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDeleteDialog(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete Student'}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+  </>
   )
 }

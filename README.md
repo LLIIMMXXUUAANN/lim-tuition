@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Hero** — full-width atmospheric background image (`public/landing_page_4k.png`) with left-aligned content, stacked CSS gradient overlay for text legibility, and a mobile dark overlay for readability; responsive navbar with hamburger menu on mobile
 
 ### Admin (authenticated only)
-- **Students** — add and manage student records (contact info, class schedule, fee, payment status, homework, notes, portal access emails)
+- **Students** — add, manage, and permanently delete student records (contact info, class schedule, fee, payment status, homework, notes, portal access emails); deletion shows a confirmation dialog and hard-deletes the DB row, Drive folder, and all Calendar events
 - **Schedule view** — dashboard groups students by day of week; each card shows payment method (Weekly/Monthly) at the bottom right
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase (payment reminders, review requests, recommendation requests, first approach outreach)
@@ -82,7 +82,7 @@ src/
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
-    api/google/                   → Google OAuth setup, Drive folder creation, Calendar event creation/update/backfill
+    api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/backfill/deletion
     auth/callback/                → Supabase auth code exchange
   components/
     shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge)
@@ -93,7 +93,7 @@ src/
     ui/         → shadcn/ui primitives
   lib/
     supabase/   → browser + server Supabase clients
-    google/     → Google OAuth2 client, Drive folder creation/update, Calendar event creation/update
+    google/     → Google OAuth2 client, Drive folder creation/update/deletion, Calendar event creation/update/deletion
     types.ts    → shared TypeScript types
     utils.ts    → formatTime, cn
   proxy.ts      → Next.js middleware (auth + route protection)
