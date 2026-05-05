@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import StudentCard from '@/components/students/StudentCard'
+import BackfillEventIdsButton from '@/components/students/BackfillEventIdsButton'
 import type { Student, StudentStatus, WeekDay } from '@/lib/types'
 
 const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -31,6 +32,12 @@ export default async function StudentsPage({ searchParams }: Props) {
   const { data: students, error } = await query
   const list = (students ?? []) as Student[]
 
+  const { count: backfillCount } = await supabase
+    .from('students')
+    .select('id', { count: 'exact', head: true })
+    .not('google_meet_link', 'is', null)
+    .is('calendar_event_ids', null)
+
   const byDay = DAYS.map((day) => {
     const entries = list
       .flatMap((s) =>
@@ -46,6 +53,7 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {!!backfillCount && <BackfillEventIdsButton count={backfillCount} />}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">My Students</h1>
         <Link href="/admin/students/new">
