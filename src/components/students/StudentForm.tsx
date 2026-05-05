@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ClassScheduleEditor from '@/components/students/ClassScheduleEditor'
 import CreateDriveFolderButton from '@/components/students/CreateDriveFolderButton'
 import CreateCalendarEventButton from '@/components/students/CreateCalendarEventButton'
-import UpdateCalendarEventButton from '@/components/students/UpdateCalendarEventButton'
 import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -67,6 +66,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [calendarWarning, setCalendarWarning] = useState('')
 
   function set<K extends keyof StudentInsert>(key: K, value: StudentInsert[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -75,6 +75,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setCalendarWarning('')
     setSaving(true)
     const supabase = createClient()
     const payload: StudentUpdate = {
@@ -88,6 +89,33 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       latest_payment: form.latest_payment || null,
       today_homework: form.today_homework || null,
       notes: form.notes || null,
+    }
+
+    // If editing a student who has calendar events and the schedule changed, patch calendar first
+    if (student && (form.calendar_event_ids ?? []).length > 0 && form.google_meet_link) {
+      const scheduleChanged = JSON.stringify(form.class_schedule) !== JSON.stringify(student.class_schedule)
+      if (scheduleChanged) {
+        try {
+          const res = await fetch('/api/google/update-class-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: form.name.trim(),
+              class_schedule: form.class_schedule,
+              event_ids: form.calendar_event_ids,
+              meet_link: form.google_meet_link,
+            }),
+          })
+          const data = await res.json()
+          if (res.ok) {
+            payload.calendar_event_ids = data.eventIds
+          } else {
+            setCalendarWarning(`Calendar not updated: ${data.error ?? 'unknown error'}`)
+          }
+        } catch {
+          setCalendarWarning('Calendar not updated: network error')
+        }
+      }
     }
 
     try {
@@ -185,15 +213,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
                 set('calendar_event_ids', eventIds)
               }}
             />
-            {(form.calendar_event_ids ?? []).length > 0 && (
-              <UpdateCalendarEventButton
-                name={form.name}
-                classSchedule={form.class_schedule ?? []}
-                eventIds={form.calendar_event_ids ?? []}
-                meetLink={form.google_meet_link ?? ''}
-                onSuccess={(newEventIds) => set('calendar_event_ids', newEventIds)}
-              />
-            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="google_drive_link">Google Drive Link</Label>
@@ -283,6 +302,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         </CardContent>
       </Card>
 
+      {calendarWarning && <p className="text-sm text-amber-600">{calendarWarning}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-3 flex-wrap">
