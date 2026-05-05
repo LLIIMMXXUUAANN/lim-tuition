@@ -82,7 +82,12 @@ export default function StudentPortalView({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <Row label="Today's Homework" value={student.today_homework} />
+          {student.today_homework && (
+            <div className="pt-1">
+              <p className="text-slate-500 mb-1">Today&apos;s Homework</p>
+              <p className="text-slate-800 whitespace-pre-wrap">{student.today_homework}</p>
+            </div>
+          )}
           {student.notes && (
             <div className="pt-1">
               <p className="text-slate-500 mb-1">Notes</p>

@@ -295,7 +295,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="today_homework">Today&apos;s Homework</Label>
-            <Input id="today_homework" value={form.today_homework ?? ''} onChange={(e) => set('today_homework', e.target.value)} placeholder="e.g. Topic 6 Q1-3" />
+            <Textarea id="today_homework" value={form.today_homework ?? ''} onChange={(e) => set('today_homework', e.target.value)} placeholder="e.g. Topic 6 Q1-3" rows={3} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
