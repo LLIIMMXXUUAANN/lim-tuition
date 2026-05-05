@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Student, ClassSlot } from '@/lib/types'
 import { formatTime } from '@/lib/utils'
+import { statusBadge } from '@/components/shared/student-fields'
 
 interface StudentCardProps {
   student: Student
@@ -12,12 +13,6 @@ const modeColor: Record<string, string> = {
   'My Python Syllabus': 'bg-blue-100 text-blue-800',
   'IGCSE': 'bg-purple-100 text-purple-800',
   'University': 'bg-green-100 text-green-800',
-}
-
-const statusBadge: Record<string, string> = {
-  'Active': 'bg-green-100 text-green-700',
-  'On Hold': 'bg-yellow-100 text-yellow-700',
-  'Completed': 'bg-slate-100 text-slate-500',
 }
 
 export default function StudentCard({ student, slot }: StudentCardProps) {

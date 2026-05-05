@@ -85,7 +85,7 @@ src/
     api/google/                   → Google OAuth setup, Drive folder creation, Calendar event creation/update/backfill
     auth/callback/                → Supabase auth code exchange
   components/
-    shared/     → AppNav, LogoutButton, StudentPortalView
+    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge)
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection

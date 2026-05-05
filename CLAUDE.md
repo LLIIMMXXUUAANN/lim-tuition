@@ -85,7 +85,7 @@ Supabase clients:
 
 ```
 src/components/
-  shared/       → AppNav, LogoutButton, StudentPortalView   (used across multiple routes)
+  shared/       → AppNav, LogoutButton, StudentPortalView, student-fields   (used across multiple routes)
   students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
@@ -103,6 +103,7 @@ src/components/
 
 ### Key components
 
+- **`shared/student-fields`** — shared display primitives used by `StudentDetail` and `StudentPortalView`: `Row` (inline label + value), `BlockField` (stacked label + `whitespace-pre-wrap` value for multi-line text), `statusBadge` (status → Tailwind class lookup). Import from here instead of redefining locally.
 - **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
 - **`shared/AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
 - **`students/StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
