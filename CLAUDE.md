@@ -18,6 +18,10 @@ No test suite. Use `npm run build` to verify type correctness before committing.
 
 **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Supabase (Postgres + Auth) · Tailwind CSS v4 · shadcn/ui
 
+### Email (magic link delivery)
+
+Magic link emails are sent via **Gmail SMTP** configured in Supabase Dashboard → Authentication → SMTP Settings. Sender is `limxuan520@gmail.com` using a Gmail App Password (not the account password). Port 587 (TLS). Rate limit: ~500 emails/day. If login link delivery fails, check Supabase → Authentication → Logs.
+
 ### Auth
 
 - Two user types: **admin** (tutor) and **students/parents**

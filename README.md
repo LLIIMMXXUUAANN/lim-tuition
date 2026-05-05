@@ -54,6 +54,19 @@ After deploying, add the Vercel URL to Supabase → Authentication → Redirect 
 https://lim-tuition.vercel.app/**
 ```
 
+## Email (magic link delivery)
+
+Magic link emails are sent via Gmail SMTP. Configured in Supabase Dashboard → Authentication → SMTP Settings:
+
+| Field | Value |
+|---|---|
+| Host | `smtp.gmail.com` |
+| Port | `587` |
+| Sender | `limxuan520@gmail.com` |
+| Password | Gmail App Password (not the account password) |
+
+To regenerate: Google Account → Security → search "App Passwords".
+
 ## Project structure
 
 ```
