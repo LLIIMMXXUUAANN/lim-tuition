@@ -69,13 +69,14 @@ export async function createWeeklyClassEvents(
   auth: OAuth2Client,
   studentName: string,
   schedule: ClassSlot[],
-): Promise<{ meetLink: string; eventCount: number }> {
+): Promise<{ meetLink: string; eventCount: number; eventIds: string[] }> {
   if (schedule.length === 0) throw new Error('Student has no class schedule.')
 
   const calendarId = process.env.GOOGLE_CALENDAR_ID
   if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
 
   const calendar = google.calendar({ version: 'v3', auth })
+  const eventIds: string[] = []
 
   // Create the first slot's event with a conference to generate one Meet link
   const firstSlot = schedule[0]
@@ -101,12 +102,14 @@ export async function createWeeklyClassEvents(
 
   const meetLink = firstRes.data.hangoutLink
   if (!meetLink) throw new Error('Calendar event created but no Meet link was returned.')
+  if (!firstRes.data.id) throw new Error('Calendar event created but no event ID was returned.')
+  eventIds.push(firstRes.data.id)
 
   // Create remaining slots — reference the same Meet link in the description
   for (const slot of schedule.slice(1)) {
     const byDay = BYDAY[slot.day]
     if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
-    await calendar.events.insert({
+    const res = await calendar.events.insert({
       calendarId,
       conferenceDataVersion: 0,
       requestBody: {
@@ -117,7 +120,68 @@ export async function createWeeklyClassEvents(
         recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
       },
     })
+    if (!res.data.id) throw new Error('Calendar event created but no event ID was returned.')
+    eventIds.push(res.data.id)
   }
 
-  return { meetLink, eventCount: schedule.length }
+  return { meetLink, eventCount: schedule.length, eventIds }
+}
+
+export async function updateWeeklyClassEvents(
+  auth: OAuth2Client,
+  studentName: string,
+  schedule: ClassSlot[],
+  existingEventIds: string[],
+  meetLink: string,
+): Promise<{ eventIds: string[] }> {
+  if (schedule.length === 0) throw new Error('Student has no class schedule.')
+
+  const calendarId = process.env.GOOGLE_CALENDAR_ID
+  if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
+
+  const calendar = google.calendar({ version: 'v3', auth })
+  const newEventIds: string[] = []
+
+  for (let i = 0; i < schedule.length; i++) {
+    const slot = schedule[i]
+    const byDay = BYDAY[slot.day]
+    if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
+
+    if (existingEventIds[i]) {
+      // Patch existing event — conferenceData stays untouched, Meet link preserved
+      const res = await calendar.events.patch({
+        calendarId,
+        eventId: existingEventIds[i],
+        requestBody: {
+          summary: studentName,
+          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
+          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
+          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+        },
+      })
+      newEventIds.push(res.data.id ?? existingEventIds[i])
+    } else {
+      // New slot added — create without conference, reference existing Meet link
+      const res = await calendar.events.insert({
+        calendarId,
+        conferenceDataVersion: 0,
+        requestBody: {
+          summary: studentName,
+          description: `Google Meet link: ${meetLink}`,
+          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
+          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
+          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+        },
+      })
+      if (!res.data.id) throw new Error('New calendar event created but no event ID was returned.')
+      newEventIds.push(res.data.id)
+    }
+  }
+
+  // Delete events for removed slots
+  for (const eventId of existingEventIds.slice(schedule.length)) {
+    await calendar.events.delete({ calendarId, eventId }).catch(() => {})
+  }
+
+  return { eventIds: newEventIds }
 }

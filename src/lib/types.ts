@@ -20,6 +20,7 @@ export interface Student {
   class_schedule: ClassSlot[]
   google_meet_link: string | null
   google_drive_link: string | null
+  calendar_event_ids: string[] | null
   fee_per_hour: number
   payment_method: PaymentMethod
   latest_payment: string | null

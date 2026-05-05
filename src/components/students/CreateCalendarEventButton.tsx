@@ -12,7 +12,7 @@ interface ClassSlot {
 interface Props {
   name: string
   classSchedule: ClassSlot[]
-  onSuccess: (meetLink: string) => void
+  onSuccess: (meetLink: string, eventIds: string[]) => void
 }
 
 export default function CreateCalendarEventButton({ name, classSchedule, onSuccess }: Props) {
@@ -31,7 +31,7 @@ export default function CreateCalendarEventButton({ name, classSchedule, onSucce
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
-      onSuccess(data.meetLink)
+      onSuccess(data.meetLink, data.eventIds ?? [])
       setEventCount(data.eventCount)
       setState('done')
     } catch (err: unknown) {

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ClassScheduleEditor from '@/components/students/ClassScheduleEditor'
 import CreateDriveFolderButton from '@/components/students/CreateDriveFolderButton'
 import CreateCalendarEventButton from '@/components/students/CreateCalendarEventButton'
+import UpdateCalendarEventButton from '@/components/students/UpdateCalendarEventButton'
 import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -29,6 +30,7 @@ const emptyForm: StudentInsert = {
   class_schedule: [],
   google_meet_link: '',
   google_drive_link: '',
+  calendar_event_ids: null,
   fee_per_hour: 60,
   payment_method: 'Monthly',
   latest_payment: '',
@@ -52,6 +54,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           class_schedule: student.class_schedule ?? [],
           google_meet_link: student.google_meet_link ?? '',
           google_drive_link: student.google_drive_link ?? '',
+          calendar_event_ids: student.calendar_event_ids ?? null,
           fee_per_hour: student.fee_per_hour,
           payment_method: student.payment_method,
           latest_payment: student.latest_payment ?? '',
@@ -177,8 +180,20 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
             <CreateCalendarEventButton
               name={form.name}
               classSchedule={form.class_schedule ?? []}
-              onSuccess={(meetLink) => set('google_meet_link', meetLink)}
+              onSuccess={(meetLink, eventIds) => {
+                set('google_meet_link', meetLink)
+                set('calendar_event_ids', eventIds)
+              }}
             />
+            {(form.calendar_event_ids ?? []).length > 0 && (
+              <UpdateCalendarEventButton
+                name={form.name}
+                classSchedule={form.class_schedule ?? []}
+                eventIds={form.calendar_event_ids ?? []}
+                meetLink={form.google_meet_link ?? ''}
+                onSuccess={(newEventIds) => set('calendar_event_ids', newEventIds)}
+              />
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="google_drive_link">Google Drive Link</Label>
