@@ -24,6 +24,16 @@ function Row({ label, value }: { label: string; value?: string | number | null }
   )
 }
 
+function BlockField({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="pt-1">
+      <p className="text-slate-500 mb-1">{label}</p>
+      <p className="text-slate-800 whitespace-pre-wrap">{value}</p>
+    </div>
+  )
+}
+
 export default function StudentDetail({ student }: { student: Student }) {
   const [editing, setEditing] = useState(false)
 
@@ -43,7 +53,6 @@ export default function StudentDetail({ student }: { student: Student }) {
 
   return (
     <div className="max-w-2xl mx-auto px-6 pt-6 pb-12 space-y-4">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/admin/students">
           <Button variant="ghost" size="sm">← Back</Button>
@@ -55,7 +64,6 @@ export default function StudentDetail({ student }: { student: Student }) {
         <Button onClick={() => setEditing(true)}>Edit</Button>
       </div>
 
-      {/* Quick links */}
       {(student.google_meet_link || student.google_drive_link) && (
         <div className="flex gap-4">
           {student.google_meet_link && (
@@ -71,7 +79,6 @@ export default function StudentDetail({ student }: { student: Student }) {
         </div>
       )}
 
-      {/* Student Info */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Student Info</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
@@ -92,7 +99,6 @@ export default function StudentDetail({ student }: { student: Student }) {
         </CardContent>
       </Card>
 
-      {/* Schedule */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Class Schedule</CardTitle></CardHeader>
         <CardContent className="text-sm">
@@ -108,7 +114,6 @@ export default function StudentDetail({ student }: { student: Student }) {
         </CardContent>
       </Card>
 
-      {/* Fees */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Fees &amp; Payment</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
@@ -118,22 +123,11 @@ export default function StudentDetail({ student }: { student: Student }) {
         </CardContent>
       </Card>
 
-      {/* Progress */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {student.today_homework && (
-            <div className="pt-1">
-              <p className="text-slate-500 mb-1">Today&apos;s Homework</p>
-              <p className="text-slate-800 whitespace-pre-wrap">{student.today_homework}</p>
-            </div>
-          )}
-          {student.notes && (
-            <div className="pt-1">
-              <p className="text-slate-500 mb-1">Notes</p>
-              <p className="text-slate-800 whitespace-pre-wrap">{student.notes}</p>
-            </div>
-          )}
+          <BlockField label="Today's Homework" value={student.today_homework} />
+          <BlockField label="Notes" value={student.notes} />
         </CardContent>
       </Card>
     </div>

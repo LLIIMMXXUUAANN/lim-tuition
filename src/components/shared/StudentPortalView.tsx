@@ -18,6 +18,16 @@ function Row({ label, value }: { label: string; value?: string | number | null }
   )
 }
 
+function BlockField({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="pt-1">
+      <p className="text-slate-500 mb-1">{label}</p>
+      <p className="text-slate-800 whitespace-pre-wrap">{value}</p>
+    </div>
+  )
+}
+
 export default function StudentPortalView({ student }: { student: Student }) {
   const schedule = student.class_schedule ?? []
 
@@ -82,18 +92,8 @@ export default function StudentPortalView({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {student.today_homework && (
-            <div className="pt-1">
-              <p className="text-slate-500 mb-1">Today&apos;s Homework</p>
-              <p className="text-slate-800 whitespace-pre-wrap">{student.today_homework}</p>
-            </div>
-          )}
-          {student.notes && (
-            <div className="pt-1">
-              <p className="text-slate-500 mb-1">Notes</p>
-              <p className="text-slate-800 whitespace-pre-wrap">{student.notes}</p>
-            </div>
-          )}
+          <BlockField label="Today's Homework" value={student.today_homework} />
+          <BlockField label="Notes" value={student.notes} />
         </CardContent>
       </Card>
     </div>
