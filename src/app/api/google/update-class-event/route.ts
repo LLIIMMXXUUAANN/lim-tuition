@@ -29,29 +29,32 @@ export async function POST(req: NextRequest) {
 
   try {
     const auth = await getOAuth2Client()
-    const { eventIds } = await updateWeeklyClassEvents(
-      auth,
-      name.trim(),
-      class_schedule as ClassSlot[],
-      event_ids,
-      meet_link.trim(),
-    )
+    const trimmedName = name.trim()
+    const trimmedMeetLink = meet_link.trim()
+    const slots = class_schedule as ClassSlot[]
 
-    let driveDocError: string | null = null
-    if (drive_folder_url?.trim()) {
-      try {
-        await updateStudentMeetDoc(auth, drive_folder_url.trim(), name.trim(), class_schedule as ClassSlot[], meet_link.trim())
-      } catch (driveErr: unknown) {
-        driveDocError = driveErr instanceof Error ? driveErr.message : 'Failed to update Drive doc'
-      }
+    const [calendarResult, driveResult] = await Promise.allSettled([
+      updateWeeklyClassEvents(auth, trimmedName, slots, event_ids, trimmedMeetLink),
+      drive_folder_url?.trim()
+        ? updateStudentMeetDoc(auth, drive_folder_url.trim(), trimmedName, slots, trimmedMeetLink)
+        : Promise.resolve(null),
+    ])
+
+    if (calendarResult.status === 'rejected') {
+      const raw = calendarResult.reason instanceof Error ? calendarResult.reason.message : 'Failed to update calendar events'
+      const message = raw.toLowerCase().includes('insufficient') || raw.includes('403')
+        ? 'Google Calendar not authorised. Visit /api/google/auth to re-connect with Calendar access.'
+        : raw
+      return NextResponse.json({ error: message }, { status: 500 })
     }
 
-    return NextResponse.json({ eventIds, driveDocError })
+    const driveDocError = driveResult.status === 'rejected'
+      ? (driveResult.reason instanceof Error ? driveResult.reason.message : 'Failed to update Drive doc')
+      : null
+
+    return NextResponse.json({ eventIds: calendarResult.value.eventIds, driveDocError })
   } catch (err: unknown) {
     const raw = err instanceof Error ? err.message : 'Failed to update calendar events'
-    const message = raw.toLowerCase().includes('insufficient') || raw.includes('403')
-      ? 'Google Calendar not authorised. Visit /api/google/auth to re-connect with Calendar access.'
-      : raw
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: raw }, { status: 500 })
   }
 }

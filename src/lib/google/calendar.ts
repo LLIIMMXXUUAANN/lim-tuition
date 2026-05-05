@@ -140,18 +140,16 @@ export async function updateWeeklyClassEvents(
   if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
 
   const calendar = google.calendar({ version: 'v3', auth })
-  const newEventIds: string[] = []
 
-  for (let i = 0; i < schedule.length; i++) {
-    const slot = schedule[i]
+  // Positional match: existingEventIds[i] corresponds to schedule[i].
+  // Index 0 always owns the Meet conference regardless of reordering — patching
+  // only updates time/recurrence, conferenceData is untouched so Meet link is preserved.
+  const updateOps = schedule.map((slot, i) => {
     const byDay = BYDAY[slot.day]
     if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
 
     if (existingEventIds[i]) {
-      // Positional match: existingEventIds[i] corresponds to schedule[i].
-      // Index 0 always owns the Meet conference regardless of reordering — patching
-      // only updates time/recurrence, conferenceData is untouched so Meet link is preserved.
-      const res = await calendar.events.patch({
+      return calendar.events.patch({
         calendarId,
         eventId: existingEventIds[i],
         requestBody: {
@@ -160,33 +158,33 @@ export async function updateWeeklyClassEvents(
           end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
           recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
         },
-      })
-      newEventIds.push(res.data.id ?? existingEventIds[i])
-    } else {
-      // New slot added — create without conference, reference existing Meet link
-      const res = await calendar.events.insert({
-        calendarId,
-        conferenceDataVersion: 0,
-        requestBody: {
-          summary: studentName,
-          description: `Google Meet link: ${meetLink}`,
-          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
-          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
-          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
-        },
-      })
-      if (!res.data.id) throw new Error('New calendar event created but no event ID was returned.')
-      newEventIds.push(res.data.id)
+      }).then(res => res.data.id ?? existingEventIds[i])
     }
-  }
 
-  // Delete events for removed slots. Failures are logged but non-fatal — an
-  // orphaned recurring event is a minor annoyance, not a data correctness issue.
-  for (const eventId of existingEventIds.slice(schedule.length)) {
-    await calendar.events.delete({ calendarId, eventId }).catch((err: unknown) => {
+    // New slot added — create without conference, reference existing Meet link
+    return calendar.events.insert({
+      calendarId,
+      conferenceDataVersion: 0,
+      requestBody: {
+        summary: studentName,
+        description: `Google Meet link: ${meetLink}`,
+        start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
+        end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
+        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+      },
+    }).then(res => {
+      if (!res.data.id) throw new Error('New calendar event created but no event ID was returned.')
+      return res.data.id
+    })
+  })
+
+  // Deletions are non-fatal — an orphaned recurring event is a minor annoyance, not a data correctness issue.
+  const deleteOps = existingEventIds.slice(schedule.length).map(eventId =>
+    calendar.events.delete({ calendarId, eventId }).catch((err: unknown) => {
       console.error(`Failed to delete calendar event ${eventId}:`, err)
     })
-  }
+  )
 
+  const [newEventIds] = await Promise.all([Promise.all(updateOps), Promise.all(deleteOps)])
   return { eventIds: newEventIds }
 }
