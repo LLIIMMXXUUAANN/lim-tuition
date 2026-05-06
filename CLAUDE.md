@@ -112,15 +112,15 @@ src/components/
 - **`students/BackfillEventIdsButton`** — banner on the students list; visible when active students have a Meet link but missing `calendar_event_ids`; calls backfill API, shows per-student results, dismissed with `router.refresh()`
 - **`templates/TemplatesList`** — receives `initialData` and `students` props from the server; renders a 4-tab layout (Payment · Review · Recommendation · First Approach). The Payment tab contains `PaymentGenerator` followed by the payment templates; the other tabs contain their respective templates. `TEMPLATE_META` is a `Record<string, { title, description }>` — look up by id directly. Save state per card cycles through `idle → saving → saved/error`.
 - **`templates/PaymentGenerator`** — client component rendered inside `TemplatesList`'s Payment tab; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
-- **`timetable/TimetableSection`** — client component on the Timetable page; renders two card boxes: (1) "Weekly Schedule" card with a **Download Schedule** button, (2) "Slot Availability" card with the AI panel + interactive grid + **Download Available Slots** button. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
+- **`timetable/TimetableSection`** — client component on the Timetable page; renders a 2-tab layout (Weekly Schedule · Slot Availability). The Slot Availability tab has `keepMounted` so grid state and student availability text survive tab switches. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 
 Server Component that fetches active students' `name` and `class_schedule` plus `timetable_rules` and `timetable_buffer_mins` from the `settings` table in parallel, then passes them as `students`, `initialRules`, and `initialBufferMins` props to `TimetableSection`. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
 
-**UI layout:** Two separate `border rounded-lg p-6` card boxes inside a `space-y-4` wrapper:
-1. **Weekly Schedule card** (top) — title + subtitle + **Download Schedule** button, no grid
-2. **Slot Availability card** (bottom) — AI panel (textareas + save controls + Generate button) → divider → legend + **Download Available Slots** button → interactive grid → hint text
+**UI layout:** Two tabs inside a `<Tabs defaultValue="schedule">` wrapper:
+1. **Weekly Schedule tab** — description + **Download Schedule** button inside a `border rounded-lg p-6` card
+2. **Slot Availability tab** (`keepMounted`) — AI panel (textareas + save controls + Generate button) → divider → legend + **Download Available Slots** button → interactive grid → hint text, all inside a `border rounded-lg p-6` card
 
 **AI slot generator (`src/app/api/timetable/generate-slots/route.ts`):**
 

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { ClassSlot, WeekDay } from '@/lib/types'
 import { formatTime, DAYS, TIME_SLOTS } from '@/lib/utils'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 type SlotType = 'preferred' | 'normal'
 type CellKey = 'booked' | 'preferred' | 'normal' | 'empty'
@@ -418,127 +419,130 @@ export default function TimetableSection({ students, initialRules = '', initialB
   }
 
   return (
-    <div className="space-y-4">
-      <div className="border rounded-lg p-6 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-base font-semibold text-slate-700">Weekly Schedule</p>
-          <p className="text-xs text-slate-400 mt-1">Clean image of student class times for sharing</p>
-        </div>
-        <button
-          onClick={() => drawSchedule(students)}
-          className="shrink-0 px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
-        >
-          Download Schedule
-        </button>
-      </div>
+    <Tabs defaultValue="schedule">
+      <TabsList className="w-full">
+        <TabsTrigger value="schedule" className="flex-1">Weekly Schedule</TabsTrigger>
+        <TabsTrigger value="availability" className="flex-1">Slot Availability</TabsTrigger>
+      </TabsList>
 
-      <div className="border rounded-lg p-6 space-y-4">
-        <div>
-          <p className="text-base font-semibold text-slate-700">Slot Availability</p>
-          <p className="text-xs text-slate-400 mt-1">Generate available slots with AI, then download for sharing</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-600">Your Scheduling Rules</label>
-            <textarea
-              value={rules}
-              onChange={e => setRules(e.target.value)}
-              rows={5}
-              placeholder="e.g. 15-min buffer between classes. Mon–Fri preferred, Sat–Sun normal. Monday before 12pm unavailable. Friday after 4:30pm unavailable..."
-              className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-navy/30"
-            />
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => saveSetting('rules', '/api/timetable/rules', { rules })}
-                disabled={isSaving.rules}
-                className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
-              >
-                {saveLabel(isSaving.rules, saveStatus.rules, 'Save Rules')}
-              </button>
-              <div className="flex items-center gap-1.5 ml-auto">
-                <label className="text-xs text-slate-500 whitespace-nowrap">Buffer between classes</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={bufferMins}
-                  onChange={e => setBufferMins(Number(e.target.value))}
-                  className="w-14 text-xs border border-slate-200 rounded-md px-2 py-1.5 text-center focus:outline-none focus:ring-2 focus:ring-navy/30"
-                />
-                <span className="text-xs text-slate-500">mins</span>
-                <button
-                  onClick={() => saveSetting('buffer', '/api/timetable/buffer-mins', { bufferMins })}
-                  disabled={isSaving.buffer}
-                  className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
-                >
-                  {saveLabel(isSaving.buffer, saveStatus.buffer, 'Save')}
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-600">Student Availability</label>
-            <textarea
-              value={studentAvailability}
-              onChange={e => setStudentAvailability(e.target.value)}
-              rows={5}
-              placeholder="e.g. Free on weekday afternoons after 3pm, whole day Saturday, Sunday morning only..."
-              className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-navy/30"
-            />
-          </div>
-        </div>
-        {aiError && <p className="text-xs text-red-500">{aiError}</p>}
-        <button
-          onClick={generateSlots}
-          disabled={isGenerating || !rules.trim()}
-          className="px-4 py-2 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors disabled:opacity-50"
-        >
-          {isGenerating ? 'Generating…' : 'Generate Slots'}
-        </button>
-
-        <div className="border-t border-slate-100 pt-4 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-red-200 rounded-sm" /> Booked</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-green-300 rounded-sm" /> Preferred</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-yellow-200 rounded-sm" /> Normal</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-slate-100 border border-slate-200 rounded-sm" /> Unavailable</span>
-          </div>
+      <TabsContent value="schedule" className="pt-4">
+        <div className="border rounded-lg p-6 flex items-center justify-between gap-4">
+          <p className="text-sm text-slate-500">Clean image of student class times for sharing</p>
           <button
-            onClick={() => drawAndDownload(grid, bookedSet)}
-            className="px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
+            onClick={() => drawSchedule(students)}
+            className="shrink-0 px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
           >
-            Download Available Slots
+            Download Schedule
           </button>
         </div>
-        <div className="overflow-x-auto select-none">
-          <div style={{ display: 'grid', gridTemplateColumns: '52px repeat(7, 70px)', gap: 1 }}>
-            <div />
-            {DAY_SHORT.map(d => (
-              <div key={d} className="text-center text-xs font-medium text-slate-600 pb-1">{d}</div>
-            ))}
-            {TIME_SLOTS.map(ts => (
-              <React.Fragment key={ts}>
-                <div className="text-right pr-2 text-xs text-slate-400 leading-5">
-                  {ts.endsWith(':00') ? ts : ''}
+      </TabsContent>
+
+      <TabsContent value="availability" className="pt-4" keepMounted>
+        <div className="border rounded-lg p-6 space-y-4">
+          <p className="text-sm text-slate-500">Generate available slots with AI, then download for sharing</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-600">Your Scheduling Rules</label>
+              <textarea
+                value={rules}
+                onChange={e => setRules(e.target.value)}
+                rows={5}
+                placeholder="e.g. 15-min buffer between classes. Mon–Fri preferred, Sat–Sun normal. Monday before 12pm unavailable. Friday after 4:30pm unavailable..."
+                className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-navy/30"
+              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => saveSetting('rules', '/api/timetable/rules', { rules })}
+                  disabled={isSaving.rules}
+                  className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
+                >
+                  {saveLabel(isSaving.rules, saveStatus.rules, 'Save Rules')}
+                </button>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <label className="text-xs text-slate-500 whitespace-nowrap">Buffer between classes</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={bufferMins}
+                    onChange={e => setBufferMins(Number(e.target.value))}
+                    className="w-14 text-xs border border-slate-200 rounded-md px-2 py-1.5 text-center focus:outline-none focus:ring-2 focus:ring-navy/30"
+                  />
+                  <span className="text-xs text-slate-500">mins</span>
+                  <button
+                    onClick={() => saveSetting('buffer', '/api/timetable/buffer-mins', { bufferMins })}
+                    disabled={isSaving.buffer}
+                    className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {saveLabel(isSaving.buffer, saveStatus.buffer, 'Save')}
+                  </button>
                 </div>
-                {DAYS.map(day => {
-                  const cellKey: CellKey = bookedSet.has(`${day}|${ts}`) ? 'booked' : (grid.get(`${day}|${ts}`) ?? 'empty')
-                  return (
-                    <div
-                      key={`${day}-${ts}`}
-                      onMouseDown={e => handleMouseDown(e, day, ts)}
-                      onMouseEnter={() => handleMouseEnter(day, ts)}
-                      className={`h-5 rounded-sm transition-colors ${CELL_CLASSES[cellKey]}`}
-                    />
-                  )
-                })}
-              </React.Fragment>
-            ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-600">Student Availability</label>
+              <textarea
+                value={studentAvailability}
+                onChange={e => setStudentAvailability(e.target.value)}
+                rows={5}
+                placeholder="e.g. Free on weekday afternoons after 3pm, whole day Saturday, Sunday morning only..."
+                className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-navy/30"
+              />
+            </div>
           </div>
+          {aiError && <p className="text-xs text-red-500">{aiError}</p>}
+          <button
+            onClick={generateSlots}
+            disabled={isGenerating || !rules.trim()}
+            className="px-4 py-2 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors disabled:opacity-50"
+          >
+            {isGenerating ? 'Generating…' : 'Generate Slots'}
+          </button>
+
+          <div className="border-t border-slate-100 pt-4 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-red-200 rounded-sm" /> Booked</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-green-300 rounded-sm" /> Preferred</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-yellow-200 rounded-sm" /> Normal</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-slate-100 border border-slate-200 rounded-sm" /> Unavailable</span>
+            </div>
+            <button
+              onClick={() => drawAndDownload(grid, bookedSet)}
+              className="px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
+            >
+              Download Available Slots
+            </button>
+          </div>
+          <div className="overflow-x-auto select-none">
+            <div style={{ display: 'grid', gridTemplateColumns: '52px repeat(7, 70px)', gap: 1 }}>
+              <div />
+              {DAY_SHORT.map(d => (
+                <div key={d} className="text-center text-xs font-medium text-slate-600 pb-1">{d}</div>
+              ))}
+              {TIME_SLOTS.map(ts => (
+                <React.Fragment key={ts}>
+                  <div className="text-right pr-2 text-xs text-slate-400 leading-5">
+                    {ts.endsWith(':00') ? ts : ''}
+                  </div>
+                  {DAYS.map(day => {
+                    const cellKey: CellKey = bookedSet.has(`${day}|${ts}`) ? 'booked' : (grid.get(`${day}|${ts}`) ?? 'empty')
+                    return (
+                      <div
+                        key={`${day}-${ts}`}
+                        onMouseDown={e => handleMouseDown(e, day, ts)}
+                        onMouseEnter={() => handleMouseEnter(day, ts)}
+                        className={`h-5 rounded-sm transition-colors ${CELL_CLASSES[cellKey]}`}
+                      />
+                    )
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Click or drag to cycle: unavailable → preferred → normal → unavailable</p>
         </div>
-        <p className="text-xs text-slate-400">Click or drag to cycle: unavailable → preferred → normal → unavailable</p>
-      </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   )
 }
