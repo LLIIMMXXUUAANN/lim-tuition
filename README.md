@@ -41,7 +41,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Backfill banner** — if existing students have a Meet link but no stored event IDs, a banner appears at the top of the students list with a "Sync Event IDs" button; it searches Calendar by student name, stores the IDs, and dismisses once done
-- **Timetable** — weekly availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; exports a HD PNG (`slot_availability.png`) with legend and colour-coded cells
+- **Timetable** — two-card layout: a "Weekly Schedule" share card above the interactive availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; two HD PNG exports:
+  - **Download Schedule** — clean shareable weekly calendar showing student names and class times (`weekly_schedule.png`); all blocks slate blue-grey; auto-crops to active hours ± 30 min
+  - **Download Available Slots** — colour-coded availability grid with legend (`slot_availability.png`)
 
 ### Student portal (authenticated students/parents)
 - **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links

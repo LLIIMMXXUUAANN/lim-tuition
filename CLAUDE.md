@@ -55,7 +55,7 @@ src/app/
       layout.tsx                  → renders <AppNav> + <main>
       students/                   → student list (grouped by day), detail, new form
       templates/                  → Supabase-backed editable message templates
-      timetable/                  → weekly availability grid + PNG export
+      timetable/                  → weekly availability grid + two PNG exports
   student/
     login/page.tsx                → student portal magic link login
     (portal)/                     → route group: portal pages share portal nav layout
@@ -112,11 +112,22 @@ src/components/
 - **`students/BackfillEventIdsButton`** — banner on the students list; visible when active students have a Meet link but missing `calendar_event_ids`; calls backfill API, shows per-student results, dismissed with `router.refresh()`
 - **`templates/TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
 - **`templates/PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
-- **`timetable/TimetableSection`** — client component on the Timetable page; interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots). Booked slots (from active students' `class_schedule`) are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. "Download PNG" renders an offscreen 2× canvas and saves `slot_availability.png`. No DB persistence — state is ephemeral.
+- **`timetable/TimetableSection`** — client component on the Timetable page; renders two card boxes: (1) "Weekly Schedule" card with a **Download Schedule** button, (2) the interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots) with a **Download Available Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. No DB persistence — state is ephemeral.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 
 Server Component that fetches active students' `name` and `class_schedule`, then passes them to `TimetableSection`. No extra tables — booked slots are derived from existing student data at render time. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
+
+**UI layout:** Two separate `border rounded-lg p-6` card boxes inside a `space-y-4` wrapper:
+1. **Weekly Schedule card** (top) — title + subtitle + **Download Schedule** button, no grid
+2. **Availability grid card** (bottom) — legend spans + **Download Available Slots** button + the interactive grid + hint text
+
+**Two PNG exports in `TimetableSection`:**
+
+- **Download Available Slots** — exports the admin's drag-painted availability grid (preferred/normal/unavailable cells + legend) as `slot_availability.png`. Shows the full 8 AM–10 PM range.
+- **Download Schedule** — exports a clean shareable weekly calendar image (`weekly_schedule.png`) showing all active students' class blocks. Auto-crops to the active hour window (earliest class start − 30 min, latest class end + 30 min, rounded to 30-min boundaries). Each student block shows name + compact time (`10:30 – 11:30`). All blocks use a single slate blue-grey colour (`#6b7fa3`). Canvas is rendered at 2× scale for retina display.
+
+Both exports share `downloadCanvas(canvas, filename)` and the module-level `SCALE = 2` constant. `fmt12(time)` is a local helper that formats `"HH:MM"` as `"h:MM"` (no AM/PM) for use inside compact block labels.
 
 ### Google Drive + Calendar integration (`src/lib/google/`, `src/app/api/google/`)
 
