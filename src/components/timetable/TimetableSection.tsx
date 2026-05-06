@@ -370,6 +370,12 @@ export default function TimetableSection({ students }: Props) {
       </div>
 
       <div className="border rounded-lg p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-base font-semibold text-slate-700">Slot Availability</p>
+            <p className="text-xs text-slate-400 mt-1">Paint your available slots for sharing</p>
+          </div>
+        </div>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-red-200 rounded-sm" /> Booked</span>
