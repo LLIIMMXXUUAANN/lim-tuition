@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { WeekDay } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -13,4 +14,17 @@ export function formatTime(time: string): string {
   const period = hour >= 12 ? 'PM' : 'AM'
   const h12 = hour % 12 || 12
   return `${h12}:${minute} ${period}`
+}
+
+export const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+export const TIME_SLOTS: string[] = []
+for (let h = 8; h < 22; h++) {
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:00`)
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)
+}
+
+export function timeToMins(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
 }

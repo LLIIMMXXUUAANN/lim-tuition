@@ -70,7 +70,7 @@ Four Supabase tables in the `public` schema:
 - **`students`** — one row per student. `class_schedule` is a `jsonb` column storing `ClassSlot[]` (array of `{ day, start, end }`). `access_emails text[]` lists emails that can log in to the student portal. `calendar_event_ids text[]` stores one Google Calendar event ID per class slot, positionally matched to `class_schedule` (index 0 = event that owns the Meet conference). `status` (`Active` | `On Hold` | `Completed`) is the sole active/inactive flag — filter active students with `.eq('status', 'Active')`. `today_homework` is a `text` column (multi-line). RLS: admin (tutor) has full access; students can only SELECT their own row (`auth.email() = ANY(access_emails)`).
 - **`templates`** — one row per template, keyed by text `id` (e.g. `payment`, `review_request1`, `first_approach`). `content` is edited in-place from the UI and upserted on Save.
 - **`tutors`** — one row per tutor email. RLS enabled (no direct access); accessed only via SECURITY DEFINER functions.
-- **`settings`** — key/value store for server-side config. Currently stores `google_refresh_token`. RLS: tutor-only via `is_tutor()`.
+- **`settings`** — key/value store for server-side config. Keys: `google_refresh_token`, `timetable_rules` (free-text scheduling rules), `timetable_buffer_mins` (integer stored as string, default `'15'`). RLS: tutor-only via `is_tutor()`.
 
 Supabase SECURITY DEFINER functions:
 - `is_tutor()` — returns true if `auth.email()` is in `tutors` (used in `proxy.ts` and RLS policy)
@@ -112,19 +112,33 @@ src/components/
 - **`students/BackfillEventIdsButton`** — banner on the students list; visible when active students have a Meet link but missing `calendar_event_ids`; calls backfill API, shows per-student results, dismissed with `router.refresh()`
 - **`templates/TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
 - **`templates/PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
-- **`timetable/TimetableSection`** — client component on the Timetable page; renders two card boxes: (1) "Weekly Schedule" card with a **Download Schedule** button, (2) the interactive 7×28 drag-to-paint grid (Mon–Sun, 8am–10pm in 30-min slots) with a **Download Available Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. No DB persistence — state is ephemeral.
+- **`timetable/TimetableSection`** — client component on the Timetable page; renders two card boxes: (1) "Weekly Schedule" card with a **Download Schedule** button, (2) "Slot Availability" card with the AI panel + interactive grid + **Download Available Slots** button. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 
-Server Component that fetches active students' `name` and `class_schedule`, then passes them to `TimetableSection`. No extra tables — booked slots are derived from existing student data at render time. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
+Server Component that fetches active students' `name` and `class_schedule` plus `timetable_rules` and `timetable_buffer_mins` from the `settings` table in parallel, then passes them as `students`, `initialRules`, and `initialBufferMins` props to `TimetableSection`. Booked slot detection uses interval overlap (`cellStart < slotEnd && cellEnd > slotStart`) to correctly catch classes that start mid-slot. The `bookedSet` is pre-computed once via `useMemo` as a `Set<string>` of `"Day|HH:MM"` keys for O(1) lookup during drag and PNG export.
 
 **UI layout:** Two separate `border rounded-lg p-6` card boxes inside a `space-y-4` wrapper:
 1. **Weekly Schedule card** (top) — title + subtitle + **Download Schedule** button, no grid
-2. **Availability grid card** (bottom) — legend spans + **Download Available Slots** button + the interactive grid + hint text
+2. **Slot Availability card** (bottom) — AI panel (textareas + save controls + Generate button) → divider → legend + **Download Available Slots** button → interactive grid → hint text
+
+**AI slot generator (`src/app/api/timetable/generate-slots/route.ts`):**
+
+- Receives `{ rules, studentAvailability?, bookedSlots, bufferMins }`.
+- Buffer zones are computed **in code** via `computeBufferSlots()` (deterministic time arithmetic — not delegated to the LLM). A slot is buffered if the gap between it and any booked class is `< bufferMins`.
+- Classifiable slots (non-booked, non-buffered) are enumerated and sent to Gemini 2.5 Flash as a prompt. Booked and buffer slots are never sent for classification.
+- Gemini classifies each slot as `"preferred"` | `"normal"` | `"unavailable"` using structured output (`responseMimeType: 'application/json'` + `responseSchema`). Response validated with Zod; a post-processing safety net forces any buffer slot that sneaks through to `unavailable`.
+- Prompt rule: student availability describes only times they **can** attend — silence does not imply unavailability. Unmentioned times → `normal`, not `unavailable`.
+- `src/lib/gemini.ts` — Gemini client factory (`getGeminiModel()`), Zod schemas (`SlotSchema`, `GenerateSlotsResponseSchema`), and `GEMINI_RESPONSE_SCHEMA` for the Gemini `responseSchema` field. Required env var: `GEMINI_API_KEY`.
+
+**Timetable API routes:**
+- `src/app/api/timetable/rules/route.ts` — GET/POST `timetable_rules` in `settings` table (tutor-only)
+- `src/app/api/timetable/buffer-mins/route.ts` — GET/POST `timetable_buffer_mins` in `settings` table; validated 0–60 (tutor-only)
+- `src/app/api/timetable/generate-slots/route.ts` — POST: computes buffer zones, calls Gemini, returns `{ slots }` (tutor-only)
 
 **Two PNG exports in `TimetableSection`:**
 
-- **Download Available Slots** — exports the admin's drag-painted availability grid (preferred/normal/unavailable cells + legend) as `slot_availability.png`. Shows the full 8 AM–10 PM range.
+- **Download Available Slots** — exports the AI-generated or drag-painted availability grid (preferred/normal/unavailable cells + legend) as `slot_availability.png`. Shows the full 8 AM–10 PM range.
 - **Download Schedule** — exports a clean shareable weekly calendar image (`weekly_schedule.png`) showing all active students' class blocks. Auto-crops to the active hour window (earliest class start − 30 min, latest class end + 30 min, rounded to 30-min boundaries). Each student block shows name + compact time (`10:30 – 11:30`). All blocks use a single slate blue-grey colour (`#6b7fa3`). Canvas is rendered at 2× scale for retina display.
 
 Both exports share `downloadCanvas(canvas, filename)` and the module-level `SCALE = 2` constant. `fmt12(time)` is a local helper that formats `"HH:MM"` as `"h:MM"` (no AM/PM) for use inside compact block labels.
@@ -168,3 +182,4 @@ POST route handler. No external AI — pure JS date arithmetic:
 - The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
 - The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.
 - Times are stored as `"HH:MM"` strings in Supabase but displayed in 12-hour format. Use `formatTime` from `src/lib/utils.ts` for all display. Do **not** apply it to `ClassScheduleEditor` inputs or `PaymentGenerator` (those need raw `HH:MM`).
+- `DAYS`, `TIME_SLOTS`, and `timeToMins` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. They are the canonical timetable constants used by both the frontend (`TimetableSection`) and the backend (`generate-slots` route).

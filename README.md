@@ -7,6 +7,8 @@ Public landing page + private admin dashboard for managing tuition students, cla
 - **Next.js 16** (App Router) + TypeScript
 - **Supabase** — Postgres database + magic link auth
 - **Tailwind CSS v4** + shadcn/ui + @heroicons/react
+- **Gemini 2.5 Flash** (`@google/generative-ai`) — AI slot classification with structured output
+- **Zod** — runtime validation of AI responses
 
 ## Getting Started
 
@@ -14,7 +16,7 @@ Copy the environment variables:
 
 ```bash
 cp .env.example .env.local
-# Fill in your Supabase URL, anon key, and Google OAuth credentials
+# Fill in your Supabase URL, anon key, Google OAuth credentials, and GEMINI_API_KEY
 ```
 
 Run the dev server:
@@ -41,7 +43,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Backfill banner** — if existing students have a Meet link but no stored event IDs, a banner appears at the top of the students list with a "Sync Event IDs" button; it searches Calendar by student name, stores the IDs, and dismisses once done
-- **Timetable** — two-card layout: a "Weekly Schedule" share card above the interactive availability grid (Mon–Sun, 8am–10pm); drag to paint slots as preferred/normal; student bookings auto-marked as unavailable; two HD PNG exports:
+- **Timetable** — two-card layout: "Weekly Schedule" share card above the "Slot Availability" card; the availability card includes:
+  - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM
+  - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
   - **Download Schedule** — clean shareable weekly calendar showing student names and class times (`weekly_schedule.png`); all blocks slate blue-grey; auto-crops to active hours ± 30 min
   - **Download Available Slots** — colour-coded availability grid with legend (`slot_availability.png`)
 
@@ -85,6 +89,7 @@ src/
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
     api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/backfill/deletion
+    api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
     auth/callback/                → Supabase auth code exchange
   components/
     shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge)
@@ -96,8 +101,9 @@ src/
   lib/
     supabase/   → browser + server Supabase clients
     google/     → Google OAuth2 client, Drive folder creation/update/deletion, Calendar event creation/update/deletion
+    gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
     types.ts    → shared TypeScript types
-    utils.ts    → formatTime, cn
+    utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins
   proxy.ts      → Next.js middleware (auth + route protection)
 ```
 
