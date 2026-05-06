@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import PaymentGenerator from './PaymentGenerator'
+import type { Student } from '@/lib/types'
 
 const TEMPLATE_ROWS: Record<string, number> = {
   payment: 3,
@@ -16,15 +19,15 @@ const TEMPLATE_ROWS: Record<string, number> = {
   first_approach: 5,
 }
 
-const TEMPLATE_META: { id: string; title: string; description: string }[] = [
-  { id: 'payment', title: 'Payment Request 1', description: 'Monthly fee reminder (standard).' },
-  { id: 'payment2', title: 'Payment Request 2', description: 'Monthly fee reminder with carried-over sessions.' },
-  { id: 'review_request1', title: 'Review Request 1', description: 'For students tutored directly.' },
-  { id: 'review_request2', title: 'Review Request 2', description: 'For students tutored through a parent.' },
-  { id: 'recommendation_request1', title: 'Recommendation Request 1', description: 'For students tutored directly.' },
-  { id: 'recommendation_request2', title: 'Recommendation Request 2', description: 'For students tutored through a parent.' },
-  { id: 'first_approach', title: 'First Approach', description: 'Initial outreach to prospective students via Superprof.' },
-]
+const TEMPLATE_META: Record<string, { title: string; description: string }> = {
+  payment:               { title: 'Payment Request 1',       description: 'Monthly fee reminder (standard).' },
+  payment2:              { title: 'Payment Request 2',       description: 'Monthly fee reminder with carried-over sessions.' },
+  review_request1:       { title: 'Review Request 1',        description: 'For students tutored directly.' },
+  review_request2:       { title: 'Review Request 2',        description: 'For students tutored through a parent.' },
+  recommendation_request1: { title: 'Recommendation Request 1', description: 'For students tutored directly.' },
+  recommendation_request2: { title: 'Recommendation Request 2', description: 'For students tutored through a parent.' },
+  first_approach:        { title: 'First Approach',          description: 'Initial outreach to prospective students via Superprof.' },
+}
 
 function TemplateCard({
   id,
@@ -114,18 +117,59 @@ function TemplateCard({
   )
 }
 
-export default function TemplatesList({ initialData }: { initialData: Record<string, string> }) {
+function TemplateGroup({ ids, initialData }: { ids: string[]; initialData: Record<string, string> }) {
   return (
-    <div className="space-y-6">
-      {TEMPLATE_META.map(({ id, title, description }) => (
-        <TemplateCard
-          key={id}
-          id={id}
-          title={title}
-          description={description}
-          initialContent={initialData[id] ?? ''}
-        />
-      ))}
+    <div className="space-y-4">
+      {ids.map((id) => {
+        const meta = TEMPLATE_META[id]
+        return (
+          <TemplateCard
+            key={id}
+            id={id}
+            title={meta.title}
+            description={meta.description}
+            initialContent={initialData[id] ?? ''}
+          />
+        )
+      })}
     </div>
+  )
+}
+
+export default function TemplatesList({
+  initialData,
+  students,
+}: {
+  initialData: Record<string, string>
+  students: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
+}) {
+  return (
+    <Tabs defaultValue="payment">
+      <TabsList className="w-full">
+        <TabsTrigger value="payment" className="flex-1">Payment</TabsTrigger>
+        <TabsTrigger value="review" className="flex-1">Review</TabsTrigger>
+        <TabsTrigger value="recommendation" className="flex-1">Recommendation</TabsTrigger>
+        <TabsTrigger value="first_approach" className="flex-1">First Approach</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="payment" className="pt-4">
+        <div className="space-y-4">
+          <PaymentGenerator students={students} />
+          <TemplateGroup ids={['payment', 'payment2']} initialData={initialData} />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="review" className="pt-4">
+        <TemplateGroup ids={['review_request1', 'review_request2']} initialData={initialData} />
+      </TabsContent>
+
+      <TabsContent value="recommendation" className="pt-4">
+        <TemplateGroup ids={['recommendation_request1', 'recommendation_request2']} initialData={initialData} />
+      </TabsContent>
+
+      <TabsContent value="first_approach" className="pt-4">
+        <TemplateGroup ids={['first_approach']} initialData={initialData} />
+      </TabsContent>
+    </Tabs>
   )
 }

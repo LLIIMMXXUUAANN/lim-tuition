@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import TemplatesList from '@/components/templates/TemplatesList'
-import PaymentGenerator from '@/components/templates/PaymentGenerator'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -34,10 +33,7 @@ export default async function TemplatesPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Templates</h1>
       </div>
-      <div className="space-y-6">
-        <PaymentGenerator students={activeStudents} />
-        <TemplatesList initialData={byId} />
-      </div>
+      <TemplatesList initialData={byId} students={activeStudents} />
     </div>
   )
 }

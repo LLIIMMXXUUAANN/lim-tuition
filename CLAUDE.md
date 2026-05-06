@@ -90,7 +90,7 @@ src/components/
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
   landing/      → 13 static sections for the public landing page
-  ui/           → shadcn/ui primitives (Button, Input, Card, Select, etc.)
+  ui/           → shadcn/ui primitives (Button, Input, Card, Select, Tabs, etc.)
 ```
 
 ### Landing page (`src/components/landing/`)
@@ -110,8 +110,8 @@ src/components/
 - **`students/StudentForm`** — on Save, if the student already has `calendar_event_ids` and the schedule changed, automatically calls `update-class-event` before the DB upsert; patches Calendar events (preserving Meet link) and rewrites the Drive "Google Meet Link" doc; Drive errors shown as amber warning but don't block the save. "Remove Student" opens a confirmation dialog that hard-deletes the row and calls `delete-student` to trash the Drive folder and delete Calendar events; Google cleanup failure shows an in-dialog amber warning but doesn't block the DB deletion.
 - **`students/ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
 - **`students/BackfillEventIdsButton`** — banner on the students list; visible when active students have a Meet link but missing `calendar_event_ids`; calls backfill API, shows per-student results, dismissed with `router.refresh()`
-- **`templates/TemplatesList`** — receives initial data from server, handles edit/save/copy per template; save state cycles through `idle → saving → saved/error`
-- **`templates/PaymentGenerator`** — client component on the Templates page; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
+- **`templates/TemplatesList`** — receives `initialData` and `students` props from the server; renders a 4-tab layout (Payment · Review · Recommendation · First Approach). The Payment tab contains `PaymentGenerator` followed by the payment templates; the other tabs contain their respective templates. `TEMPLATE_META` is a `Record<string, { title, description }>` — look up by id directly. Save state per card cycles through `idle → saving → saved/error`.
+- **`templates/PaymentGenerator`** — client component rendered inside `TemplatesList`'s Payment tab; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
 - **`timetable/TimetableSection`** — client component on the Timetable page; renders two card boxes: (1) "Weekly Schedule" card with a **Download Schedule** button, (2) "Slot Availability" card with the AI panel + interactive grid + **Download Available Slots** button. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
