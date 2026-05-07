@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { timeToMins, MONTH_NAMES, DAY_INDEX } from '@/lib/utils'
 import type { ClassSlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -12,15 +13,6 @@ interface RequestBody {
   carryover?: number
 }
 
-const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-]
-
-const DAY_INDEX: Record<string, number> = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-  Thursday: 4, Friday: 5, Saturday: 6,
-}
 
 function getWeekdayDates(year: number, month: number, weekday: string): number[] {
   const dayIndex = DAY_INDEX[weekday]
@@ -35,11 +27,6 @@ function getWeekdayDates(year: number, month: number, weekday: string): number[]
   return dates
 }
 
-function durationHours(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number)
-  const [eh, em] = end.split(':').map(Number)
-  return (eh * 60 + em - (sh * 60 + sm)) / 60
-}
 
 function formatFee(fee: number): string {
   const rounded = Math.round(fee * 100) / 100
@@ -116,7 +103,7 @@ export async function POST(request: NextRequest) {
   for (const [day, slots] of slotsByDay) {
     const dates = getWeekdayDates(year, month, day)
     allDates.push(...dates)
-    const hoursPerSession = slots.reduce((sum, s) => sum + durationHours(s.start, s.end), 0)
+    const hoursPerSession = slots.reduce((sum, s) => sum + (timeToMins(s.end) - timeToMins(s.start)) / 60, 0)
     sessionFeeTotal += dates.length * hoursPerSession * student.fee_per_hour
   }
 

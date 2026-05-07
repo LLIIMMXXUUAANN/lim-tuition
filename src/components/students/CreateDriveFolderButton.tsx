@@ -2,12 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-
-interface ClassSlot {
-  day: string
-  start: string
-  end: string
-}
+import type { ClassSlot } from '@/lib/types'
 
 interface Props {
   name: string

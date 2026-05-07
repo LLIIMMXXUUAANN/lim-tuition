@@ -92,7 +92,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       notes: form.notes || null,
     }
 
-    // If editing a student who has calendar events and the schedule changed, patch calendar first
     if (student && (form.calendar_event_ids ?? []).length > 0 && form.google_meet_link) {
       const scheduleChanged = JSON.stringify(form.class_schedule) !== JSON.stringify(student.class_schedule)
       if (scheduleChanged) {

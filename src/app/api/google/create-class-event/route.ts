@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireTutor } from '@/lib/supabase/server'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createWeeklyClassEvents } from '@/lib/google/calendar'
 import type { ClassSlot } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: isTutor } = await supabase.rpc('is_tutor')
-  if (!isTutor) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { error } = await requireTutor()
+  if (error) return error
 
   const body = await req.json().catch(() => ({})) as { name?: string; class_schedule?: { day: string; start: string; end: string }[] }
   const { name, class_schedule } = body

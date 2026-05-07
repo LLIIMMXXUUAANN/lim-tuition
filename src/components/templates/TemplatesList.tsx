@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useClipboard } from '@/lib/hooks/useClipboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -44,11 +45,11 @@ function TemplateCard({
   const [content, setContent] = useState(initialContent)
   const [editing, setEditing] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useClipboard()
+  const supabase = createClient()
 
   async function handleSave() {
     setSaveState('saving')
-    const supabase = createClient()
     const { error } = await supabase.from('templates').upsert({ id, content })
     if (error) {
       setSaveState('error')
@@ -66,10 +67,8 @@ function TemplateCard({
     setEditing(false)
   }
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  function handleCopy() {
+    copy(content)
   }
 
   return (

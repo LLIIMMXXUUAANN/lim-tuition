@@ -19,3 +19,11 @@ export async function getOAuth2Client() {
   client.setCredentials({ refresh_token: data.value })
   return client
 }
+
+export function newOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI,
+  )
+}

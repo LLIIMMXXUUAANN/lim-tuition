@@ -1,11 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { DAYS } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import StudentCard from '@/components/students/StudentCard'
 import BackfillEventIdsButton from '@/components/students/BackfillEventIdsButton'
-import type { Student, StudentStatus, WeekDay } from '@/lib/types'
-
-const DAYS: WeekDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+import type { Student, StudentStatus } from '@/lib/types'
 
 const TABS: { label: string; value: StudentStatus | 'All' }[] = [
   { label: 'All', value: 'All' },
@@ -26,18 +25,19 @@ export default async function StudentsPage({ searchParams }: Props) {
     : 'Active'
 
   const supabase = await createClient()
-  let query = supabase.from('students').select('*').order('name')
+  let query = supabase.from('students').select('id, name, status, mode, contact_person, class_schedule, payment_method, google_meet_link, calendar_event_ids').order('name')
   if (activeTab !== 'All') query = query.eq('status', activeTab)
 
-  const { data: students, error } = await query
+  const [{ data: students, error }, { count: backfillCount }] = await Promise.all([
+    query,
+    supabase
+      .from('students')
+      .select('id', { count: 'exact', head: true })
+      .not('google_meet_link', 'is', null)
+      .is('calendar_event_ids', null)
+      .eq('status', 'Active'),
+  ])
   const list = (students ?? []) as Student[]
-
-  const { count: backfillCount } = await supabase
-    .from('students')
-    .select('id', { count: 'exact', head: true })
-    .not('google_meet_link', 'is', null)
-    .is('calendar_event_ids', null)
-    .eq('status', 'Active')
 
   const byDay = DAYS.map((day) => {
     const entries = list
@@ -67,15 +67,14 @@ export default async function StudentsPage({ searchParams }: Props) {
           <Link
             key={tab.value}
             href={tab.value === 'Active' ? '/admin/students' : `/admin/students?status=${encodeURIComponent(tab.value)}`}
-          >
-            <button className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               activeTab === tab.value
                 ? 'bg-slate-800 text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}>
-              {tab.label}
-              {activeTab === tab.value && list.length > 0 && ` (${list.length})`}
-            </button>
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.value && list.length > 0 && ` (${list.length})`}
           </Link>
         ))}
       </div>

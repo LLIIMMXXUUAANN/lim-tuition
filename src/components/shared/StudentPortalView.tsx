@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatTime } from '@/lib/utils'
 import type { Student } from '@/lib/types'
-import { Row, BlockField, statusBadge } from '@/components/shared/student-fields'
+import { Row, BlockField, statusBadge, ScheduleList } from '@/components/shared/student-fields'
 
 export default function StudentPortalView({ student }: { student: Student }) {
   const schedule = student.class_schedule ?? []
@@ -43,15 +42,7 @@ export default function StudentPortalView({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Class Schedule</CardTitle></CardHeader>
         <CardContent className="text-sm">
-          {schedule.length === 0 ? (
-            <p className="text-slate-400 italic">No schedule set</p>
-          ) : (
-            <div className="space-y-1">
-              {schedule.map((slot, i) => (
-                <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
-              ))}
-            </div>
-          )}
+          <ScheduleList schedule={schedule} />
         </CardContent>
       </Card>
 

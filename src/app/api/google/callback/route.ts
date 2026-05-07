@@ -1,22 +1,15 @@
-import { google } from 'googleapis'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireTutor } from '@/lib/supabase/server'
+import { newOAuth2Client } from '@/lib/google/auth'
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: isTutor } = await supabase.rpc('is_tutor')
-  if (!isTutor) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { supabase, error } = await requireTutor()
+  if (error) return error
 
   const code = req.nextUrl.searchParams.get('code')
   if (!code) return NextResponse.json({ error: 'No code' }, { status: 400 })
 
-  const client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI,
-  )
+  const client = newOAuth2Client()
   const { tokens } = await client.getToken(code)
   if (!tokens.refresh_token) {
     return NextResponse.json({ error: 'No refresh token returned. Revoke app access in Google Account settings and try again.' }, { status: 400 })

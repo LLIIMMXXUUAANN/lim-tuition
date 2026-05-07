@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useClipboard } from '@/lib/hooks/useClipboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,19 +24,24 @@ interface Props {
 }
 
 export default function PaymentGenerator({ students }: Props) {
-  const nextMonth = new Date()
-  nextMonth.setMonth(nextMonth.getMonth() + 1)
-
   const [studentId, setStudentId]       = useState('')
-  const [month, setMonth]               = useState(String(nextMonth.getMonth() + 1))
-  const [year, setYear]                 = useState(String(nextMonth.getFullYear()))
+  const [month, setMonth]               = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 1)
+    return String(d.getMonth() + 1)
+  })
+  const [year, setYear]                 = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 1)
+    return String(d.getFullYear())
+  })
   const [templateType, setTemplateType] = useState<'1' | '2'>('1')
   const [carryover, setCarryover]       = useState('1')
 
   const [status, setStatus]     = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [message, setMessage]   = useState('')
-  const [copied, setCopied]     = useState(false)
+  const { copied, copy } = useClipboard()
 
   async function handleGenerate() {
     if (!studentId) return
@@ -75,11 +81,9 @@ export default function PaymentGenerator({ students }: Props) {
     }
   }
 
-  async function handleCopy() {
+  function handleCopy() {
     if (!message) return
-    await navigator.clipboard.writeText(message)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    copy(message)
   }
 
   const isValid = !!studentId && !!month && !!year

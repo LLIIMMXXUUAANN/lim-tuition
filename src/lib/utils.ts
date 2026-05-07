@@ -28,3 +28,13 @@ export function timeToMins(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
 }
+
+export const DAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+}
+
+export const MONTH_NAMES: string[] = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+]

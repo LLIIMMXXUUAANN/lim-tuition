@@ -1,3 +1,6 @@
+import { formatTime } from '@/lib/utils'
+import type { ClassSlot } from '@/lib/types'
+
 export const statusBadge: Record<string, string> = {
   'Active': 'bg-green-100 text-green-700',
   'On Hold': 'bg-yellow-100 text-yellow-700',
@@ -20,6 +23,19 @@ export function BlockField({ label, value }: { label: string; value?: string | n
     <div className="pt-1">
       <p className="text-slate-500 mb-1">{label}</p>
       <p className="text-slate-800 whitespace-pre-wrap">{value}</p>
+    </div>
+  )
+}
+
+export function ScheduleList({ schedule }: { schedule: ClassSlot[] }) {
+  if (schedule.length === 0) {
+    return <p className="text-slate-400 italic">No schedule set</p>
+  }
+  return (
+    <div className="space-y-1">
+      {schedule.map((slot, i) => (
+        <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
+      ))}
     </div>
   )
 }

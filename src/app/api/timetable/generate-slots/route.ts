@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireTutor } from '@/lib/supabase/server'
 import { getGeminiModel, GenerateSlotsResponseSchema } from '@/lib/gemini'
 import { TIME_SLOTS, DAYS, timeToMins } from '@/lib/utils'
 
@@ -16,8 +16,8 @@ function computeBufferSlots(bookedSlots: BookedSlot[], bufferMins: number): Set<
     for (const ts of TIME_SLOTS) {
       const slotStart = timeToMins(ts)
       const slotEnd = slotStart + 30
-      const gapBefore = classStart - slotEnd  // gap between this slot's end and class start
-      const gapAfter  = slotStart - classEnd  // gap between class end and this slot's start
+      const gapBefore = classStart - slotEnd
+      const gapAfter  = slotStart - classEnd
       if ((gapBefore >= 0 && gapBefore < bufferMins) || (gapAfter >= 0 && gapAfter < bufferMins)) {
         blocked.add(`${slot.day}|${ts}`)
       }
@@ -26,31 +26,32 @@ function computeBufferSlots(bookedSlots: BookedSlot[], bufferMins: number): Set<
   return blocked
 }
 
+function buildBookedCellSet(bookedSlots: BookedSlot[]): Set<string> {
+  return new Set(
+    bookedSlots.flatMap(slot =>
+      TIME_SLOTS.filter(ts => {
+        const slotStart = timeToMins(ts)
+        const slotEnd = slotStart + 30
+        return slotStart < timeToMins(slot.end) && slotEnd > timeToMins(slot.start)
+      }).map(ts => `${slot.day}|${ts}`)
+    )
+  )
+}
+
 function buildPrompt(
   rules: string,
   studentAvailability: string,
   bookedSlots: BookedSlot[],
   bufferSlots: Set<string>,
+  bookedCellSet: Set<string>,
 ): string {
   const bookedLines = bookedSlots.length
     ? bookedSlots.map(s => `  ${s.day} ${s.start}–${s.end}`).join('\n')
     : '  (none)'
 
-  const bookedSet = new Set(
-    bookedSlots.flatMap(slot =>
-      TIME_SLOTS
-        .filter(ts => {
-          const slotStart = timeToMins(ts)
-          const slotEnd = slotStart + 30
-          return slotStart < timeToMins(slot.end) && slotEnd > timeToMins(slot.start)
-        })
-        .map(ts => `${slot.day}|${ts}`)
-    )
-  )
-
   const classifiableSlots = DAYS.flatMap(day =>
     TIME_SLOTS
-      .filter(ts => !bookedSet.has(`${day}|${ts}`) && !bufferSlots.has(`${day}|${ts}`))
+      .filter(ts => !bookedCellSet.has(`${day}|${ts}`) && !bufferSlots.has(`${day}|${ts}`))
       .map(ts => `${day} ${ts}`)
   ).join(', ')
 
@@ -81,11 +82,8 @@ CRITICAL — how to interpret student availability:
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: isTutor } = await supabase.rpc('is_tutor')
-  if (!isTutor) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { error } = await requireTutor()
+  if (error) return error
 
   const body = await req.json().catch(() => ({})) as {
     rules?: string
@@ -101,12 +99,14 @@ export async function POST(req: NextRequest) {
   const bookedSlots = body.bookedSlots ?? []
   const bufferMins = typeof body.bufferMins === 'number' ? body.bufferMins : 15
   const bufferSlots = computeBufferSlots(bookedSlots, bufferMins)
+  const bookedCellSet = buildBookedCellSet(bookedSlots)
 
   const prompt = buildPrompt(
     body.rules.trim(),
     body.studentAvailability?.trim() || 'No student availability provided — classify slots based on tutor rules only.',
     bookedSlots,
     bufferSlots,
+    bookedCellSet,
   )
 
   try {

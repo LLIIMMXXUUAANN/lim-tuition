@@ -131,7 +131,6 @@ export async function createStudentDriveFolder(
 
   const drive = google.drive({ version: 'v3', auth })
 
-  // Root student folder
   const rootId = await createFolder(drive, studentName, studentsFolderId)
   await drive.permissions.create({
     fileId: rootId,
@@ -139,24 +138,25 @@ export async function createStudentDriveFolder(
   })
 
   try {
-    // 1. Teaching Slides — shortcut to Topic_1.pptx
-    const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
-    await createShortcut(drive, lecTopic1FileId, teachingId, 'Topic_1.pptx')
-
-    // 2. In-Class Coding Examples — empty ipynb
-    const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
-    await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
-
-    // 3. Homework Questions — blank Google Doc
-    const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
-    await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
-
-    // 4. Homework Sample Answers — empty ipynb
-    const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
-    await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
-
-    // Google Meet Link — doc with student info and meet link
-    await createMeetDoc(drive, rootId, studentName, classSchedule, meetLink)
+    await Promise.all([
+      (async () => {
+        const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
+        await createShortcut(drive, lecTopic1FileId, teachingId, 'Topic_1.pptx')
+      })(),
+      (async () => {
+        const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
+        await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
+      })(),
+      (async () => {
+        const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
+        await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
+      })(),
+      (async () => {
+        const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
+        await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
+      })(),
+      createMeetDoc(drive, rootId, studentName, classSchedule, meetLink),
+    ])
   } catch (err) {
     // Clean up root folder so a retry doesn't create duplicates
     await drive.files.delete({ fileId: rootId }).catch(() => null)

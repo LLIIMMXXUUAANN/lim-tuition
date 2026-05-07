@@ -92,18 +92,19 @@ src/
     api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
     auth/callback/                → Supabase auth code exchange
   components/
-    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge)
+    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList)
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
-    supabase/   → browser + server Supabase clients
-    google/     → Google OAuth2 client, Drive folder creation/update/deletion, Calendar event creation/update/deletion
+    supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
+    google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
+    hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
     gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
-    types.ts    → shared TypeScript types
-    utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins
+    types.ts    → shared TypeScript types (Student, ClassSlot, etc.)
+    utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES
   proxy.ts      → Next.js middleware (auth + route protection)
 ```
 

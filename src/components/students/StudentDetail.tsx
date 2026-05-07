@@ -3,11 +3,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { formatTime } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import StudentForm from '@/components/students/StudentForm'
 import type { Student } from '@/lib/types'
-import { Row, BlockField, statusBadge } from '@/components/shared/student-fields'
+import { Row, BlockField, statusBadge, ScheduleList } from '@/components/shared/student-fields'
 
 export default function StudentDetail({ student }: { student: Student }) {
   const [editing, setEditing] = useState(false)
@@ -77,15 +76,7 @@ export default function StudentDetail({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Class Schedule</CardTitle></CardHeader>
         <CardContent className="text-sm">
-          {schedule.length === 0 ? (
-            <p className="text-slate-400 italic">No schedule set</p>
-          ) : (
-            <div className="space-y-1">
-              {schedule.map((slot, i) => (
-                <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
-              ))}
-            </div>
-          )}
+          <ScheduleList schedule={schedule} />
         </CardContent>
       </Card>
 

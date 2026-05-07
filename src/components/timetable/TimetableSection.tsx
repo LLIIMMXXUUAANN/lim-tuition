@@ -11,9 +11,12 @@ type SaveStatus = 'idle' | 'saved' | 'error'
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+function cellKey(day: string, ts: string): string {
+  return `${day}|${ts}`
+}
+
 const SCALE = 2
 
-// PNG layout constants
 const PNG_PAD      = 24
 const PNG_LABEL_W  = 56
 const PNG_CELL_W   = 86
@@ -45,7 +48,7 @@ function buildBookedSet(students: { class_schedule: ClassSlot[] }[]): Set<string
       for (const ts of TIME_SLOTS) {
         const tsEnd = addMinutes(ts, 30)
         if (ts < slot.end && tsEnd > slot.start)
-          s.add(`${slot.day}|${ts}`)
+          s.add(cellKey(slot.day, ts))
       }
   return s
 }
@@ -63,6 +66,12 @@ function cycleType(current: SlotType | undefined): SlotType | null {
   return null
 }
 
+const LEGEND_ITEMS = [
+  { color: '#4ade80', label: 'Preferred available' },
+  { color: '#fde047', label: 'Normal available' },
+  { color: '#f1f5f9', label: 'Unavailable', border: '#cbd5e1' },
+]
+
 function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
   const canvas = document.createElement('canvas')
   canvas.width = PNG_W * SCALE
@@ -75,23 +84,15 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
   const headerY = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H + PNG_GAP
   const gridY   = headerY + PNG_HEADER_H
 
-  // White background
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, PNG_W, PNG_H)
 
-  // Title
   ctx.fillStyle = '#0f2942'
   ctx.font = 'bold 16px system-ui, sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText('Weekly Availability', gridX, PNG_PAD + PNG_TITLE_H / 2)
 
-  // Legend row (top, below title)
-  const LEGEND_ITEMS = [
-    { color: '#4ade80', label: 'Preferred available' },
-    { color: '#fde047', label: 'Normal available' },
-    { color: '#f1f5f9', label: 'Unavailable', border: '#cbd5e1' },
-  ]
   const swatchSize = 13
   const swatchRadius = 4
   const legendMidY = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H / 2
@@ -116,7 +117,6 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
     lx += swatchSize + 5 + ctx.measureText(item.label).width + 22
   }
 
-  // Day header bar (navy, rounded top corners)
   ctx.fillStyle = '#0f2942'
   ctx.beginPath()
   ctx.roundRect(gridX, headerY, PNG_CELL_W * 7, PNG_HEADER_H, [6, 6, 0, 0])
@@ -130,18 +130,15 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
     ctx.fillText(d, gridX + i * PNG_CELL_W + PNG_CELL_W / 2, headerY + PNG_HEADER_H / 2)
   })
 
-  // Grid cells
   const CELL_RADIUS = 6
   TIME_SLOTS.forEach((ts, row) => {
     const y = gridY + row * PNG_CELL_H
 
-    // Alternating row tint
     if (row % 2 === 0) {
       ctx.fillStyle = '#f8fafc'
       ctx.fillRect(PNG_PAD, y, PNG_LABEL_W + PNG_CELL_W * 7, PNG_CELL_H)
     }
 
-    // Hour label
     if (ts.endsWith(':00')) {
       ctx.fillStyle = '#64748b'
       ctx.font = '11px system-ui, sans-serif'
@@ -153,8 +150,8 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
     DAYS.forEach((day, col) => {
       const x = gridX + col * PNG_CELL_W
       let fill = '#f1f5f9'
-      if (!bookedSet.has(`${day}|${ts}`)) {
-        const t = grid.get(`${day}|${ts}`)
+      if (!bookedSet.has(cellKey(day, ts))) {
+        const t = grid.get(cellKey(day, ts))
         if (t === 'preferred') fill = '#4ade80'
         else if (t === 'normal') fill = '#fde047'
       }
@@ -184,7 +181,6 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   const SCH_CELL_H  = 28
   const BLOCK_COLOR = '#6b7fa3'
 
-  // Auto-crop: find active hour window, round to 30-min boundaries
   let minMin = 22 * 60, maxMin = 8 * 60
   for (const s of students)
     for (const slot of s.class_schedule) {
@@ -384,8 +380,8 @@ export default function TimetableSection({ students, initialRules = '', initialB
 
       const newGrid = new Map<string, SlotType>()
       for (const slot of data.slots as { day: string; time: string; state: string }[]) {
-        if (slot.state === 'preferred') newGrid.set(`${slot.day}|${slot.time}`, 'preferred')
-        else if (slot.state === 'normal') newGrid.set(`${slot.day}|${slot.time}`, 'normal')
+        if (slot.state === 'preferred') newGrid.set(cellKey(slot.day, slot.time), 'preferred')
+        else if (slot.state === 'normal') newGrid.set(cellKey(slot.day, slot.time), 'normal')
       }
       setGrid(newGrid)
     } catch (err) {
@@ -398,23 +394,23 @@ export default function TimetableSection({ students, initialRules = '', initialB
   function applyPaint(day: WeekDay, ts: string, paint: SlotType | null) {
     setGrid(prev => {
       const m = new Map(prev)
-      if (paint === null) m.delete(`${day}|${ts}`)
-      else m.set(`${day}|${ts}`, paint)
+      if (paint === null) m.delete(cellKey(day, ts))
+      else m.set(cellKey(day, ts), paint)
       return m
     })
   }
 
   function handleMouseDown(e: React.MouseEvent, day: WeekDay, ts: string) {
-    if (bookedSet.has(`${day}|${ts}`)) return
+    if (bookedSet.has(cellKey(day, ts))) return
     e.preventDefault()
-    const paint = cycleType(grid.get(`${day}|${ts}`))
+    const paint = cycleType(grid.get(cellKey(day, ts)))
     paintType.current = paint
     isDragging.current = true
     applyPaint(day, ts, paint)
   }
 
   function handleMouseEnter(day: WeekDay, ts: string) {
-    if (!isDragging.current || bookedSet.has(`${day}|${ts}`)) return
+    if (!isDragging.current || bookedSet.has(cellKey(day, ts))) return
     applyPaint(day, ts, paintType.current)
   }
 
@@ -526,13 +522,13 @@ export default function TimetableSection({ students, initialRules = '', initialB
                     {ts.endsWith(':00') ? ts : ''}
                   </div>
                   {DAYS.map(day => {
-                    const cellKey: CellKey = bookedSet.has(`${day}|${ts}`) ? 'booked' : (grid.get(`${day}|${ts}`) ?? 'empty')
+                    const cellState: CellKey = bookedSet.has(cellKey(day, ts)) ? 'booked' : (grid.get(cellKey(day, ts)) ?? 'empty')
                     return (
                       <div
                         key={`${day}-${ts}`}
                         onMouseDown={e => handleMouseDown(e, day, ts)}
                         onMouseEnter={() => handleMouseEnter(day, ts)}
-                        className={`h-5 rounded-sm transition-colors ${CELL_CLASSES[cellKey]}`}
+                        className={`h-5 rounded-sm transition-colors ${CELL_CLASSES[cellState]}`}
                       />
                     )
                   })}

@@ -2,12 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-
-interface ClassSlot {
-  day: string
-  start: string
-  end: string
-}
+import type { ClassSlot } from '@/lib/types'
 
 interface Props {
   name: string
@@ -18,7 +13,6 @@ interface Props {
 export default function CreateCalendarEventButton({ name, classSchedule, onSuccess }: Props) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  const [eventCount, setEventCount] = useState(0)
 
   async function handleClick() {
     setState('loading')
@@ -32,7 +26,6 @@ export default function CreateCalendarEventButton({ name, classSchedule, onSucce
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       onSuccess(data.meetLink, data.eventIds ?? [])
-      setEventCount(data.eventCount)
       setState('done')
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to create calendar event')
@@ -57,7 +50,7 @@ export default function CreateCalendarEventButton({ name, classSchedule, onSucce
         {state === 'loading'
           ? 'Creating…'
           : state === 'done'
-          ? `✓ ${eventCount} event${eventCount !== 1 ? 's' : ''} created`
+          ? `✓ ${classSchedule.length} event${classSchedule.length !== 1 ? 's' : ''} created`
           : 'Create Google Calendar Event'}
       </Button>
       {state === 'idle' && (missingName || missingSchedule) && (

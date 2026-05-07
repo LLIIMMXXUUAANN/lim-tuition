@@ -1,15 +1,11 @@
 import { google } from 'googleapis'
 import type { OAuth2Client } from 'google-auth-library'
 import type { ClassSlot } from '@/lib/types'
+import { DAY_INDEX } from '@/lib/utils'
 
 const BYDAY: Record<string, string> = {
   Sunday: 'SU', Monday: 'MO', Tuesday: 'TU', Wednesday: 'WE',
   Thursday: 'TH', Friday: 'FR', Saturday: 'SA',
-}
-
-const DAY_INDEX: Record<string, number> = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-  Thursday: 4, Friday: 5, Saturday: 6,
 }
 
 const TIMEZONE = 'Asia/Kuala_Lumpur'
@@ -105,24 +101,26 @@ export async function createWeeklyClassEvents(
   if (!firstRes.data.id) throw new Error('Calendar event created but no event ID was returned.')
   eventIds.push(firstRes.data.id)
 
-  // Create remaining slots — reference the same Meet link in the description
-  for (const slot of schedule.slice(1)) {
-    const byDay = BYDAY[slot.day]
-    if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
-    const res = await calendar.events.insert({
-      calendarId,
-      conferenceDataVersion: 0,
-      requestBody: {
-        summary: studentName,
-        description: `Google Meet link: ${meetLink}`,
-        start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
-        end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
-        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
-      },
+  const remainingIds = await Promise.all(
+    schedule.slice(1).map(async (slot) => {
+      const byDay = BYDAY[slot.day]
+      if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
+      const res = await calendar.events.insert({
+        calendarId,
+        conferenceDataVersion: 0,
+        requestBody: {
+          summary: studentName,
+          description: `Google Meet link: ${meetLink}`,
+          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
+          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
+          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+        },
+      })
+      if (!res.data.id) throw new Error('Calendar event created but no event ID was returned.')
+      return res.data.id
     })
-    if (!res.data.id) throw new Error('Calendar event created but no event ID was returned.')
-    eventIds.push(res.data.id)
-  }
+  )
+  eventIds.push(...remainingIds)
 
   return { meetLink, eventCount: schedule.length, eventIds }
 }
