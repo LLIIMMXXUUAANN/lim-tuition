@@ -125,6 +125,27 @@ export async function createWeeklyClassEvents(
   return { meetLink, eventCount: schedule.length, eventIds }
 }
 
+export async function findRecurringEventIds(
+  auth: OAuth2Client,
+  studentName: string,
+): Promise<string[]> {
+  const calendarId = process.env.GOOGLE_CALENDAR_ID
+  if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
+
+  const calendar = google.calendar({ version: 'v3', auth })
+  const res = await calendar.events.list({
+    calendarId,
+    q: studentName,
+    singleEvents: false,
+    maxResults: 20,
+  })
+  const matching = (res.data.items ?? []).filter(
+    e => e.summary === studentName && e.recurrence?.length && e.id,
+  )
+  matching.sort((a, b) => new Date(a.created!).getTime() - new Date(b.created!).getTime())
+  return matching.map(e => e.id!)
+}
+
 export async function updateWeeklyClassEvents(
   auth: OAuth2Client,
   studentName: string,
@@ -186,3 +207,4 @@ export async function updateWeeklyClassEvents(
   const [newEventIds] = await Promise.all([Promise.all(updateOps), Promise.all(deleteOps)])
   return { eventIds: newEventIds }
 }
+

@@ -92,30 +92,42 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       notes: form.notes || null,
     }
 
-    if (student && (form.calendar_event_ids ?? []).length > 0 && form.google_meet_link) {
+    // Use a local variable so the warning is only shown after a successful DB save,
+    // and so we can decide whether to keep the form open.
+    let calendarMsg = ''
+
+    if (student) {
       const scheduleChanged = JSON.stringify(form.class_schedule) !== JSON.stringify(student.class_schedule)
       if (scheduleChanged) {
-        try {
-          const res = await fetch('/api/google/update-class-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: form.name.trim(),
-              class_schedule: form.class_schedule,
-              event_ids: form.calendar_event_ids,
-              meet_link: form.google_meet_link,
-              drive_folder_url: form.google_drive_link || undefined,
-            }),
-          })
-          const data = await res.json()
-          if (res.ok) {
-            payload.calendar_event_ids = data.eventIds
-            if (data.driveDocError) setCalendarWarning(`Calendar updated. Drive doc not updated: ${data.driveDocError}`)
-          } else {
-            setCalendarWarning(`Calendar not updated: ${data.error ?? 'unknown error'}`)
+        const hasEventIds = (form.calendar_event_ids ?? []).length > 0
+        const hasMeetLink = !!form.google_meet_link
+        if (hasEventIds && hasMeetLink) {
+          try {
+            const res = await fetch('/api/google/update-class-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: form.name.trim(),
+                class_schedule: form.class_schedule,
+                event_ids: form.calendar_event_ids,
+                meet_link: form.google_meet_link,
+                drive_folder_url: form.google_drive_link || undefined,
+              }),
+            })
+            const data = await res.json()
+            if (res.ok) {
+              payload.calendar_event_ids = data.eventIds
+              if (data.driveDocError) calendarMsg = `Calendar updated. Drive doc not updated: ${data.driveDocError}`
+            } else {
+              calendarMsg = `Calendar not updated: ${data.error ?? 'unknown error'}`
+            }
+          } catch {
+            calendarMsg = 'Calendar not updated: network error'
           }
-        } catch {
-          setCalendarWarning('Calendar not updated: network error')
+        } else if (!hasEventIds) {
+          calendarMsg = 'Schedule saved — Google Calendar and Drive doc were not updated (no calendar event IDs). Click "Create Calendar Event" to set up sync.'
+        } else {
+          calendarMsg = 'Schedule saved — Google Calendar and Drive doc were not updated (Meet link is missing).'
         }
       }
     }
@@ -124,8 +136,13 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       if (student) {
         const { error: err } = await supabase.from('students').update(payload).eq('id', student.id)
         if (err) throw err
-        onSaved?.()
         router.refresh()
+        if (calendarMsg) {
+          setCalendarWarning(calendarMsg)
+          setSaving(false)
+        } else {
+          onSaved?.()
+        }
       } else {
         const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
         if (err) throw err

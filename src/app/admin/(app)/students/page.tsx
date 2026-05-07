@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { DAYS } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import StudentCard from '@/components/students/StudentCard'
-import BackfillEventIdsButton from '@/components/students/BackfillEventIdsButton'
+import SyncAllButton from '@/components/students/SyncAllButton'
 import type { Student, StudentStatus } from '@/lib/types'
 
 const TABS: { label: string; value: StudentStatus | 'All' }[] = [
@@ -28,15 +28,7 @@ export default async function StudentsPage({ searchParams }: Props) {
   let query = supabase.from('students').select('id, name, status, mode, contact_person, class_schedule, payment_method, google_meet_link, calendar_event_ids').order('name')
   if (activeTab !== 'All') query = query.eq('status', activeTab)
 
-  const [{ data: students, error }, { count: backfillCount }] = await Promise.all([
-    query,
-    supabase
-      .from('students')
-      .select('id', { count: 'exact', head: true })
-      .not('google_meet_link', 'is', null)
-      .is('calendar_event_ids', null)
-      .eq('status', 'Active'),
-  ])
+  const { data: students, error } = await query
   const list = (students ?? []) as Student[]
 
   const byDay = DAYS.map((day) => {
@@ -54,7 +46,6 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      {!!backfillCount && <BackfillEventIdsButton count={backfillCount} />}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">My Students</h1>
         <Link href="/admin/students/new">
@@ -122,6 +113,7 @@ export default async function StudentsPage({ searchParams }: Props) {
           )}
         </div>
       )}
+      <SyncAllButton />
     </div>
   )
 }

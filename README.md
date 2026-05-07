@@ -40,9 +40,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Templates** — editable message templates stored in Supabase, organised into 4 sub-tabs: **Payment** (payment reminder templates + payment generator), **Review** (review request templates), **Recommendation** (recommendation request templates), **First Approach** (Superprof outreach template)
 - **Payment generator** — lives inside the Payment tab; auto-calculates session dates and fees for a given student and month; supports carryover session deductions
 - **Google Calendar event creation** — "Create Google Calendar Event" button on the new student form; creates a weekly recurring event in the Superprof calendar for each class slot, auto-generates a Google Meet link, and auto-fills the `google_meet_link` field. Event IDs are stored per-slot so the same Meet link can be reused on reschedule.
-- **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule
+- **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule. If the auto-update can't run (missing event IDs, missing Meet link, API error), an amber warning is shown and the form stays open so it's readable
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
-- **Backfill banner** — if existing students have a Meet link but no stored event IDs, a banner appears at the top of the students list with a "Sync Event IDs" button; it searches Calendar by student name, stores the IDs, and dismisses once done
+- **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. For students with no stored event IDs it first searches Calendar by name to find and save them, then patches. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
 - **Timetable** — two-tab layout: **Weekly Schedule** tab (download shareable schedule image) and **Slot Availability** tab (state preserved across tab switches); the availability tab includes:
   - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM. Time-range end boundaries in rules are exclusive: `"08:00 to 10:00 unavailable"` leaves the 10:00 slot fully available
   - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
@@ -88,12 +88,12 @@ src/
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
-    api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/backfill/deletion
+    api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/sync-all/deletion
     api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
     auth/callback/                → Supabase auth code exchange
   components/
     shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList)
-    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, BackfillEventIdsButton
+    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
     landing/    → 13 public landing page sections
@@ -107,6 +107,14 @@ src/
     utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES
   proxy.ts      → Next.js middleware (auth + route protection)
 ```
+
+## Google OAuth
+
+One-time setup: visit `/api/google/auth` as admin → complete Google consent → refresh token is saved to the `settings` table.
+
+**Avoid 7-day token expiry:** Google expires refresh tokens every 7 days for apps in Testing mode. Publish the app to **In production** in Google Cloud Console → APIs & Services → OAuth consent screen → Publish App. No verification needed for a single-user app — you'll just see an "unverified app" warning during your own OAuth flow.
+
+If you see `invalid_grant` errors, re-visit `/api/google/auth` to re-authorize. After publishing to production, this should only happen if you change your Google account password or manually revoke access.
 
 ## Commands
 
