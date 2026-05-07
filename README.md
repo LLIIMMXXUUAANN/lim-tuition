@@ -43,11 +43,12 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule. If the auto-update can't run (missing event IDs, missing Meet link, API error), an amber warning is shown and the form stays open so it's readable
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. For students with no stored event IDs it first searches Calendar by name to find and save them, then patches. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
-- **Timetable** — two-tab layout: **Weekly Schedule** tab (download shareable schedule image) and **Slot Availability** tab (state preserved across tab switches); the availability tab includes:
-  - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM. Time-range end boundaries in rules are exclusive: `"08:00 to 10:00 unavailable"` leaves the 10:00 slot fully available
-  - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
-  - **Download Schedule** — clean shareable weekly calendar showing student names and class times (`weekly_schedule.png`); all blocks slate blue-grey; auto-crops to active hours ± 30 min
-  - **Download Available Slots** — colour-coded availability grid with legend (`slot_availability.png`)
+- **Timetable** — two-tab layout:
+  - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
+  - **Slot Availability tab** (state preserved across tab switches):
+    - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM. Time-range end boundaries in rules are exclusive: `"08:00 to 10:00 unavailable"` leaves the 10:00 slot fully available
+    - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
+    - **Download Available Slots** — colour-coded availability grid with legend (`slot_availability.png`)
 
 ### Student portal (authenticated students/parents)
 - **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links

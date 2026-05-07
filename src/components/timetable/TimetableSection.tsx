@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { ClassSlot, WeekDay } from '@/lib/types'
-import { formatTime, DAYS, TIME_SLOTS } from '@/lib/utils'
+import { formatTime, DAYS, TIME_SLOTS, timeToMins } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 type SlotType = 'preferred' | 'normal'
@@ -10,6 +10,8 @@ type CellKey = 'booked' | 'preferred' | 'normal' | 'empty'
 type SaveStatus = 'idle' | 'saved' | 'error'
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const SCHEDULE_CELL_H = 28
+const GRID_COLS = '72px repeat(7, 1fr)'
 
 function cellKey(day: string, ts: string): string {
   return `${day}|${ts}`
@@ -177,29 +179,26 @@ function fmt12(time: string): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')}`
 }
 
-function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[]) {
-  const SCH_CELL_H  = 28
-  const BLOCK_COLOR = '#6b7fa3'
-
+function computeScheduleWindow(students: { class_schedule: ClassSlot[] }[]): { startMin: number; endMin: number; activeSlots: string[] } {
   let minMin = 22 * 60, maxMin = 8 * 60
   for (const s of students)
     for (const slot of s.class_schedule) {
-      const [sh, sm] = slot.start.split(':').map(Number)
-      const [eh, em] = slot.end.split(':').map(Number)
-      minMin = Math.min(minMin, sh * 60 + sm)
-      maxMin = Math.max(maxMin, eh * 60 + em)
+      minMin = Math.min(minMin, timeToMins(slot.start))
+      maxMin = Math.max(maxMin, timeToMins(slot.end))
     }
   if (minMin >= maxMin) { minMin = 8 * 60; maxMin = 22 * 60 }
-  const startMin = Math.max(8 * 60,  Math.floor((minMin - 30) / 30) * 30)
-  const endMin   = Math.min(22 * 60, Math.ceil((maxMin  + 30) / 30) * 30)
-  const ACTIVE_SLOTS = TIME_SLOTS.filter(ts => {
-    const [h, m] = ts.split(':').map(Number)
-    const min = h * 60 + m
-    return min >= startMin && min < endMin
-  })
+  const startMin = Math.max(8 * 60, Math.floor((minMin - 30) / 30) * 30)
+  const endMin   = Math.min(22 * 60, Math.ceil((maxMin + 30) / 30) * 30)
+  const activeSlots = TIME_SLOTS.filter(ts => { const m = timeToMins(ts); return m >= startMin && m < endMin })
+  return { startMin, endMin, activeSlots }
+}
+
+function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[]) {
+  const BLOCK_COLOR = '#0f2942'
+  const { startMin, activeSlots: ACTIVE_SLOTS } = computeScheduleWindow(students)
 
   const SCH_H = PNG_PAD + PNG_TITLE_H + PNG_GAP + PNG_HEADER_H
-              + SCH_CELL_H * ACTIVE_SLOTS.length
+              + SCHEDULE_CELL_H * ACTIVE_SLOTS.length
               + PNG_PAD
 
   const canvas = document.createElement('canvas')
@@ -213,7 +212,7 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   const headerY    = PNG_PAD + PNG_TITLE_H + PNG_GAP
   const gridY      = headerY + PNG_HEADER_H
   const gridW      = PNG_CELL_W * 7
-  const gridBottom = gridY + SCH_CELL_H * ACTIVE_SLOTS.length
+  const gridBottom = gridY + SCHEDULE_CELL_H * ACTIVE_SLOTS.length
 
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, PNG_W, SCH_H)
@@ -237,24 +236,24 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   )
 
   ACTIVE_SLOTS.forEach((ts, row) => {
-    const y = gridY + row * SCH_CELL_H
+    const y = gridY + row * SCHEDULE_CELL_H
     if (row % 2 === 0) {
       ctx.fillStyle = '#f8fafc'
-      ctx.fillRect(PNG_PAD, y, PNG_LABEL_W + gridW, SCH_CELL_H)
+      ctx.fillRect(PNG_PAD, y, PNG_LABEL_W + gridW, SCHEDULE_CELL_H)
     }
     if (ts.endsWith(':00')) {
       ctx.fillStyle = '#94a3b8'
       ctx.font = '10px system-ui, sans-serif'
       ctx.textAlign = 'right'
       ctx.textBaseline = 'middle'
-      ctx.fillText(formatTime(ts), gridX - 6, y + SCH_CELL_H / 2)
+      ctx.fillText(formatTime(ts), gridX - 6, y + SCHEDULE_CELL_H / 2)
     }
   })
 
   ctx.strokeStyle = '#e2e8f0'
   ctx.lineWidth = 1
   ctx.beginPath()
-  ctx.roundRect(gridX, gridY, gridW, SCH_CELL_H * ACTIVE_SLOTS.length, [0, 0, 6, 6])
+  ctx.roundRect(gridX, gridY, gridW, SCHEDULE_CELL_H * ACTIVE_SLOTS.length, [0, 0, 6, 6])
   ctx.stroke()
   for (let i = 1; i < 7; i++) {
     const x = gridX + i * PNG_CELL_W
@@ -268,16 +267,16 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
     for (const slot of student.class_schedule) {
       const dayIdx = DAYS.indexOf(slot.day)
       if (dayIdx === -1) continue
-      const [sh, sm] = slot.start.split(':').map(Number)
-      const [eh, em] = slot.end.split(':').map(Number)
-      const startOffset   = (sh * 60 + sm - startMin) / 30
-      const durationSlots = (eh * 60 + em - sh * 60 - sm) / 30
+      const sMin = timeToMins(slot.start)
+      const eMin = timeToMins(slot.end)
+      const startOffset   = (sMin - startMin) / 30
+      const durationSlots = (eMin - sMin) / 30
       if (startOffset < 0 || durationSlots <= 0) continue
 
       const x = gridX + dayIdx * PNG_CELL_W + 2
-      const y = gridY + startOffset * SCH_CELL_H + 2
+      const y = gridY + startOffset * SCHEDULE_CELL_H + 2
       const w = PNG_CELL_W - 4
-      const h = Math.min(durationSlots * SCH_CELL_H - 4, gridBottom - y - 2)
+      const h = Math.min(durationSlots * SCHEDULE_CELL_H - 4, gridBottom - y - 2)
       if (h <= 0) continue
 
       ctx.fillStyle = BLOCK_COLOR
@@ -292,13 +291,13 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
       ctx.textAlign = 'center'
 
       if (durationSlots >= 2) {
+        ctx.textBaseline = 'middle'
         ctx.fillStyle = '#ffffff'
         ctx.font = 'bold 11px system-ui, sans-serif'
-        ctx.textBaseline = 'top'
-        ctx.fillText(student.name, x + w / 2, y + 6)
+        ctx.fillText(student.name, x + w / 2, y + h / 2 - 8)
         ctx.fillStyle = 'rgba(255,255,255,0.85)'
         ctx.font = '10px system-ui, sans-serif'
-        ctx.fillText(`${fmt12(slot.start)} – ${fmt12(slot.end)}`, x + w / 2, y + 20)
+        ctx.fillText(`${fmt12(slot.start)} – ${fmt12(slot.end)}`, x + w / 2, y + h / 2 + 8)
       } else {
         ctx.fillStyle = '#ffffff'
         ctx.font = 'bold 10px system-ui, sans-serif'
@@ -310,6 +309,69 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   }
 
   downloadCanvas(canvas, 'weekly_schedule.png')
+}
+
+function WeeklyScheduleView({ students }: { students: { name: string; class_schedule: ClassSlot[] }[] }) {
+  const { startMin, activeSlots } = computeScheduleWindow(students)
+  const gridHeight = activeSlots.length * SCHEDULE_CELL_H
+  const stripeGradient = `repeating-linear-gradient(to bottom, #f8fafc 0px, #f8fafc ${SCHEDULE_CELL_H}px, #ffffff ${SCHEDULE_CELL_H}px, #ffffff ${SCHEDULE_CELL_H * 2}px)`
+
+  const byDay: Record<string, { name: string; start: string; end: string }[]> = {}
+  for (const day of DAYS) byDay[day] = []
+  for (const s of students)
+    for (const slot of s.class_schedule)
+      byDay[slot.day]?.push({ name: s.name, start: slot.start, end: slot.end })
+
+  if (!students.some(s => s.class_schedule.length > 0))
+    return <p className="text-sm text-slate-400 text-center py-8">No classes scheduled yet.</p>
+
+  return (
+    <div className="select-none rounded-lg border border-slate-200 overflow-hidden">
+      <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS }}>
+        <div className="bg-[#0f2942]" />
+        {DAY_SHORT.map(d => (
+          <div key={d} className="bg-[#0f2942] text-white text-xs font-semibold text-center py-2">{d}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS }}>
+        <div className="bg-white relative" style={{ height: gridHeight }}>
+          {activeSlots.map((ts, row) => ts.endsWith(':00') ? (
+            <div key={ts} style={{ position: 'absolute', top: row * SCHEDULE_CELL_H, right: 8, height: SCHEDULE_CELL_H }} className="text-xs text-slate-400 flex items-center justify-end whitespace-nowrap">
+              {formatTime(ts)}
+            </div>
+          ) : null)}
+        </div>
+        {DAYS.map(day => (
+          <div key={day} className="relative border-l border-slate-100" style={{ height: gridHeight, background: stripeGradient }}>
+            {byDay[day].map(({ name, start, end }) => {
+              const sMin = timeToMins(start)
+              const eMin = timeToMins(end)
+              const top = (sMin - startMin) / 30 * SCHEDULE_CELL_H + 2
+              const height = (eMin - sMin) / 30 * SCHEDULE_CELL_H - 4
+              if (top < 0 || height <= 0) return null
+              const durationSlots = (eMin - sMin) / 30
+              return (
+                <div
+                  key={`${name}|${start}`}
+                  style={{ position: 'absolute', top, left: 2, right: 2, height, background: '#0f2942', borderRadius: 5, overflow: 'hidden', zIndex: 1 }}
+                  className="flex flex-col items-center justify-center px-1"
+                >
+                  {durationSlots >= 2 ? (
+                    <>
+                      <span className="text-white font-semibold text-xs leading-tight w-full text-center truncate">{name}</span>
+                      <span className="text-white/85 text-[10px]">{fmt12(start)} – {fmt12(end)}</span>
+                    </>
+                  ) : (
+                    <span className="text-white font-semibold text-[10px] leading-tight w-full text-center truncate">{name}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 interface Props {
@@ -422,14 +484,17 @@ export default function TimetableSection({ students, initialRules = '', initialB
       </TabsList>
 
       <TabsContent value="schedule" className="pt-4">
-        <div className="border rounded-lg p-6 flex items-center justify-between gap-4">
-          <p className="text-sm text-slate-500">Clean image of student class times for sharing</p>
-          <button
-            onClick={() => drawSchedule(students)}
-            className="shrink-0 px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
-          >
-            Download Schedule
-          </button>
+        <div className="border rounded-lg p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-slate-500">Current student class times</p>
+            <button
+              onClick={() => drawSchedule(students)}
+              className="shrink-0 px-4 py-1.5 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors"
+            >
+              Download Schedule
+            </button>
+          </div>
+          <WeeklyScheduleView students={students} />
         </div>
       </TabsContent>
 
