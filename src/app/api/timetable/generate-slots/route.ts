@@ -74,6 +74,7 @@ INSTRUCTIONS:
 - "preferred" — tutor prefers this day AND the student EXPLICITLY mentioned they are available at that time
 - "normal" — tutor day is normal (Wed/Sat/Sun), OR student did not mention this time, OR no student availability was provided
 - "unavailable" — blocked by tutor rules (restricted hours, day limits) OR student EXPLICITLY said they cannot attend
+- Time-range boundaries are EXCLUSIVE at the end: "08:00 to 10:00 unavailable" blocks the 08:00, 08:30, 09:00, and 09:30 slots but NOT 10:00 — the 10:00 slot starts after the block ends and is fully available. Never apply any extra margin around unavailable boundaries.
 
 CRITICAL — how to interpret student availability:
 - Student availability describes only times they CAN attend. They do NOT list times they cannot.

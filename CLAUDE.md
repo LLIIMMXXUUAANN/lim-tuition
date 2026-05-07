@@ -129,6 +129,7 @@ Server Component that fetches active students' `name` and `class_schedule` plus 
 - Classifiable slots (non-booked, non-buffered) are enumerated and sent to Gemini 2.5 Flash as a prompt. Booked and buffer slots are never sent for classification.
 - Gemini classifies each slot as `"preferred"` | `"normal"` | `"unavailable"` using structured output (`responseMimeType: 'application/json'` + `responseSchema`). Response validated with Zod; a post-processing safety net forces any buffer slot that sneaks through to `unavailable`.
 - Prompt rule: student availability describes only times they **can** attend — silence does not imply unavailability. Unmentioned times → `normal`, not `unavailable`.
+- Prompt rule: unavailable-time end boundaries are **exclusive** — `"08:00 to 10:00 unavailable"` blocks 08:00, 08:30, 09:00, 09:30 but NOT 10:00. The LLM is explicitly told never to apply any margin around unavailability boundaries (only buffer zones around booked student classes apply, and those are computed in code before the prompt is built).
 - `src/lib/gemini.ts` — Gemini client factory (`getGeminiModel()`), Zod schemas (`SlotSchema`, `GenerateSlotsResponseSchema`), and `GEMINI_RESPONSE_SCHEMA` for the Gemini `responseSchema` field. Required env var: `GEMINI_API_KEY`.
 
 **Timetable API routes:**
