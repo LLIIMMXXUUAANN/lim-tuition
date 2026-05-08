@@ -1,4 +1,3 @@
-// src/components/agent/AgentChat.tsx
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -15,39 +14,37 @@ interface ChatMessage {
   steps?: string[]
 }
 
-// Extracts [student_id:UUID] from agent reply, returns text + studentId separately
 function parseAgentReply(content: string): { text: string; studentId: string | null } {
   const match = content.match(/\[student_id:([0-9a-f-]+)\]/i)
   if (!match) return { text: content, studentId: null }
   return { text: content.replace(match[0], '').trim(), studentId: match[1] }
 }
 
+function loadStoredMessages(): ChatMessage[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return []
+    const parsed = JSON.parse(stored) as ChatMessage[]
+    // ensure all messages have ids (migration for old stored data)
+    return parsed.map(m => m.id ? m : { ...m, id: crypto.randomUUID() })
+  } catch {
+    return []
+  }
+}
+
 export default function AgentChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(loadStoredMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Hydrate from localStorage once on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored) as ChatMessage[]
-        // ensure all messages have ids (migration for old stored data)
-        setMessages(parsed.map(m => m.id ? m : { ...m, id: crypto.randomUUID() }))
-      }
-    } catch {}
-  }, [])
-
-  // Persist to localStorage on every change
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
     } catch {}
   }, [messages])
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
@@ -130,41 +127,39 @@ export default function AgentChat() {
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'user' ? (
-              <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm">
-                {msg.content}
-              </div>
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[80%] text-sm shadow-sm">
-                {msg.steps && msg.steps.length > 0 && (
-                  <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100">
-                    {msg.steps.map((step, j) => (
-                      <div key={j}>{step}</div>
-                    ))}
-                  </div>
-                )}
-                {(() => {
-                  const { text, studentId } = parseAgentReply(msg.content)
-                  return (
-                    <>
-                      <p className="whitespace-pre-wrap text-slate-800">{text}</p>
-                      {studentId && (
-                        <Link
-                          href={`/admin/students/${studentId}`}
-                          className="inline-block mt-2 text-xs font-medium text-navy hover:underline"
-                        >
-                          View student →
-                        </Link>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
-            )}
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const { text: msgText, studentId } = msg.role === 'agent'
+            ? parseAgentReply(msg.content)
+            : { text: msg.content, studentId: null }
+          return (
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.role === 'user' ? (
+                <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm">
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[80%] text-sm shadow-sm">
+                  {msg.steps && msg.steps.length > 0 && (
+                    <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100">
+                      {msg.steps.map((step, j) => (
+                        <div key={j}>{step}</div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="whitespace-pre-wrap text-slate-800">{msgText}</p>
+                  {studentId && (
+                    <Link
+                      href={`/admin/students/${studentId}`}
+                      className="inline-block mt-2 text-xs font-medium text-navy hover:underline"
+                    >
+                      View student →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {loading && (
           <div className="flex justify-start">

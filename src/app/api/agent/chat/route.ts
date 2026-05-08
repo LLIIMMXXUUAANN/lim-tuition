@@ -257,6 +257,8 @@ async function selfEval(
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+
 export async function POST(req: NextRequest) {
   const { supabase, error } = await requireTutor()
   if (error) return error
@@ -269,9 +271,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
-
-  // Convert simple chat messages → Gemini Content format
   const contents: Content[] = body.messages.map(m => ({
     role: m.role,
     parts: [{ text: m.content }],
@@ -281,55 +280,55 @@ export async function POST(req: NextRequest) {
   let reply = ''
   let lastMutationTool: { name: string; args: Record<string, unknown>; createdId?: string } | null = null
 
-  try { for (let round = 0; round < 5; round++) {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents,
-      config: {
-        tools: TOOL_DECLARATIONS,
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-    })
-
-    const fnCalls = response.functionCalls ?? []
-
-    if (fnCalls.length === 0) {
-      reply = response.text ?? ''
-      break
-    }
-
-    // Append model's turn (with function calls) to history
-    const modelContent = response.candidates?.[0]?.content
-    if (modelContent) {
-      contents.push(modelContent)
-    }
-
-    // Execute each tool call sequentially
-    const fnResponseParts: Array<{
-      functionResponse: { name: string; id?: string; response: Record<string, unknown> }
-    }> = []
-
-    for (const fc of fnCalls) {
-      if (!fc.name) continue
-      steps.push(`🔧 ${fc.name}(${JSON.stringify(fc.args)})`)
-      const result = await executeTool(fc.name, fc.args as Record<string, unknown>, supabase)
-      fnResponseParts.push({
-        functionResponse: {
-          name: fc.name,
-          ...(fc.id ? { id: fc.id } : {}),
-          response: { result },
+  try {
+    for (let round = 0; round < 5; round++) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents,
+        config: {
+          tools: TOOL_DECLARATIONS,
+          systemInstruction: SYSTEM_INSTRUCTION,
         },
       })
-      if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
-        const created = (result as { student: { id: string } }).student
-        lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
-      } else if (['update_student', 'delete_student'].includes(fc.name)) {
-        lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown> }
-      }
-    }
 
-    contents.push({ role: 'user', parts: fnResponseParts })
-  } } catch (err) {
+      const fnCalls = response.functionCalls ?? []
+
+      if (fnCalls.length === 0) {
+        reply = response.text ?? ''
+        break
+      }
+
+      const modelContent = response.candidates?.[0]?.content
+      if (modelContent) {
+        contents.push(modelContent)
+      }
+
+      const fnResponseParts: Array<{
+        functionResponse: { name: string; id?: string; response: Record<string, unknown> }
+      }> = []
+
+      for (const fc of fnCalls) {
+        if (!fc.name) continue
+        steps.push(`🔧 ${fc.name}(${JSON.stringify(fc.args)})`)
+        const result = await executeTool(fc.name, fc.args as Record<string, unknown>, supabase)
+        fnResponseParts.push({
+          functionResponse: {
+            name: fc.name,
+            ...(fc.id ? { id: fc.id } : {}),
+            response: { result },
+          },
+        })
+        if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
+          const created = (result as { student: { id: string } }).student
+          lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
+        } else if (['update_student', 'delete_student'].includes(fc.name)) {
+          lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown> }
+        }
+      }
+
+      contents.push({ role: 'user', parts: fnResponseParts })
+    }
+  } catch (err) {
     const message = err instanceof Error ? err.message : 'Gemini API error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
@@ -338,7 +337,6 @@ export async function POST(req: NextRequest) {
     reply = "I wasn't able to complete that in the allowed steps — please try a simpler request."
   }
 
-  // Self-evaluation after any mutating operation
   if (lastMutationTool) {
     const verification = await selfEval(lastMutationTool.name, lastMutationTool.args, supabase, lastMutationTool.createdId)
     if (verification) reply = `${reply}\n\n${verification}`
