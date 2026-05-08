@@ -56,6 +56,7 @@ src/app/
       students/                   → student list (grouped by day), detail, new form
       templates/                  → Supabase-backed editable message templates
       timetable/                  → weekly availability grid + two PNG exports
+      agent/                      → AI agent chat UI (v1: students CRUD only)
   student/
     login/page.tsx                → student portal magic link login
     (portal)/                     → route group: portal pages share portal nav layout
@@ -89,6 +90,7 @@ src/components/
   students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
+  agent/        → AgentChat (chat UI, localStorage persistence, tool step display)
   landing/      → 13 static sections for the public landing page
   ui/           → shadcn/ui primitives (Button, Input, Card, Select, Tabs, etc.)
 ```
@@ -177,6 +179,21 @@ POST route handler. No external AI — pure JS date arithmetic:
 - Fee = `fee_per_hour × duration_hours × session_count` per day, summed across all days
 - Template 2 (carryover): deducts `carryover × avg_fee_per_session` from the total (tutor owes student those sessions)
 - `formatFee` rounds to 2 d.p. before integer check to avoid floating-point noise
+
+### AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/chat/route.ts`)
+
+v1 — students CRUD only. No Google Calendar/Drive integration.
+
+- **`agent/page.tsx`** — thin server component wrapper that renders `<AgentChat />`
+- **`components/agent/AgentChat.tsx`** — client component; owns `messages` state (lazy-initialised from `localStorage`), persists on every change, auto-scrolls. Renders navy user bubbles and white agent bubbles with inline tool steps. Parses `[student_id:UUID]` token from agent replies to render a "View student →" link.
+- **`api/agent/chat/route.ts`** — stateless `POST` handler. Receives full `messages[]` history on every request. Runs a Gemini 2.5 Flash function-calling loop (max 5 rounds). 4 tools call Supabase directly: `search_students`, `create_student`, `update_student`, `delete_student`. After every mutation, re-queries Supabase to self-evaluate and appends `✓ verified in DB` or `⚠ could not verify` to the reply. Returns `{ reply, steps[] }`.
+
+**Key implementation details:**
+- `ALLOWED_UPDATE_KEYS` Set in `updateStudent` — allowlist of writable columns; prevents prompt injection from overwriting sensitive fields (`access_emails`, `drive_folder_url`, etc.)
+- All 4 tool schemas sent to Gemini upfront on every request — no progressive disclosure
+- `delete_student` requires explicit "yes" in the conversation before Gemini may call it (enforced via `SYSTEM_INSTRUCTION` rule, not just the `required` schema)
+- `GoogleGenAI` instance is module-level (one per cold start, not per request)
+- Uses `@google/genai` v1.x (not `@google/generative-ai`) — required for function calling support with `Type` enum and `Content[]` types
 
 ### Patterns
 

@@ -8,6 +8,7 @@ Public landing page + private admin dashboard for managing tuition students, cla
 - **Supabase** — Postgres database + magic link auth
 - **Tailwind CSS v4** + shadcn/ui + @heroicons/react
 - **Gemini 2.5 Flash** (`@google/generative-ai`) — AI slot classification with structured output
+- **Gemini 2.5 Flash** (`@google/genai` v1.x) — AI agent function calling for student management
 - **Zod** — runtime validation of AI responses
 
 ## Getting Started
@@ -43,6 +44,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule. If the auto-update can't run (missing event IDs, missing Meet link, API error), an amber warning is shown and the form stays open so it's readable
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. For students with no stored event IDs it first searches Calendar by name to find and save them, then patches. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
+- **AI Agent** — natural language interface at `/admin/agent`; type commands like "Create student LX, IGCSE, Monday 3–5pm, RM 60/hr" or "Update John's fee to RM 80"; Gemini 2.5 Flash interprets the command, asks follow-up questions for missing fields, executes against Supabase, and self-evaluates that the change persisted. v1 covers students CRUD only (no Google Calendar/Drive). Conversation persists across page refreshes via localStorage.
 - **Timetable** — two-tab layout:
   - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
@@ -86,6 +88,8 @@ src/
     admin/(app)/students/         → student list, detail, new form
     admin/(app)/templates/        → message templates + payment generator
     admin/(app)/timetable/        → weekly availability grid
+    admin/(app)/agent/            → AI agent chat UI
+    api/agent/                    → Gemini function-calling loop + 4 Supabase tools
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
@@ -97,6 +101,7 @@ src/
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
+    agent/      → AgentChat (chat UI + localStorage persistence)
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
