@@ -3,10 +3,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const STORAGE_KEY = 'agent_chat_messages'
 
 interface ChatMessage {
+  id: string
   role: 'user' | 'agent'
   content: string
   steps?: string[]
@@ -29,7 +32,11 @@ export default function AgentChat() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) setMessages(JSON.parse(stored))
+      if (stored) {
+        const parsed = JSON.parse(stored) as ChatMessage[]
+        // ensure all messages have ids (migration for old stored data)
+        setMessages(parsed.map(m => m.id ? m : { ...m, id: crypto.randomUUID() }))
+      }
     } catch {}
   }, [])
 
@@ -50,7 +57,7 @@ export default function AgentChat() {
     if (!text || loading) return
     setInput('')
 
-    const next: ChatMessage[] = [...messages, { role: 'user', content: text }]
+    const next: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: 'user', content: text }]
     setMessages(next)
     setLoading(true)
 
@@ -72,12 +79,13 @@ export default function AgentChat() {
 
       setMessages(prev => [
         ...prev,
-        { role: 'agent', content: data.reply ?? '', steps: data.steps ?? [] },
+        { id: crypto.randomUUID(), role: 'agent', content: data.reply ?? '', steps: data.steps ?? [] },
       ])
     } catch (err) {
       setMessages(prev => [
         ...prev,
         {
+          id: crypto.randomUUID(),
           role: 'agent',
           content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`,
         },
@@ -89,7 +97,6 @@ export default function AgentChat() {
 
   function clearChat() {
     setMessages([])
-    try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }
 
   return (
@@ -123,8 +130,8 @@ export default function AgentChat() {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'user' ? (
               <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm">
                 {msg.content}
@@ -172,7 +179,8 @@ export default function AgentChat() {
 
       {/* Input bar */}
       <div className="flex gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
-        <input
+        <Input
+          aria-label="Chat input"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => {
@@ -183,15 +191,15 @@ export default function AgentChat() {
           }}
           placeholder="What would you like to do?"
           disabled={loading}
-          className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy/40 disabled:opacity-50 bg-white"
+          className="flex-1 border-slate-200 px-4 py-2.5 focus:ring-navy/20 focus:border-navy/40 bg-white"
         />
-        <button
+        <Button
           onClick={() => void send()}
           disabled={loading || !input.trim()}
-          className="bg-navy text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-navy/90 disabled:opacity-40 transition-colors"
+          className="bg-navy text-white px-4 py-2.5 hover:bg-navy/90"
         >
           Send
-        </button>
+        </Button>
       </div>
     </div>
   )
