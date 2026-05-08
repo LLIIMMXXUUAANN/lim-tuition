@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { label: 'Students', href: '/admin/students' },
   { label: 'Templates', href: '/admin/templates' },
   { label: 'Timetable', href: '/admin/timetable' },
+  { label: 'Agent', href: '/admin/agent' },
 ]
 
 export default function AppNav() {
