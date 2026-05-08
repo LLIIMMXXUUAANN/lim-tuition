@@ -53,12 +53,22 @@ async function createStudent(
   return { student: data }
 }
 
+const ALLOWED_UPDATE_KEYS = new Set([
+  'name', 'mode', 'fee_per_hour', 'payment_method', 'status',
+  'class_schedule', 'contact_person', 'contact_phone', 'student_phone',
+  'today_homework', 'notes', 'latest_payment',
+])
+
 async function updateStudent(
   supabase: Supabase,
   id: string,
   fields: Record<string, unknown>
 ) {
-  const { error } = await supabase.from('students').update(fields).eq('id', id)
+  const permitted = Object.fromEntries(
+    Object.entries(fields).filter(([k]) => ALLOWED_UPDATE_KEYS.has(k))
+  )
+  if (Object.keys(permitted).length === 0) return { error: 'No valid fields to update' }
+  const { error } = await supabase.from('students').update(permitted).eq('id', id)
   if (error) return { error: error.message }
   return { success: true }
 }
@@ -209,16 +219,18 @@ async function executeTool(
 async function selfEval(
   toolName: string,
   args: Record<string, unknown>,
-  supabase: Supabase
+  supabase: Supabase,
+  createdId?: string
 ): Promise<string> {
   try {
     if (toolName === 'create_student') {
+      if (!createdId) return '⚠ could not verify'
       const { data } = await supabase
         .from('students')
         .select('id')
-        .ilike('name', args.name as string)
-        .limit(1)
-      return data?.length ? '✓ verified in DB' : '⚠ could not verify'
+        .eq('id', createdId)
+        .maybeSingle()
+      return data ? '✓ verified in DB' : '⚠ could not verify'
     }
     if (toolName === 'update_student') {
       const { data } = await supabase
@@ -266,9 +278,9 @@ export async function POST(req: NextRequest) {
 
   const steps: string[] = []
   let reply = ''
-  let lastMutationTool: { name: string; args: Record<string, unknown> } | null = null
+  let lastMutationTool: { name: string; args: Record<string, unknown>; createdId?: string } | null = null
 
-  for (let round = 0; round < 5; round++) {
+  try { for (let round = 0; round < 5; round++) {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents,
@@ -306,21 +318,27 @@ export async function POST(req: NextRequest) {
           response: { result },
         },
       })
-      if (['create_student', 'update_student', 'delete_student'].includes(fc.name)) {
+      if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
+        const created = (result as { student: { id: string } }).student
+        lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
+      } else if (['update_student', 'delete_student'].includes(fc.name)) {
         lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown> }
       }
     }
 
     contents.push({ role: 'user', parts: fnResponseParts })
+  } } catch (err) {
+    const message = err instanceof Error ? err.message : 'Gemini API error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 
   if (!reply) {
-    reply = 'I hit the maximum number of steps. Please try breaking your request into smaller commands.'
+    reply = "I wasn't able to complete that in the allowed steps — please try a simpler request."
   }
 
   // Self-evaluation after any mutating operation
   if (lastMutationTool) {
-    const verification = await selfEval(lastMutationTool.name, lastMutationTool.args, supabase)
+    const verification = await selfEval(lastMutationTool.name, lastMutationTool.args, supabase, lastMutationTool.createdId)
     if (verification) reply = `${reply}\n\n${verification}`
   }
 
