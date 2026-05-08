@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, Type } from '@google/genai'
+import type { Tool, Content } from '@google/genai'
 import { requireTutor, createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
 
@@ -81,7 +82,7 @@ async function deleteStudent(supabase: Supabase, id: string) {
 
 // ─── Gemini tool declarations ─────────────────────────────────────────────────
 
-const TOOL_DECLARATIONS = [
+const TOOL_DECLARATIONS: Tool[] = [
   {
     functionDeclarations: [
       {
@@ -89,9 +90,9 @@ const TOOL_DECLARATIONS = [
         description:
           'Search for students by name (partial match). Use before update/delete to get the student ID. Use after mutations to verify the change.',
         parameters: {
-          type: 'object',
+          type: Type.OBJECT,
           properties: {
-            query: { type: 'string', description: 'Partial or full student name' },
+            query: { type: Type.STRING, description: 'Partial or full student name' },
           },
           required: ['query'],
         },
@@ -100,45 +101,45 @@ const TOOL_DECLARATIONS = [
         name: 'create_student',
         description: 'Create a new student record in the database.',
         parameters: {
-          type: 'object',
+          type: Type.OBJECT,
           properties: {
-            name: { type: 'string' },
+            name: { type: Type.STRING },
             mode: {
-              type: 'string',
+              type: Type.STRING,
               enum: ['University', 'IGCSE', 'My Python Syllabus'],
             },
-            fee_per_hour: { type: 'number', description: 'Hourly fee in RM' },
-            payment_method: { type: 'string', enum: ['Monthly', 'Weekly'] },
+            fee_per_hour: { type: Type.NUMBER, description: 'Hourly fee in RM' },
+            payment_method: { type: Type.STRING, enum: ['Monthly', 'Weekly'] },
             status: {
-              type: 'string',
+              type: Type.STRING,
               enum: ['Active', 'On Hold', 'Completed'],
             },
             class_schedule: {
-              type: 'array',
+              type: Type.ARRAY,
               items: {
-                type: 'object',
+                type: Type.OBJECT,
                 properties: {
                   day: {
-                    type: 'string',
+                    type: Type.STRING,
                     enum: [
                       'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                       'Friday', 'Saturday', 'Sunday',
                     ],
                   },
                   start: {
-                    type: 'string',
+                    type: Type.STRING,
                     description: '24-hour HH:MM format, e.g. "15:00"',
                   },
                   end: {
-                    type: 'string',
+                    type: Type.STRING,
                     description: '24-hour HH:MM format, e.g. "17:00"',
                   },
                 },
                 required: ['day', 'start', 'end'],
               },
             },
-            contact_person: { type: 'string' },
-            contact_phone: { type: 'string' },
+            contact_person: { type: Type.STRING },
+            contact_phone: { type: Type.STRING },
           },
           required: ['name', 'mode', 'fee_per_hour'],
         },
@@ -148,14 +149,14 @@ const TOOL_DECLARATIONS = [
         description:
           'Update one or more fields on an existing student. You MUST call search_students first to obtain the student UUID.',
         parameters: {
-          type: 'object',
+          type: Type.OBJECT,
           properties: {
             id: {
-              type: 'string',
+              type: Type.STRING,
               description: 'Student UUID obtained from search_students',
             },
             fields: {
-              type: 'object',
+              type: Type.OBJECT,
               description:
                 'Object of fields to update. Allowed keys: name, mode, fee_per_hour, payment_method, status, class_schedule, contact_person, contact_phone, today_homework, notes',
             },
@@ -168,10 +169,10 @@ const TOOL_DECLARATIONS = [
         description:
           'Permanently delete a student record. Only call this AFTER the user has typed "yes" to confirm deletion in this conversation.',
         parameters: {
-          type: 'object',
+          type: Type.OBJECT,
           properties: {
             id: {
-              type: 'string',
+              type: Type.STRING,
               description: 'Student UUID obtained from search_students',
             },
           },
@@ -271,7 +272,7 @@ export async function POST(req: NextRequest) {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
 
   // Convert simple chat messages → Gemini Content format
-  const contents = body.messages.map(m => ({
+  const contents: Content[] = body.messages.map(m => ({
     role: m.role,
     parts: [{ text: m.content }],
   }))
@@ -309,6 +310,7 @@ export async function POST(req: NextRequest) {
     }> = []
 
     for (const fc of fnCalls) {
+      if (!fc.name) continue
       steps.push(`🔧 ${fc.name}(${JSON.stringify(fc.args)})`)
       const result = await executeTool(fc.name, fc.args as Record<string, unknown>, supabase)
       fnResponseParts.push({
