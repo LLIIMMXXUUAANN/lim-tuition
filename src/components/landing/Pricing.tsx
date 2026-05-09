@@ -15,7 +15,7 @@ export default function Pricing() {
             </div>
             <div>
               <h3 className="text-base font-semibold">Rate</h3>
-              <p className="text-slate-700 mt-1">RM65 per hour (1-to-1 online)</p>
+              <p className="text-slate-700 mt-1">RM60 per hour (1-to-1 online)</p>
             </div>
           </div>
           <div className="flex items-start gap-4">
