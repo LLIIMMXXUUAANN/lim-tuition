@@ -26,6 +26,11 @@ async function listStudents(
   supabase: Supabase,
   params: { status?: string; day?: string },
 ) {
+  const VALID_STATUSES = new Set(['Active', 'On Hold', 'Completed'])
+  if (params.status && !VALID_STATUSES.has(params.status)) {
+    return { error: `Invalid status: ${params.status}` }
+  }
+
   let query = supabase
     .from('students')
     .select('id, name, status, mode, fee_per_hour, class_schedule')
