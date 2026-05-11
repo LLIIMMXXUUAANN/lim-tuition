@@ -3,6 +3,9 @@ import { GoogleGenAI, Type } from '@google/genai'
 import type { Tool, Content } from '@google/genai'
 import { requireTutor, createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
+import { getOAuth2Client } from '@/lib/google/auth'
+import { createWeeklyClassEvents } from '@/lib/google/calendar'
+import { createStudentDriveFolder } from '@/lib/google/drive'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +110,79 @@ async function deleteStudent(supabase: Supabase, id: string) {
   const { error } = await supabase.from('students').delete().eq('id', id)
   if (error) return { error: error.message }
   return { success: true }
+}
+
+async function setupStudentGoogle(supabase: Supabase, studentId: string) {
+  const { data: student, error } = await supabase
+    .from('students')
+    .select('name, class_schedule, calendar_event_ids, google_meet_link, google_drive_link')
+    .eq('id', studentId)
+    .single()
+
+  if (error || !student) return { error: 'Student not found' }
+
+  const { name, class_schedule, calendar_event_ids, google_drive_link } = student
+  let { google_meet_link } = student
+
+  if (!class_schedule?.length) {
+    return { error: 'Student has no class schedule — add a schedule before setting up Google.' }
+  }
+
+  const needsCalendar = !calendar_event_ids?.length
+  const needsDrive = !google_drive_link
+
+  if (!needsCalendar && !needsDrive) {
+    return { result: 'Already fully set up — Calendar ✓, Drive ✓. Nothing to do.' }
+  }
+
+  let auth: Awaited<ReturnType<typeof getOAuth2Client>>
+  try {
+    auth = await getOAuth2Client()
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Google not connected' }
+  }
+
+  const summary: string[] = []
+
+  if (needsCalendar) {
+    try {
+      const { meetLink, eventIds } = await createWeeklyClassEvents(
+        auth, name, class_schedule as ClassSlot[],
+      )
+      await supabase
+        .from('students')
+        .update({ google_meet_link: meetLink, calendar_event_ids: eventIds })
+        .eq('id', studentId)
+      google_meet_link = meetLink
+      summary.push(`Calendar ✓ (${eventIds.length} event${eventIds.length !== 1 ? 's' : ''} created, Meet link saved)`)
+    } catch (err) {
+      return { error: `Calendar setup failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  } else {
+    summary.push('Calendar ✓ (already set up, skipped)')
+  }
+
+  if (needsDrive) {
+    if (!google_meet_link) {
+      return { error: 'No Meet link available — Calendar setup must succeed before Drive can be created.' }
+    }
+    try {
+      const driveUrl = await createStudentDriveFolder(
+        auth, name, google_meet_link, class_schedule as ClassSlot[],
+      )
+      await supabase
+        .from('students')
+        .update({ google_drive_link: driveUrl })
+        .eq('id', studentId)
+      summary.push('Drive ✓ (folder created)')
+    } catch (err) {
+      summary.push(`Drive ✗ (${err instanceof Error ? err.message : 'Unknown error'})`)
+    }
+  } else {
+    summary.push('Drive ✓ (already set up, skipped)')
+  }
+
+  return { result: summary.join(', ') }
 }
 
 // ─── Gemini tool declarations ─────────────────────────────────────────────────
@@ -228,6 +304,21 @@ const TOOL_DECLARATIONS: Tool[] = [
           required: ['id'],
         },
       },
+      {
+        name: 'setup_student_google',
+        description:
+          'Set up Google Calendar weekly events and Drive folder for a student. Creates Calendar events (generating a Meet link) then creates the Drive folder. Skips whichever is already done. You MUST call search_students first to get the student UUID.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            student_id: {
+              type: Type.STRING,
+              description: 'Student UUID obtained from search_students',
+            },
+          },
+          required: ['student_id'],
+        },
+      },
     ],
   },
 ]
@@ -261,6 +352,8 @@ async function executeTool(
       return updateStudent(supabase, args.id as string, args.fields as Record<string, unknown>)
     case 'delete_student':
       return deleteStudent(supabase, args.id as string)
+    case 'setup_student_google':
+      return setupStudentGoogle(supabase, args.student_id as string)
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -299,6 +392,19 @@ async function selfEval(
         .eq('id', args.id as string)
         .maybeSingle()
       return !data ? '✓ verified deleted' : '⚠ student still exists in DB'
+    }
+    if (toolName === 'setup_student_google') {
+      const { data } = await supabase
+        .from('students')
+        .select('google_meet_link, google_drive_link')
+        .eq('id', args.student_id as string)
+        .maybeSingle()
+      if (!data) return '⚠ could not verify'
+      const parts = [
+        data.google_meet_link ? '✓ Meet link set' : '⚠ Meet link missing',
+        data.google_drive_link ? '✓ Drive folder set' : '⚠ Drive folder missing',
+      ]
+      return parts.join(', ')
     }
   } catch {
     return '⚠ could not verify'
@@ -372,7 +478,7 @@ export async function POST(req: NextRequest) {
         if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
           const created = (result as { student: { id: string } }).student
           lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
-        } else if (['update_student', 'delete_student'].includes(fc.name)) {
+        } else if (['update_student', 'delete_student', 'setup_student_google'].includes(fc.name)) {
           lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown> }
         }
       }
