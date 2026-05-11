@@ -40,6 +40,7 @@ Magic link emails are sent via **Gmail SMTP** configured in Supabase Dashboard �
 
 - **`src/app/admin/login/page.tsx`** — calls `check_tutor_access(email)` RPC before sending OTP; shows "No access." if email not in `tutors` table
 - **`src/app/student/login/page.tsx`** — calls `check_portal_access(email)` RPC before sending OTP; shows "No access." if email not in any student's `access_emails`
+- Both pages share identical structure: `bg-softBg` full-screen centred layout, `bg-white rounded-2xl shadow-sm border border-slate-100 p-10` card, `</>` navy/gold brand mark inside the card, `text-accentGold` back link. Do not use a shadcn `<Card>` here — the custom structure keeps styling consistent with the brand.
 - Both normalise email with `.trim().toLowerCase()` before RPC + OTP calls
 - Favicon is `src/app/icon.svg` (Next.js App Router convention) — navy background with gold `</>`. A copy also lives at `public/favicon.svg`; keep them in sync if updated.
 
@@ -105,8 +106,8 @@ src/components/
 
 ### Key components
 
-- **`shared/student-fields`** — shared display primitives used by `StudentDetail`, `StudentPortalView`, and `StudentCard`: `Row` (inline label + value), `BlockField` (stacked label + `whitespace-pre-wrap` value for multi-line text), `statusBadge` (status → Tailwind class lookup), `ScheduleList` (renders a `ClassSlot[]` as a formatted list, or "No schedule set" when empty). Import from here instead of redefining locally.
-- **`students/StudentCard`** — shows name, status/mode badges, contact person, schedule time, and payment method (bottom-right, muted grey). When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
+- **`shared/student-fields`** — shared display primitives used by `StudentDetail`, `StudentPortalView`, and `StudentCard`: `Row` (inline label + value), `BlockField` (stacked label + `whitespace-pre-wrap` value for multi-line text), `statusBadge` (status → Tailwind class lookup), `ScheduleList` (renders a `ClassSlot[]` as a formatted list, or "No schedule set" when empty), `ExternalLink` (gold-coloured `<a>` for Meet/Drive links). Import from here instead of redefining locally.
+- **`students/StudentCard`** — shows name, mode badge, contact person, schedule time, and payment method (bottom-right, muted grey). Accepts `showStatus` prop (default `false`) — pass `showStatus={true}` only on the "All" filter tab where the status badge is informative; on day-filtered tabs it's redundant. Mode badge colours: `'My Python Syllabus'` → `bg-navy/6 text-navy`; `'Other Syllabus'` → `bg-accentGold/15 text-accentGold`. Uses `@heroicons/react` (`ClockIcon`, `CalendarDaysIcon`, `CreditCardIcon`) instead of emoji. When rendered under a specific day (`slot` prop), time and payment method are on the same line; otherwise payment method appears below all schedule lines.
 - **`shared/AppNav`** — sticky top nav, client component (needs `usePathname` for active tab highlighting); brand link goes to `/` (landing page)
 - **`students/StudentDetail`** — read-only view by default; Edit button toggles to `StudentForm` inline
 - **`students/StudentForm`** — on Save, if the student already has `calendar_event_ids` and the schedule changed, automatically calls `update-class-event` before the DB upsert; patches Calendar events (preserving Meet link) and rewrites the Drive "Google Meet Link" doc. If the calendar update produces a warning (API error, missing event IDs, missing Meet link), the form stays open after save so the user can read the amber warning — they close via ← Cancel. "Remove Student" opens a confirmation dialog that hard-deletes the row and calls `delete-student` to trash the Drive folder and delete Calendar events; Google cleanup failure shows an in-dialog amber warning but doesn't block the DB deletion.
@@ -114,7 +115,7 @@ src/components/
 - **`students/SyncAllButton`** — banner at the bottom of the students list; one click syncs all active students' Google Calendar events and Drive Meet docs to match the DB schedule. For students with no `calendar_event_ids`, it searches Calendar by exact name first (backfill), saves the IDs, then patches. Results show per-student status (✓ synced / – skipped / ✗ error). If `invalid_grant` is detected, shows a reconnect link.
 - **`templates/TemplatesList`** — receives `initialData` and `students` props from the server; renders a 4-tab layout (Payment · Review · Recommendation · First Approach). The Payment tab contains `PaymentGenerator` followed by the payment templates; the other tabs contain their respective templates. `TEMPLATE_META` is a `Record<string, { title, description }>` — look up by id directly. Save state per card cycles through `idle → saving → saved/error`.
 - **`templates/PaymentGenerator`** — client component rendered inside `TemplatesList`'s Payment tab; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
-- **`timetable/TimetableSection`** — client component on the Timetable page; renders a 2-tab layout (Weekly Schedule · Slot Availability). The Weekly Schedule tab shows a live `WeeklyScheduleView` HTML grid (navy header, auto-cropped to active hours, class blocks in `#0f2942`) plus a **Download Schedule** button. The Slot Availability tab has `keepMounted` so grid state and student availability text survive tab switches. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
+- **`timetable/TimetableSection`** — client component on the Timetable page; renders a 2-tab layout (Weekly Schedule · Slot Availability). The Weekly Schedule tab shows a live `WeeklyScheduleView` HTML grid (navy header, auto-cropped to active hours, class blocks in `NAVY`) plus a **Download Schedule** button. The Slot Availability tab has `keepMounted` so grid state and student availability text survive tab switches. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
 
 ### Timetable (`src/app/admin/(app)/timetable/page.tsx`)
 
@@ -142,9 +143,9 @@ Server Component that fetches active students' `name` and `class_schedule` plus 
 **Two PNG exports in `TimetableSection`:**
 
 - **Download Available Slots** — exports the AI-generated or drag-painted availability grid (preferred/normal/unavailable cells + legend) as `slot_availability.png`. Shows the full 8 AM–10 PM range.
-- **Download Schedule** — exports a clean shareable weekly calendar image (`weekly_schedule.png`) showing all active students' class blocks. Auto-crops to the active hour window via `computeScheduleWindow()`. Each student block shows name + compact time (`10:30 – 11:30`). All blocks use navy (`#0f2942`), matching the HTML grid. Canvas is rendered at 2× scale for retina display.
+- **Download Schedule** — exports a clean shareable weekly calendar image (`weekly_schedule.png`) showing all active students' class blocks. Auto-crops to the active hour window via `computeScheduleWindow()`. Each student block shows name + compact time (`10:30 – 11:30`). All blocks use the module-level `NAVY = '#0A1A2F'` constant, matching the HTML grid. Canvas is rendered at 2× scale for retina display.
 
-Both exports share `downloadCanvas(canvas, filename)` and the module-level `SCALE = 2` constant. `fmt12(time)` is a local helper that formats `"HH:MM"` as `"h:MM"` (no AM/PM) for use inside compact block labels. `LEGEND_ITEMS` is a module-level constant (not recreated per download). Cell keys use the module-level `cellKey(day, ts)` helper which returns `"${day}|${ts}"` — use this everywhere instead of inlining the template. `computeScheduleWindow(students)` returns `{ startMin, endMin, activeSlots }` and is shared by `drawSchedule` and `WeeklyScheduleView`.
+Both exports share `downloadCanvas(canvas, filename)` and the module-level `SCALE = 2` and `NAVY = '#0A1A2F'` constants. `fmt12(time)` is a local helper that formats `"HH:MM"` as `"h:MM"` (no AM/PM) for use inside compact block labels. `LEGEND_ITEMS` is a module-level constant (not recreated per download). Cell keys use the module-level `cellKey(day, ts)` helper which returns `"${day}|${ts}"` — use this everywhere instead of inlining the template. `computeScheduleWindow(students)` returns `{ startMin, endMin, activeSlots }` and is shared by `drawSchedule` and `WeeklyScheduleView`.
 
 ### Google Drive + Calendar integration (`src/lib/google/`, `src/app/api/google/`)
 
@@ -259,6 +260,18 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)
 - Input auto-focuses on mount and after each agent response via `useEffect([loading])`; disabled (and not focused) while the agent is executing
 - "Clear chat" wipes `messages` state → next send has no history context for Gemini
+
+### Brand theming conventions
+
+- **Primary color token:** `globals.css` sets `--primary: var(--color-navy)` — this brands all shadcn default `<Button>` instances navy without touching individual components. Do not revert this.
+- **Navbars** (`AppNav`, student portal layout): `bg-navy border-b border-slate-800`; brand mark `</>` always `text-accentGold font-bold`; nav text `text-slate-100`; active tab `bg-white/20 text-white`; inactive tab `text-white/80`.
+- **Page headings:** all `<h1>` on admin and portal pages use `text-navy`.
+- **Tabs** (`ui/tabs.tsx`): `TabsList` uses `bg-navy/8`; active `TabsTrigger` is `bg-navy text-white`; inactive is `text-navy/50 hover:text-navy`. Always include `data-active:hover:text-white` to prevent hover from overriding active tab text.
+- **Card titles** (`ui/card.tsx`): `CardTitle` includes `text-navy`.
+- **External links** (Meet, Drive): always use `ExternalLink` from `shared/student-fields` — renders as gold coloured link with `hover:underline`.
+- **Icons:** use `@heroicons/react/24/outline` SVGs throughout; do not use emoji as UI icons.
+- **Mode badges on StudentCard:** `'My Python Syllabus'` → `bg-navy/6 text-navy`; `'Other Syllabus'` → `bg-accentGold/15 text-accentGold`.
+- **Custom brand colors** (`navy`, `navyLight`, `accentGold`, `softBg`, `cardBg`) are declared in `globals.css` via `@theme {}` (Tailwind v4).
 
 ### Patterns
 

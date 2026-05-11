@@ -15,10 +15,10 @@ export default function AppNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="border-b bg-white sticky top-0 z-10">
+    <nav className="bg-navy border-b border-slate-800 sticky top-0 z-10">
       <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
-        <Link href="/" className="group flex items-center gap-2 font-semibold text-slate-800 hover:text-accentGold transition-colors mr-2 shrink-0">
-          <span className="text-slate-900 group-hover:text-accentGold transition-colors">&lt;/&gt;</span>
+        <Link href="/" className="flex items-center gap-2 font-semibold text-slate-100 hover:text-accentGold transition-colors mr-2 shrink-0">
+          <span className="text-accentGold font-bold">&lt;/&gt;</span>
           Lim&apos;s Programming Tuition
         </Link>
         <div className="flex gap-1 flex-1">
@@ -31,11 +31,11 @@ export default function AppNav() {
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   gold
                     ? isActive
-                      ? 'bg-accentGold/15 text-accentGold'
-                      : 'text-accentGold/70 hover:text-accentGold hover:bg-accentGold/10'
+                      ? 'bg-accentGold/20 text-accentGold'
+                      : 'text-accentGold/90 hover:text-accentGold hover:bg-accentGold/10'
                     : isActive
-                      ? 'bg-slate-100 text-slate-900'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      ? 'bg-white/20 text-white'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 {label}
@@ -43,7 +43,7 @@ export default function AppNav() {
             )
           })}
         </div>
-        <LogoutButton />
+        <LogoutButton className="text-white/70 hover:text-white hover:bg-white/10" />
       </div>
     </nav>
   )

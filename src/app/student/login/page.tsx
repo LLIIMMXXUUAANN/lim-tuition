@@ -58,8 +58,9 @@ export default function StudentLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-softBg">
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 max-w-sm w-full space-y-6">
         <div className="text-center space-y-1">
-          <h1 className="text-2xl font-semibold">Student Portal</h1>
-          <p className="text-slate-500 text-sm">Enter your email to receive a login link</p>
+          <span className="text-2xl font-bold text-navy">&lt;/&gt;</span>
+          <h1 className="text-xl font-semibold mt-1">Student Portal</h1>
+          <p className="text-slate-500 text-sm">Sign in to view your schedule and progress</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -72,7 +73,7 @@ export default function StudentLoginPage() {
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Checking...' : 'Send Login Link'}</Button>
         </form>
-        <Link href="/" className="text-sm text-slate-400 hover:underline block text-center">
+        <Link href="/" className="text-sm text-accentGold/80 hover:text-accentGold hover:underline block text-center">
           ← Back to home
         </Link>
       </div>

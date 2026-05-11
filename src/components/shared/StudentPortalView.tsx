@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Student } from '@/lib/types'
-import { Row, BlockField, statusBadge, ScheduleList } from '@/components/shared/student-fields'
+import { Row, BlockField, statusBadge, ScheduleList, ExternalLink } from '@/components/shared/student-fields'
 
 export default function StudentPortalView({ student }: { student: Student }) {
   const schedule = student.class_schedule ?? []
@@ -8,7 +8,7 @@ export default function StudentPortalView({ student }: { student: Student }) {
   return (
     <div className="max-w-2xl mx-auto px-6 pt-6 pb-12 space-y-4">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold flex-1">{student.name}</h1>
+        <h1 className="text-2xl font-bold text-navy flex-1">{student.name}</h1>
         <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusBadge[student.status] ?? 'bg-slate-100 text-slate-500'}`}>
           {student.status}
         </span>
@@ -16,16 +16,8 @@ export default function StudentPortalView({ student }: { student: Student }) {
 
       {(student.google_meet_link || student.google_drive_link) && (
         <div className="flex gap-4">
-          {student.google_meet_link && (
-            <a href={student.google_meet_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-              Join Google Meet →
-            </a>
-          )}
-          {student.google_drive_link && (
-            <a href={student.google_drive_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-              Open Drive →
-            </a>
-          )}
+          {student.google_meet_link && <ExternalLink href={student.google_meet_link}>Join Google Meet →</ExternalLink>}
+          {student.google_drive_link && <ExternalLink href={student.google_drive_link}>Open Drive →</ExternalLink>}
         </div>
       )}
 

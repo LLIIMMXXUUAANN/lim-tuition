@@ -29,6 +29,7 @@ const PNG_GAP      = 12
 const PNG_HEADER_H = 30
 const PNG_W = PNG_PAD + PNG_LABEL_W + PNG_CELL_W * 7 + PNG_PAD
 const PNG_H = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H + PNG_GAP + PNG_HEADER_H + PNG_CELL_H * TIME_SLOTS.length + PNG_PAD
+const NAVY = NAVY
 
 const CELL_CLASSES: Record<CellKey, string> = {
   booked:    'bg-red-200 cursor-default',
@@ -89,7 +90,7 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, PNG_W, PNG_H)
 
-  ctx.fillStyle = '#0f2942'
+  ctx.fillStyle = NAVY
   ctx.font = 'bold 16px system-ui, sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
@@ -119,7 +120,7 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
     lx += swatchSize + 5 + ctx.measureText(item.label).width + 22
   }
 
-  ctx.fillStyle = '#0f2942'
+  ctx.fillStyle = NAVY
   ctx.beginPath()
   ctx.roundRect(gridX, headerY, PNG_CELL_W * 7, PNG_HEADER_H, [6, 6, 0, 0])
   ctx.fill()
@@ -194,7 +195,6 @@ function computeScheduleWindow(students: { class_schedule: ClassSlot[] }[]): { s
 }
 
 function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[]) {
-  const BLOCK_COLOR = '#0f2942'
   const { startMin, activeSlots: ACTIVE_SLOTS } = computeScheduleWindow(students)
 
   const SCH_H = PNG_PAD + PNG_TITLE_H + PNG_GAP + PNG_HEADER_H
@@ -217,13 +217,13 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, PNG_W, SCH_H)
 
-  ctx.fillStyle = '#0f2942'
+  ctx.fillStyle = NAVY
   ctx.font = 'bold 16px system-ui, sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText('Weekly Schedule', gridX, PNG_PAD + PNG_TITLE_H / 2)
 
-  ctx.fillStyle = '#0f2942'
+  ctx.fillStyle = NAVY
   ctx.beginPath()
   ctx.roundRect(gridX, headerY, gridW, PNG_HEADER_H, [6, 6, 0, 0])
   ctx.fill()
@@ -279,7 +279,7 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
       const h = Math.min(durationSlots * SCHEDULE_CELL_H - 4, gridBottom - y - 2)
       if (h <= 0) continue
 
-      ctx.fillStyle = BLOCK_COLOR
+      ctx.fillStyle = NAVY
       ctx.beginPath()
       ctx.roundRect(x, y, w, h, 5)
       ctx.fill()
@@ -328,9 +328,9 @@ function WeeklyScheduleView({ students }: { students: { name: string; class_sche
   return (
     <div className="select-none rounded-lg border border-slate-200 overflow-hidden">
       <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS }}>
-        <div className="bg-[#0f2942]" />
+        <div className="bg-[#0A1A2F]" />
         {DAY_SHORT.map(d => (
-          <div key={d} className="bg-[#0f2942] text-white text-xs font-semibold text-center py-2">{d}</div>
+          <div key={d} className="bg-[#0A1A2F] text-white text-xs font-semibold text-center py-2">{d}</div>
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS }}>
@@ -353,7 +353,7 @@ function WeeklyScheduleView({ students }: { students: { name: string; class_sche
               return (
                 <div
                   key={`${name}|${start}`}
-                  style={{ position: 'absolute', top, left: 2, right: 2, height, background: '#0f2942', borderRadius: 5, overflow: 'hidden', zIndex: 1 }}
+                  style={{ position: 'absolute', top, left: 2, right: 2, height, background: NAVY, borderRadius: 5, overflow: 'hidden', zIndex: 1 }}
                   className="flex flex-col items-center justify-center px-1"
                 >
                   {durationSlots >= 2 ? (
@@ -516,7 +516,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
                 <button
                   onClick={() => saveSetting('rules', '/api/timetable/rules', { rules })}
                   disabled={isSaving.rules}
-                  className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs bg-navy/8 hover:bg-navy/15 text-navy rounded-md transition-colors disabled:opacity-50"
                 >
                   {saveLabel(isSaving.rules, saveStatus.rules, 'Save Rules')}
                 </button>
@@ -534,7 +534,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
                   <button
                     onClick={() => saveSetting('buffer', '/api/timetable/buffer-mins', { bufferMins })}
                     disabled={isSaving.buffer}
-                    className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs bg-navy/8 hover:bg-navy/15 text-navy rounded-md transition-colors disabled:opacity-50"
                   >
                     {saveLabel(isSaving.buffer, saveStatus.buffer, 'Save')}
                   </button>

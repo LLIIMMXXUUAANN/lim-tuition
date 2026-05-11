@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ClockIcon, CalendarDaysIcon, CreditCardIcon } from '@heroicons/react/24/outline'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Student, ClassSlot } from '@/lib/types'
 import { formatTime } from '@/lib/utils'
@@ -6,15 +7,18 @@ import { statusBadge } from '@/components/shared/student-fields'
 
 interface StudentCardProps {
   student: Student
-  slot?: ClassSlot  // when shown under a specific day, highlight that slot's time
+  slot?: ClassSlot
+  showStatus?: boolean
 }
 
 const modeColor: Record<string, string> = {
-  'My Python Syllabus': 'bg-blue-100 text-blue-800',
-  'Other Syllabus': 'bg-purple-100 text-purple-800',
+  'My Python Syllabus': 'bg-navy/6 text-navy',
+  'Other Syllabus': 'bg-accentGold/15 text-accentGold',
 }
 
-export default function StudentCard({ student, slot }: StudentCardProps) {
+const modeFallback = 'bg-navy/6 text-navy'
+
+export default function StudentCard({ student, slot, showStatus = false }: StudentCardProps) {
   return (
     <Link href={`/admin/students/${student.id}`}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -22,10 +26,12 @@ export default function StudentCard({ student, slot }: StudentCardProps) {
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-lg">{student.name}</CardTitle>
             <div className="flex gap-1 flex-shrink-0">
-              <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusBadge[student.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                {student.status}
-              </span>
-              <span className={`text-xs font-medium px-2 py-1 rounded-full ${modeColor[student.mode] ?? 'bg-slate-100 text-slate-700'}`}>
+              {showStatus && (
+                <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusBadge[student.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                  {student.status}
+                </span>
+              )}
+              <span className={`text-xs font-medium px-2 py-1 rounded-full ${modeColor[student.mode] ?? modeFallback}`}>
                 {student.mode}
               </span>
             </div>
@@ -37,16 +43,16 @@ export default function StudentCard({ student, slot }: StudentCardProps) {
         <CardContent className="text-sm">
           {slot ? (
             <div className="flex items-center justify-between gap-2">
-              <p className="text-slate-600">🕐 {formatTime(slot.start)} – {formatTime(slot.end)}</p>
-              <p className="text-slate-400 text-xs">💳 {student.payment_method}</p>
+              <p className="text-slate-600 flex items-center gap-1"><ClockIcon className="w-3.5 h-3.5 shrink-0" />{formatTime(slot.start)} – {formatTime(slot.end)}</p>
+              <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.payment_method}</p>
             </div>
           ) : student.class_schedule?.length > 0 ? (
             <div className="text-slate-600 space-y-0.5">
               {student.class_schedule.map((s, i) => (
-                <p key={i}>📅 {s.day} {formatTime(s.start)} – {formatTime(s.end)}</p>
+                <p key={i} className="flex items-center gap-1"><CalendarDaysIcon className="w-3.5 h-3.5 shrink-0" />{s.day} {formatTime(s.start)} – {formatTime(s.end)}</p>
               ))}
               <div className="flex justify-end">
-                <p className="text-slate-400 text-xs">💳 {student.payment_method}</p>
+                <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.payment_method}</p>
               </div>
             </div>
           ) : (

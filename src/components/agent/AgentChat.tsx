@@ -107,11 +107,11 @@ export default function AgentChat() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <h1 className="text-xl font-bold text-slate-800">AI Agent</h1>
+        <h1 className="text-xl font-bold text-navy">AI Agent</h1>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-xs text-slate-400 hover:text-accentGold transition-colors"
           >
             Clear chat
           </button>

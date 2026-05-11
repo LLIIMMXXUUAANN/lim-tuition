@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import StudentForm from '@/components/students/StudentForm'
 import type { Student } from '@/lib/types'
-import { Row, BlockField, statusBadge, ScheduleList } from '@/components/shared/student-fields'
+import { Row, BlockField, statusBadge, ScheduleList, ExternalLink } from '@/components/shared/student-fields'
 
 export default function StudentDetail({ student }: { student: Student }) {
   const [editing, setEditing] = useState(false)
@@ -16,7 +16,7 @@ export default function StudentDetail({ student }: { student: Student }) {
       <div>
         <div className="max-w-2xl mx-auto px-6 pt-6 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>← Cancel</Button>
-          <h1 className="text-2xl font-bold">Editing: {student.name}</h1>
+          <h1 className="text-2xl font-bold text-navy">Editing: {student.name}</h1>
         </div>
         <StudentForm student={student} onSaved={() => setEditing(false)} />
       </div>
@@ -40,16 +40,8 @@ export default function StudentDetail({ student }: { student: Student }) {
 
       {(student.google_meet_link || student.google_drive_link) && (
         <div className="flex gap-4">
-          {student.google_meet_link && (
-            <a href={student.google_meet_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-              Join Google Meet →
-            </a>
-          )}
-          {student.google_drive_link && (
-            <a href={student.google_drive_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-              Open Drive →
-            </a>
-          )}
+          {student.google_meet_link && <ExternalLink href={student.google_meet_link}>Join Google Meet →</ExternalLink>}
+          {student.google_drive_link && <ExternalLink href={student.google_drive_link}>Open Drive →</ExternalLink>}
         </div>
       )}
 

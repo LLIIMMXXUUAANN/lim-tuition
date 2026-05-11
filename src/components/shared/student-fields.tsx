@@ -1,5 +1,14 @@
+import { CalendarDaysIcon } from '@heroicons/react/24/outline'
 import { formatTime } from '@/lib/utils'
 import type { ClassSlot } from '@/lib/types'
+
+export function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-sm text-accentGold hover:underline font-medium">
+      {children}
+    </a>
+  )
+}
 
 export const statusBadge: Record<string, string> = {
   'Active': 'bg-green-100 text-green-700',
@@ -34,7 +43,7 @@ export function ScheduleList({ schedule }: { schedule: ClassSlot[] }) {
   return (
     <div className="space-y-1">
       {schedule.map((slot, i) => (
-        <p key={i} className="text-slate-700">📅 {slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
+        <p key={i} className="text-slate-700 flex items-center gap-1.5"><CalendarDaysIcon className="w-3.5 h-3.5 shrink-0 text-accentGold" />{slot.day} &nbsp; {formatTime(slot.start)} – {formatTime(slot.end)}</p>
       ))}
     </div>
   )

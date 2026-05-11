@@ -15,7 +15,7 @@ export default async function TemplatesPage() {
   if (templatesResult.error) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">Templates</h1>
+        <h1 className="text-2xl font-bold text-navy mb-4">Templates</h1>
         <p className="text-red-500">Failed to load templates: {templatesResult.error.message}</p>
       </div>
     )
@@ -31,7 +31,7 @@ export default async function TemplatesPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Templates</h1>
+        <h1 className="text-2xl font-bold text-navy">Templates</h1>
       </div>
       <TemplatesList initialData={byId} students={activeStudents} />
     </div>

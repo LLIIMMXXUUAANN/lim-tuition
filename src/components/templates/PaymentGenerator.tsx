@@ -195,7 +195,7 @@ export default function PaymentGenerator({ students }: Props) {
 
         {message && (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 rounded-lg p-3 border border-slate-200">
+            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-softBg rounded-lg p-3 border border-navy/10">
               {message}
             </p>
             <Button

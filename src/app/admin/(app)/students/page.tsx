@@ -47,7 +47,7 @@ export default async function StudentsPage({ searchParams }: Props) {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">My Students</h1>
+        <h1 className="text-2xl font-bold text-navy">My Students</h1>
         <Link href="/admin/students/new">
           <Button>+ Add Student</Button>
         </Link>
@@ -60,8 +60,8 @@ export default async function StudentsPage({ searchParams }: Props) {
             href={tab.value === 'Active' ? '/admin/students' : `/admin/students?status=${encodeURIComponent(tab.value)}`}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               activeTab === tab.value
-                ? 'bg-slate-800 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-navy text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
             }`}
           >
             {tab.label}
@@ -84,14 +84,14 @@ export default async function StudentsPage({ searchParams }: Props) {
         <div className="space-y-8">
           {byDay.filter(({ entries }) => entries.length > 0).map(({ day, entries }) => (
             <section key={day}>
-              <h2 className="text-base font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+              <h2 className="text-base font-semibold text-navy mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-accentGold inline-block" />
                 {day}
                 <span className="text-slate-400 font-normal text-sm">({entries.length})</span>
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {entries.map(({ student, slot }, i) => (
-                  <StudentCard key={`${student.id}-${i}`} student={student} slot={slot} />
+                  <StudentCard key={`${student.id}-${i}`} student={student} slot={slot} showStatus={activeTab === 'All'} />
                 ))}
               </div>
             </section>
@@ -99,14 +99,14 @@ export default async function StudentsPage({ searchParams }: Props) {
 
           {unscheduled.length > 0 && (
             <section>
-              <h2 className="text-base font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />
+              <h2 className="text-base font-semibold text-navy mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-accentGold/40 inline-block" />
                 No Schedule
                 <span className="text-slate-400 font-normal text-sm">({unscheduled.length})</span>
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {unscheduled.map((s) => (
-                  <StudentCard key={s.id} student={s} />
+                  <StudentCard key={s.id} student={s} showStatus={activeTab === 'All'} />
                 ))}
               </div>
             </section>

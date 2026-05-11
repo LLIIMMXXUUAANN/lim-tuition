@@ -39,7 +39,7 @@ export default function SyncAllButton() {
     : `Done — ${syncedCount} of ${results.length} synced.`
 
   return (
-    <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+    <div className="mt-6 rounded-lg border border-slate-200 bg-softBg px-4 py-3">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-slate-600">{label}</p>
         {state === 'idle' && (
@@ -65,7 +65,7 @@ export default function SyncAllButton() {
       )}
 
       {state === 'done' && results.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3">
+        <ul className="mt-3 space-y-1 border-t border-navy/15 pt-3">
           {results.map((r) => (
             <li key={r.name} className="flex items-start gap-2 text-xs">
               <span className={

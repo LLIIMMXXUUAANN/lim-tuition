@@ -2,9 +2,9 @@
 
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 function LoginForm() {
@@ -44,50 +44,50 @@ function LoginForm() {
 
   if (sent) {
     return (
-      <p className="text-sm text-slate-600">
-        Check your inbox for a login link.
-      </p>
+      <div className="text-center space-y-4">
+        <h1 className="text-2xl font-semibold">Check your inbox</h1>
+        <p className="text-slate-600">A login link has been sent to your email.</p>
+        <Link href="/" className="text-sm text-accentGold hover:underline block">
+          ← Back to home
+        </Link>
+      </div>
     )
   }
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4">
-      <Input
-        type="email"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? 'Sending...' : 'Send login link'}
-      </Button>
-    </form>
+    <>
+      <div className="text-center space-y-1">
+        <span className="text-2xl font-bold text-navy">&lt;/&gt;</span>
+        <h1 className="text-xl font-semibold mt-1">Admin Portal</h1>
+        <p className="text-slate-500 text-sm">Sign in to manage your students</p>
+      </div>
+      <form onSubmit={handleLogin} className="space-y-4">
+        <Input
+          type="email"
+          placeholder="your@email.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? 'Sending...' : 'Send Login Link'}
+        </Button>
+      </form>
+      <Link href="/" className="text-sm text-accentGold/80 hover:text-accentGold hover:underline block text-center">
+        ← Back to home
+      </Link>
+    </>
   )
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-sm space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Admin Portal</CardTitle>
-            <CardDescription>Sign in to manage your students</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<p className="text-sm text-slate-500">Loading...</p>}>
-              <LoginForm />
-            </Suspense>
-          </CardContent>
-        </Card>
-        <p className="text-center text-sm text-slate-500">
-          Not the admin?{' '}
-          <a href="/" className="text-slate-700 underline underline-offset-4 hover:text-slate-900">
-            Back to landing page
-          </a>
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-softBg">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 max-w-sm w-full space-y-6">
+        <Suspense fallback={<p className="text-sm text-slate-500 text-center">Loading...</p>}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   )

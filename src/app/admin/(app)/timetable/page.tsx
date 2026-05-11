@@ -21,7 +21,7 @@ export default async function TimetablePage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Timetable</h1>
+        <h1 className="text-2xl font-bold text-navy">Timetable</h1>
       </div>
       <TimetableSection students={students} initialRules={initialRules} initialBufferMins={initialBufferMins} />
     </div>

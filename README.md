@@ -52,7 +52,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
   - **Self-evaluation:** after every mutation, a post-loop DB query verifies the change persisted and appends a `✓` or `⚠` status to the tool steps display
   - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; "View student →" link rendered from `[student_id:UUID]` token Gemini appends to replies
 - **Timetable** — two-tab layout:
-  - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
+  - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy `#0A1A2F`, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
     - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM. Time-range end boundaries in rules are exclusive: `"08:00 to 10:00 unavailable"` leaves the 10:00 slot fully available
     - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
@@ -103,7 +103,7 @@ src/
     api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
     auth/callback/                → Supabase auth code exchange
   components/
-    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList)
+    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList, ExternalLink)
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
