@@ -4,8 +4,8 @@ import type { Tool, Content } from '@google/genai'
 import { requireTutor, createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
 import { getOAuth2Client } from '@/lib/google/auth'
-import { createWeeklyClassEvents } from '@/lib/google/calendar'
-import { createStudentDriveFolder } from '@/lib/google/drive'
+import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/lib/google/calendar'
+import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/drive'
 import { deleteStudentGoogle } from '@/lib/google/cleanup'
 import { syncAllStudents } from '@/lib/google/sync'
 
@@ -103,9 +103,72 @@ async function updateStudent(
     Object.entries(fields).filter(([k]) => ALLOWED_UPDATE_KEYS.has(k))
   )
   if (Object.keys(permitted).length === 0) return { error: 'No valid fields to update' }
+
   const { error } = await supabase.from('students').update(permitted).eq('id', id)
   if (error) return { error: error.message }
-  return { success: true }
+
+  // If schedule didn't change, nothing more to do
+  if (!('class_schedule' in permitted)) return { success: true }
+
+  // Schedule changed — sync Calendar + Drive if the student has Google set up
+  const { data: student } = await supabase
+    .from('students')
+    .select('name, class_schedule, calendar_event_ids, google_meet_link, google_drive_link')
+    .eq('id', id)
+    .maybeSingle()
+
+  // Student not found or Google not set up — skip silently
+  if (!student?.calendar_event_ids?.length || !student?.google_meet_link) {
+    return { success: true }
+  }
+
+  let auth: Awaited<ReturnType<typeof getOAuth2Client>>
+  try {
+    auth = await getOAuth2Client()
+  } catch (err) {
+    return {
+      success: true,
+      googleWarning: `Schedule saved but Calendar not updated: ${err instanceof Error ? err.message : 'Google not connected'}`,
+    }
+  }
+
+  const warnings: string[] = []
+
+  try {
+    const { eventIds } = await updateWeeklyClassEvents(
+      auth,
+      student.name,
+      student.class_schedule as ClassSlot[],
+      student.calendar_event_ids,
+      student.google_meet_link,
+    )
+    const { error: dbErr } = await supabase
+      .from('students')
+      .update({ calendar_event_ids: eventIds })
+      .eq('id', id)
+    if (dbErr) warnings.push(`Calendar updated but event ID save failed: ${dbErr.message}`)
+  } catch (err) {
+    warnings.push(`Calendar update failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+  }
+
+  if (student.google_drive_link) {
+    try {
+      await updateStudentMeetDoc(
+        auth,
+        student.google_drive_link,
+        student.name,
+        student.class_schedule as ClassSlot[],
+        student.google_meet_link,
+      )
+    } catch (err) {
+      warnings.push(`Drive Meet doc update failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  return {
+    success: true,
+    ...(warnings.length ? { googleWarnings: warnings } : {}),
+  }
 }
 
 async function deleteStudent(supabase: Supabase, id: string) {
