@@ -149,10 +149,11 @@ async function setupStudentGoogle(supabase: Supabase, studentId: string) {
       const { meetLink, eventIds } = await createWeeklyClassEvents(
         auth, name, class_schedule as ClassSlot[],
       )
-      await supabase
+      const { error: calDbErr } = await supabase
         .from('students')
         .update({ google_meet_link: meetLink, calendar_event_ids: eventIds })
         .eq('id', studentId)
+      if (calDbErr) return { error: `Calendar events created but DB save failed: ${calDbErr.message}` }
       google_meet_link = meetLink
       summary.push(`Calendar ✓ (${eventIds.length} event${eventIds.length !== 1 ? 's' : ''} created, Meet link saved)`)
     } catch (err) {
@@ -170,11 +171,15 @@ async function setupStudentGoogle(supabase: Supabase, studentId: string) {
       const driveUrl = await createStudentDriveFolder(
         auth, name, google_meet_link, class_schedule as ClassSlot[],
       )
-      await supabase
+      const { error: driveDbErr } = await supabase
         .from('students')
         .update({ google_drive_link: driveUrl })
         .eq('id', studentId)
-      summary.push('Drive ✓ (folder created)')
+      if (driveDbErr) {
+        summary.push(`Drive ✗ (folder created but DB save failed: ${driveDbErr.message})`)
+      } else {
+        summary.push('Drive ✓ (folder created)')
+      }
     } catch (err) {
       summary.push(`Drive ✗ (${err instanceof Error ? err.message : 'Unknown error'})`)
     }
@@ -326,7 +331,7 @@ const TOOL_DECLARATIONS: Tool[] = [
 const SYSTEM_INSTRUCTION = `You are a helpful assistant for a private tuition admin system. You help the tutor manage student records using the provided tools.
 
 RULES — follow these exactly:
-1. Before calling update_student or delete_student, always call search_students first to obtain the student's UUID.
+1. Before calling update_student, delete_student, or setup_student_google, always call search_students first to obtain the student's UUID.
 2. Never call delete_student without first asking: "Are you sure you want to permanently delete [name]? Type yes to confirm." You must see "yes" in the conversation before proceeding.
 3. If a create_student command is missing required fields (mode, fee_per_hour), ask for them before calling the tool.
 4. If search_students returns multiple matches, list them and ask which student the user means.
