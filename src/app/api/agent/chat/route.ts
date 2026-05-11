@@ -22,6 +22,30 @@ async function searchStudents(supabase: Supabase, query: string) {
   return { students: data ?? [] }
 }
 
+async function listStudents(
+  supabase: Supabase,
+  params: { status?: string; day?: string },
+) {
+  let query = supabase
+    .from('students')
+    .select('id, name, status, mode, fee_per_hour, class_schedule')
+    .order('name')
+
+  if (params.status) query = query.eq('status', params.status)
+
+  const { data, error } = await query
+  if (error) return { error: error.message }
+
+  let students = data ?? []
+  if (params.day) {
+    students = students.filter((s: { class_schedule: ClassSlot[] | null }) =>
+      s.class_schedule?.some((slot: ClassSlot) => slot.day === params.day)
+    )
+  }
+
+  return { students }
+}
+
 async function createStudent(
   supabase: Supabase,
   params: {
@@ -95,6 +119,26 @@ const TOOL_DECLARATIONS: Tool[] = [
             query: { type: Type.STRING, description: 'Partial or full student name' },
           },
           required: ['query'],
+        },
+      },
+      {
+        name: 'list_students',
+        description:
+          'List students with optional filters. Use when the user asks to see all students, students on a specific day, or students with a specific status. Supports combining both filters.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            status: {
+              type: Type.STRING,
+              enum: ['Active', 'On Hold', 'Completed'],
+              description: 'Filter by student status (optional)',
+            },
+            day: {
+              type: Type.STRING,
+              enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+              description: 'Filter by class day (optional)',
+            },
+          },
         },
       },
       {
@@ -204,6 +248,8 @@ async function executeTool(
   switch (name) {
     case 'search_students':
       return searchStudents(supabase, args.query as string)
+    case 'list_students':
+      return listStudents(supabase, args as { status?: string; day?: string })
     case 'create_student':
       return createStudent(supabase, args as Parameters<typeof createStudent>[1])
     case 'update_student':
