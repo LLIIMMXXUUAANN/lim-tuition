@@ -44,7 +44,13 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the existing Calendar events are automatically patched (not recreated) so the Google Meet link is preserved; the "Google Meet Link" doc in the student's Drive folder is also rewritten with the new schedule. If the auto-update can't run (missing event IDs, missing Meet link, API error), an amber warning is shown and the form stays open so it's readable
 - **Google Drive folder creation** — "Create Google Drive Folder (Python Syllabus)" button on the new student form; requires Meet link to be set first; automatically creates the student's folder structure (Teaching Slides shortcut, blank coding notebooks, homework doc, pre-filled Google Meet Link doc) and sets anyone-with-link viewer access
 - **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. For students with no stored event IDs it first searches Calendar by name to find and save them, then patches. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
-- **AI Agent** — natural language interface at `/admin/agent`; type commands like "Create student LX, IGCSE, Monday 3–5pm, RM 60/hr" or "Update John's fee to RM 80"; Gemini 2.5 Flash interprets the command, asks follow-up questions for missing fields, executes against Supabase, and self-evaluates that the change persisted. v1 covers students CRUD only (no Google Calendar/Drive). Conversation persists across page refreshes via localStorage.
+- **AI Agent** — natural language interface at `/admin/agent` powered by Gemini 2.5 Flash function calling. Type commands like "Create student LX, IGCSE, Monday 3–5pm, RM 60/hr", "Update John's fee to RM 80", or "Show all active Monday students". Gemini drives a multi-round tool loop (up to 10 rounds) that executes against Supabase and Google APIs, then self-evaluates that mutations persisted. Conversation history is sent on every request and persisted to localStorage across page refreshes.
+  - **9 tools:** `search_students`, `get_student`, `list_students`, `create_student`, `update_student`, `delete_student`, `setup_student_google`, `sync_all_students`, `manage_portal_access`
+  - **Auto Google sync:** updating a student's `class_schedule` via the agent automatically patches Calendar events and rewrites the Drive Meet doc (parallel, non-fatal)
+  - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
+  - **Safety:** `delete_student` requires explicit "yes" in conversation + warns about Calendar/Drive removal; `update_student` uses `ALLOWED_UPDATE_KEYS` allowlist to prevent prompt injection; `sync_all_students` requires explicit confirmation
+  - **Self-evaluation:** after every mutation, a post-loop DB query verifies the change persisted and appends a `✓` or `⚠` status to the tool steps display
+  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; "View student →" link rendered from `[student_id:UUID]` token Gemini appends to replies
 - **Timetable** — two-tab layout:
   - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
@@ -89,7 +95,7 @@ src/
     admin/(app)/templates/        → message templates + payment generator
     admin/(app)/timetable/        → weekly availability grid
     admin/(app)/agent/            → AI agent chat UI
-    api/agent/                    → Gemini function-calling loop + 4 Supabase tools
+    api/agent/                    → Gemini function-calling loop (max 10 rounds, parallel tool execution)
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
@@ -101,13 +107,14 @@ src/
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
-    agent/      → AgentChat (chat UI + localStorage persistence)
+    agent/      → AgentChat (chat UI, localStorage persistence, react-markdown rendering)
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
     supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
     google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
     hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
+    agent/      → tools.ts (9 tool implementations), schema.ts (TOOL_DECLARATIONS + SYSTEM_INSTRUCTION), eval.ts (selfEval)
     gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
     types.ts    → shared TypeScript types (Student, ClassSlot, etc.)
     utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES

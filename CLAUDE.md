@@ -180,20 +180,83 @@ POST route handler. No external AI — pure JS date arithmetic:
 - Template 2 (carryover): deducts `carryover × avg_fee_per_session` from the total (tutor owes student those sessions)
 - `formatFee` rounds to 2 d.p. before integer check to avoid floating-point noise
 
-### AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/chat/route.ts`)
+### AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/`, `src/lib/agent/`)
 
-v1 — students CRUD only. No Google Calendar/Drive integration.
+Natural language interface for managing students. Gemini 2.5 Flash drives a function-calling loop that executes against Supabase and Google APIs.
 
-- **`agent/page.tsx`** — thin server component wrapper that renders `<AgentChat />`
-- **`components/agent/AgentChat.tsx`** — client component; owns `messages` state (lazy-initialised from `localStorage`), persists on every change, auto-scrolls. Renders navy user bubbles and white agent bubbles with inline tool steps. Parses `[student_id:UUID]` token from agent replies to render a "View student →" link.
-- **`api/agent/chat/route.ts`** — stateless `POST` handler. Receives full `messages[]` history on every request. Runs a Gemini 2.5 Flash function-calling loop (max 5 rounds). 4 tools call Supabase directly: `search_students`, `create_student`, `update_student`, `delete_student`. After every mutation, re-queries Supabase to self-evaluate and appends `✓ verified in DB` or `⚠ could not verify` to the reply. Returns `{ reply, steps[] }`.
+**File structure:**
+- **`agent/page.tsx`** — thin server component wrapper; renders `<AgentChat />`
+- **`components/agent/AgentChat.tsx`** — client component; see UI section below
+- **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
+- **`lib/agent/tools.ts`** — all 9 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
+- **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
-**Key implementation details:**
-- `ALLOWED_UPDATE_KEYS` Set in `updateStudent` — allowlist of writable columns; prevents prompt injection from overwriting sensitive fields (`access_emails`, `drive_folder_url`, etc.)
-- All 4 tool schemas sent to Gemini upfront on every request — no progressive disclosure
-- `delete_student` requires explicit "yes" in the conversation before Gemini may call it (enforced via `SYSTEM_INSTRUCTION` rule, not just the `required` schema)
-- `GoogleGenAI` instance is module-level (one per cold start, not per request)
-- Uses `@google/genai` v1.x (not `@google/generative-ai`) — required for function calling support with `Type` enum and `Content[]` types
+**Tools (all 9):**
+
+| Tool | Required | Optional | Returns |
+|---|---|---|---|
+| `search_students` | `query` | — | `{ students: [{ id, name, status, class_schedule }] }` |
+| `get_student` | `id` | — | `{ student: <all fields> }` |
+| `list_students` | — | `status`, `day` | `{ students: [{ id, name, status, mode, fee_per_hour, class_schedule }] }` |
+| `create_student` | `name`, `mode`, `fee_per_hour` | all other fields | `{ student: { id, name }, suggestGoogleSetup?: true }` |
+| `update_student` | `id`, `fields` | — | `{ success: true, googleWarnings?: string[], suggestGoogleSetup?: true }` |
+| `delete_student` | `id` | — | `{ success: true, warnings?: string[] }` |
+| `setup_student_google` | `student_id` | — | `{ result: string }` or `{ error: string }` |
+| `sync_all_students` | — | — | `{ results: [...] }` |
+| `manage_portal_access` | `student_id`, `action`, `email` | — | `{ result: string }` |
+
+**Function-calling loop (`api/agent/chat/route.ts`):**
+- Receives full `messages[]` history on every request (stateless — frontend owns history)
+- Maps frontend `role: 'agent'` → Gemini `role: 'model'` before sending
+- Runs up to 10 rounds; exits early when Gemini returns no function calls
+- Within each round, all function calls are executed in parallel via `Promise.all` (Gemini can return multiple calls per round)
+- Steps are pushed in call order before parallel execution so display order is stable
+- `lastMutationTool` tracks the final mutation in the loop for `selfEval` (create captures `createdId` from the tool result; update/delete/setup use `MUTATION_TOOLS` set)
+- `MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])` — named constant at module level; used for both mutation tracking and selfEval dispatch
+- Returns `{ reply: string, steps: string[] }` — steps are displayed above the reply in the UI
+
+**Self-evaluation (`lib/agent/eval.ts`):**
+- `selfEval(toolName, args, supabase, createdId?)` — runs after the loop completes if any mutation occurred
+- `create_student` / `update_student`: SELECT `id` WHERE `id = X` → `✓ verified in DB` or `⚠ could not verify`
+- `delete_student`: SELECT `id` WHERE `id = X` → `✓ verified deleted` or `_⚠ student still exists in DB_`
+- `setup_student_google`: SELECT `google_meet_link, google_drive_link` → reports which links are set
+- Result is appended to `steps[]` (not `reply`) so it appears in the tool-steps section
+
+**Tool implementation notes (`lib/agent/tools.ts`):**
+- `ALLOWED_UPDATE_KEYS` Set — allowlist of writable columns for `update_student`; prevents prompt injection from touching any column not in the set
+- `update_student` auto-syncs Calendar + Drive when `class_schedule` is in the updated fields: if `calendar_event_ids` + `google_meet_link` are set, calls `updateWeeklyClassEvents` and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; Google failures are non-fatal (returned as `googleWarnings`); if Google is not set up, returns `suggestGoogleSetup: true` instead
+- `create_student` returns `suggestGoogleSetup: true` when a `class_schedule` was provided — the system instruction rule 11 tells Gemini to ask the user if they want Google setup
+- `manage_portal_access` normalises the email (`.trim().toLowerCase()`) before diffing against the stored `access_emails` array
+- `delete_student` attempts Google cleanup (Drive trash + Calendar delete) before the DB delete; Google failure is non-fatal
+- `errMsg(err, fallback)` — `err instanceof Error ? err.message : fallback` — use this everywhere instead of inlining
+
+**System instruction rules summary (`lib/agent/schema.ts`):**
+1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
+2. `delete_student` requires explicit "yes" in conversation; must warn about Calendar/Drive removal first
+3. Ask for missing required fields (`mode`, `fee_per_hour`) before calling `create_student`
+4. Multiple search matches → list and ask which student
+5. No search results for update/delete → say so, offer to create instead
+6. After create/update → append `[student_id:UUID]` to reply (UI renders "View student →" link)
+7. Formatting rules: tables for lists, bold labels for single records, skip null/empty fields, render Meet/Drive as markdown links, blockquote for notes/homework, list_students for roster queries
+8. `sync_all_students` requires explicit confirmation before calling
+9. Delete confirmation must mention Google Calendar/Drive removal
+10. After `setup_student_google` → also append `[student_id:UUID]`
+11. If tool result has `suggestGoogleSetup: true` → ask user if they want Google setup; only call `setup_student_google` on yes
+
+**`[student_id:UUID]` token protocol:**
+- Gemini appends `[student_id:UUID]` literally at the end of replies after create/update/setup
+- `parseAgentReply(content)` in `AgentChat.tsx` extracts the UUID via regex, strips the token from the display text, and returns `{ text, studentId }`
+- If `studentId` is non-null, a "View student →" `<Link>` is rendered bottom-right of the agent bubble
+
+**AgentChat UI (`components/agent/AgentChat.tsx`):**
+- `messages` state lazy-initialised from `localStorage` (key: `agent_chat_messages`); persisted on every change via `useEffect`
+- Stored messages include `id` (UUID), `role` (`'user'` | `'agent'`), `content`, and `steps[]`
+- `loadStoredMessages` migrates old stored messages without `id` by generating UUIDs on load
+- Reply rendered via `<ReactMarkdown remarkPlugins={[remarkGfm]}>` — supports GFM tables, bold, blockquotes, links
+- Custom `a` renderer: `mailto:` links render as `<span>` (prevents remark-gfm from auto-linking email addresses as clickable mailto links)
+- Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)
+- "Clear chat" wipes `messages` state → next send has no history context for Gemini
 
 ### Patterns
 

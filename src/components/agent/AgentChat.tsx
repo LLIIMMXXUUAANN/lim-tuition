@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -59,7 +61,6 @@ export default function AgentChat() {
     setLoading(true)
 
     try {
-      // API expects role 'model' for agent turns, 'user' for user turns
       const apiMessages = next.map(m => ({
         role: m.role === 'agent' ? ('model' as const) : ('user' as const),
         content: m.content,
@@ -140,20 +141,32 @@ export default function AgentChat() {
               ) : (
                 <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[80%] text-sm shadow-sm">
                   {msg.steps && msg.steps.length > 0 && (
-                    <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100">
+                    <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100 break-all">
                       {msg.steps.map((step, j) => (
-                        <div key={j}>{step}</div>
+                        <div key={j}>{step.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '…')}</div>
                       ))}
                     </div>
                   )}
-                  <p className="whitespace-pre-wrap text-slate-800">{msgText}</p>
+                  <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ href, children }) => {
+                          if (href?.startsWith('mailto:')) return <span>{children}</span>
+                          return <a href={href} className="text-navy underline">{children}</a>
+                        },
+                      }}
+                    >{msgText}</ReactMarkdown>
+                  </div>
                   {studentId && (
-                    <Link
-                      href={`/admin/students/${studentId}`}
-                      className="inline-block mt-2 text-xs font-medium text-navy hover:underline"
-                    >
-                      View student →
-                    </Link>
+                    <div className="flex justify-end mt-2">
+                      <Link
+                        href={`/admin/students/${studentId}`}
+                        className="text-xs font-medium text-navy hover:underline"
+                      >
+                        View student →
+                      </Link>
+                    </div>
                   )}
                 </div>
               )}
