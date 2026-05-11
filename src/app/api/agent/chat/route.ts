@@ -113,7 +113,7 @@ async function updateStudent(
   // Schedule changed — sync Calendar + Drive if the student has Google set up
   const { data: student } = await supabase
     .from('students')
-    .select('name, class_schedule, calendar_event_ids, google_meet_link, google_drive_link')
+    .select('name, calendar_event_ids, google_meet_link, google_drive_link')
     .eq('id', id)
     .maybeSingle()
 
@@ -128,7 +128,7 @@ async function updateStudent(
   } catch (err) {
     return {
       success: true,
-      googleWarning: `Schedule saved but Calendar not updated: ${err instanceof Error ? err.message : 'Google not connected'}`,
+      googleWarnings: [`Schedule saved but Calendar not updated: ${err instanceof Error ? err.message : 'Google not connected'}`],
     }
   }
 
@@ -138,7 +138,7 @@ async function updateStudent(
     const { eventIds } = await updateWeeklyClassEvents(
       auth,
       student.name,
-      student.class_schedule as ClassSlot[],
+      permitted.class_schedule as ClassSlot[],
       student.calendar_event_ids,
       student.google_meet_link,
     )
@@ -157,7 +157,7 @@ async function updateStudent(
         auth,
         student.google_drive_link,
         student.name,
-        student.class_schedule as ClassSlot[],
+        permitted.class_schedule as ClassSlot[],
         student.google_meet_link,
       )
     } catch (err) {
