@@ -2,16 +2,17 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { ClassSlot } from '@/lib/types'
+import type { ClassSlot, StudentMode } from '@/lib/types'
 
 interface Props {
   name: string
   meetLink: string
   classSchedule: ClassSlot[]
+  mode: StudentMode
   onSuccess: (url: string) => void
 }
 
-export default function CreateDriveFolderButton({ name, meetLink, classSchedule, onSuccess }: Props) {
+export default function CreateDriveFolderButton({ name, meetLink, classSchedule, mode, onSuccess }: Props) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -22,7 +23,7 @@ export default function CreateDriveFolderButton({ name, meetLink, classSchedule,
       const res = await fetch('/api/google/create-student-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, meet_link: meetLink, class_schedule: classSchedule }),
+        body: JSON.stringify({ name, meet_link: meetLink, class_schedule: classSchedule, mode }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
@@ -43,7 +44,7 @@ export default function CreateDriveFolderButton({ name, meetLink, classSchedule,
         onClick={handleClick}
         disabled={!name.trim() || !meetLink.trim() || state === 'loading' || state === 'done'}
       >
-        {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : 'Create Google Drive Folder (Python Syllabus)'}
+        {state === 'loading' ? 'Creating…' : state === 'done' ? '✓ Folder created' : `Create Google Drive Folder (${mode})`}
       </Button>
       {state === 'idle' && (!name.trim() || !meetLink.trim()) && (
         <span className="text-xs text-slate-400">

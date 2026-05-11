@@ -281,6 +281,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
               name={form.name}
               meetLink={form.google_meet_link ?? ''}
               classSchedule={form.class_schedule ?? []}
+              mode={form.mode}
               onSuccess={(url) => set('google_drive_link', url)}
             />
           </div>

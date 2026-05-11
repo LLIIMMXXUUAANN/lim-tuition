@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import type { OAuth2Client } from 'google-auth-library'
-import type { ClassSlot } from '@/lib/types'
+import type { ClassSlot, StudentMode } from '@/lib/types'
 
 const EMPTY_IPYNB = JSON.stringify({
   cells: [{ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: [] }],
@@ -123,11 +123,12 @@ export async function createStudentDriveFolder(
   studentName: string,
   meetLink: string,
   classSchedule: ClassSlot[],
+  mode: StudentMode = 'My Python Syllabus',
 ): Promise<string> {
   const studentsFolderId = process.env.GOOGLE_STUDENTS_FOLDER_ID
-  const lecTopic1FileId = process.env.GOOGLE_LEC_TOPIC1_FILE_ID
   if (!studentsFolderId) throw new Error('GOOGLE_STUDENTS_FOLDER_ID env var is not set')
-  if (!lecTopic1FileId) throw new Error('GOOGLE_LEC_TOPIC1_FILE_ID env var is not set')
+  const lecTopic1FileId = process.env.GOOGLE_LEC_TOPIC1_FILE_ID
+  if (mode === 'My Python Syllabus' && !lecTopic1FileId) throw new Error('GOOGLE_LEC_TOPIC1_FILE_ID env var is not set')
 
   const drive = google.drive({ version: 'v3', auth })
 
@@ -138,25 +139,29 @@ export async function createStudentDriveFolder(
   })
 
   try {
-    await Promise.all([
-      (async () => {
-        const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
-        await createShortcut(drive, lecTopic1FileId, teachingId, 'Topic_1.pptx')
-      })(),
-      (async () => {
-        const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
-        await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
-      })(),
-      (async () => {
-        const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
-        await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
-      })(),
-      (async () => {
-        const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
-        await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
-      })(),
-      createMeetDoc(drive, rootId, studentName, classSchedule, meetLink),
-    ])
+    if (mode === 'My Python Syllabus') {
+      await Promise.all([
+        (async () => {
+          const teachingId = await createFolder(drive, '1. Teaching Slides', rootId)
+          await createShortcut(drive, lecTopic1FileId!, teachingId, 'Topic_1.pptx')
+        })(),
+        (async () => {
+          const codingId = await createFolder(drive, '2. In-Class Coding Examples', rootId)
+          await uploadIpynb(drive, `${studentName} Topic 1`, codingId)
+        })(),
+        (async () => {
+          const hwQId = await createFolder(drive, '3. Homework Questions', rootId)
+          await createBlankDoc(drive, `${studentName} Topic 1 Homework`, hwQId)
+        })(),
+        (async () => {
+          const hwAnsId = await createFolder(drive, '4. Homework Sample Answers', rootId)
+          await uploadIpynb(drive, `${studentName} Homework Topic 1`, hwAnsId)
+        })(),
+        createMeetDoc(drive, rootId, studentName, classSchedule, meetLink),
+      ])
+    } else {
+      await createMeetDoc(drive, rootId, studentName, classSchedule, meetLink)
+    }
   } catch (err) {
     // Clean up root folder so a retry doesn't create duplicates
     await drive.files.delete({ fileId: rootId }).catch(() => null)
