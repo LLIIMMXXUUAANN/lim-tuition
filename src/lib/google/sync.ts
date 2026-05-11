@@ -41,10 +41,10 @@ export async function syncAllStudents(supabase: Supabase, auth: OAuth2Client): P
       if (!eventIds.length) {
         try {
           eventIds = await findRecurringEventIds(auth, name)
-          if (!eventIds.length) return { name, status: 'skipped', reason: 'no Calendar events found — use setup_student_google' }
+          if (!eventIds.length) return { name, status: 'skipped', reason: 'no Calendar events found — use Create Calendar Event' }
         } catch (err: unknown) {
           const raw = errMsg(err, 'Calendar search failed')
-          return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect at /api/google/auth' : raw }
+          return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect' : raw }
         }
       }
 
@@ -58,7 +58,7 @@ export async function syncAllStudents(supabase: Supabase, auth: OAuth2Client): P
 
         if (calResult.status === 'rejected') {
           const raw = errMsg(calResult.reason, 'Calendar update failed')
-          return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect at /api/google/auth' : raw }
+          return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect' : raw }
         }
 
         await supabase
