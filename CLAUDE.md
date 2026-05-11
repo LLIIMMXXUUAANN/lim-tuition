@@ -228,6 +228,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `update_student` auto-syncs Calendar + Drive when `class_schedule` is in the updated fields: if `calendar_event_ids` + `google_meet_link` are set, calls `updateWeeklyClassEvents` and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; Google failures are non-fatal (returned as `googleWarnings`); if Google is not set up, returns `suggestGoogleSetup: true` instead
 - `create_student` returns `suggestGoogleSetup: true` when a `class_schedule` was provided — the system instruction rule 11 tells Gemini to ask the user if they want Google setup
 - `manage_portal_access` normalises the email (`.trim().toLowerCase()`) before diffing against the stored `access_emails` array
+- `setup_student_google` fetches the student's `mode` from the DB and passes it to `createStudentDriveFolder` — so Other Syllabus students get a Meet-doc-only folder, Python Syllabus students get the full 4-subfolder structure
 - `delete_student` attempts Google cleanup (Drive trash + Calendar delete) before the DB delete; Google failure is non-fatal
 - `errMsg(err, fallback)` — `err instanceof Error ? err.message : fallback` — use this everywhere instead of inlining
 
@@ -256,6 +257,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - Reply rendered via `<ReactMarkdown remarkPlugins={[remarkGfm]}>` — supports GFM tables, bold, blockquotes, links
 - Custom `a` renderer: `mailto:` links render as `<span>` (prevents remark-gfm from auto-linking email addresses as clickable mailto links)
 - Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)
+- Input auto-focuses on mount and after each agent response via `useEffect([loading])`; disabled (and not focused) while the agent is executing
 - "Clear chat" wipes `messages` state → next send has no history context for Gemini
 
 ### Patterns

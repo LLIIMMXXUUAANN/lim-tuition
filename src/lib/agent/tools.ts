@@ -268,13 +268,13 @@ export async function deleteStudent(supabase: Supabase, id: string) {
 export async function setupStudentGoogle(supabase: Supabase, studentId: string) {
   const { data: student, error } = await supabase
     .from('students')
-    .select('name, class_schedule, calendar_event_ids, google_meet_link, google_drive_link')
+    .select('name, mode, class_schedule, calendar_event_ids, google_meet_link, google_drive_link')
     .eq('id', studentId)
     .single()
 
   if (error || !student) return { error: 'Student not found' }
 
-  const { name, class_schedule, calendar_event_ids, google_drive_link } = student
+  const { name, mode, class_schedule, calendar_event_ids, google_drive_link } = student
   let { google_meet_link } = student
 
   if (!class_schedule?.length) {
@@ -322,7 +322,7 @@ export async function setupStudentGoogle(supabase: Supabase, studentId: string) 
     }
     try {
       const driveUrl = await createStudentDriveFolder(
-        auth, name, google_meet_link, class_schedule as ClassSlot[],
+        auth, name, google_meet_link, class_schedule as ClassSlot[], mode as StudentMode,
       )
       const { error: driveDbErr } = await supabase
         .from('students')

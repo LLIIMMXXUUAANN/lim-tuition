@@ -40,6 +40,7 @@ export default function AgentChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
@@ -50,6 +51,10 @@ export default function AgentChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  useEffect(() => {
+    if (!loading) inputRef.current?.focus()
+  }, [loading])
 
   async function send() {
     const text = input.trim()
@@ -188,6 +193,7 @@ export default function AgentChat() {
       {/* Input bar */}
       <div className="flex gap-2 pt-3 border-t border-slate-100 flex-shrink-0">
         <Input
+          ref={inputRef}
           aria-label="Chat input"
           value={input}
           onChange={e => setInput(e.target.value)}
