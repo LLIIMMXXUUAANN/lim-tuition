@@ -8,7 +8,7 @@ const NAV_LINKS = [
   { label: 'Students', href: '/admin/students' },
   { label: 'Templates', href: '/admin/templates' },
   { label: 'Timetable', href: '/admin/timetable' },
-  { label: 'Agent', href: '/admin/agent' },
+  { label: 'AI Agent', href: '/admin/agent', gold: true },
 ]
 
 export default function AppNav() {
@@ -22,16 +22,20 @@ export default function AppNav() {
           Lim&apos;s Programming Tuition
         </Link>
         <div className="flex gap-1 flex-1">
-          {NAV_LINKS.map(({ label, href }) => {
+          {NAV_LINKS.map(({ label, href, gold }) => {
             const isActive = pathname.startsWith(href)
             return (
               <Link
                 key={href}
                 href={href}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-slate-100 text-slate-900'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  gold
+                    ? isActive
+                      ? 'bg-accentGold/15 text-accentGold'
+                      : 'text-accentGold/70 hover:text-accentGold hover:bg-accentGold/10'
+                    : isActive
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 {label}
