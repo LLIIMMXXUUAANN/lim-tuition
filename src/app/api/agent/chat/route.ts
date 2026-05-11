@@ -366,7 +366,7 @@ const TOOL_DECLARATIONS: Tool[] = [
       {
         name: 'sync_all_students',
         description:
-          'Sync all active students\' Google Calendar events and Drive Meet docs to match the database schedule. Affects every active student — always confirm with the user before calling.',
+          "Sync all active students' Google Calendar events and Drive Meet docs to match the database schedule. Affects every active student — always confirm with the user before calling.",
         parameters: {
           type: Type.OBJECT,
           properties: {},
@@ -388,7 +388,7 @@ RULES — follow these exactly:
 7. Keep replies concise and friendly.
 8. Before calling sync_all_students, ask the user: "This will sync Google Calendar and Drive for all active students. Confirm?" and wait for explicit confirmation.
 9. When asking the user to confirm deletion (before calling delete_student), state explicitly that their Google Calendar events and Drive folder will also be permanently removed.
-10. After a successful setup_student_google, include the student UUID in your reply using the format: [student_id:UUID] — this lets the UI render a link to their profile.`
+10. After a successful setup_student_google, also include the student UUID in your reply using the same format as Rule 6: [student_id:UUID]`
 
 // ─── Tool dispatcher ──────────────────────────────────────────────────────────
 
