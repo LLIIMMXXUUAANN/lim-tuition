@@ -7,6 +7,8 @@ export async function deleteStudentGoogle(
   driveUrl?: string | null,
   eventIds?: string[] | null,
 ): Promise<{ driveError: string | null; calendarError: string | null }> {
+  const calendarId = process.env.GOOGLE_CALENDAR_ID
+
   const [driveResult, calendarResult] = await Promise.allSettled([
     (async () => {
       if (!driveUrl?.trim()) return null
@@ -16,7 +18,6 @@ export async function deleteStudentGoogle(
     })(),
     (async () => {
       if (!eventIds?.length) return null
-      const calendarId = process.env.GOOGLE_CALENDAR_ID
       if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
       const calendar = google.calendar({ version: 'v3', auth })
       await Promise.all(
