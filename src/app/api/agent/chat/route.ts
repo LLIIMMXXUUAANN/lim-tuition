@@ -327,7 +327,7 @@ const TOOL_DECLARATIONS: Tool[] = [
             fields: {
               type: Type.OBJECT,
               description:
-                'Object of fields to update. Allowed keys: name, mode, fee_per_hour, payment_method, status, class_schedule, contact_person, contact_phone, today_homework, notes',
+                'Object of fields to update. Allowed keys: name, mode, fee_per_hour, payment_method, status, class_schedule, contact_person, contact_phone, student_phone, today_homework, notes, latest_payment',
             },
           },
           required: ['id', 'fields'],
