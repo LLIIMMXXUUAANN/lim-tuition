@@ -6,6 +6,8 @@ import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createWeeklyClassEvents } from '@/lib/google/calendar'
 import { createStudentDriveFolder } from '@/lib/google/drive'
+import { deleteStudentGoogle } from '@/lib/google/cleanup'
+import { syncAllStudents } from '@/lib/google/sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,9 +109,32 @@ async function updateStudent(
 }
 
 async function deleteStudent(supabase: Supabase, id: string) {
+  const { data: student } = await supabase
+    .from('students')
+    .select('google_drive_link, calendar_event_ids')
+    .eq('id', id)
+    .maybeSingle()
+
+  const warnings: string[] = []
+
+  if (student?.google_drive_link || student?.calendar_event_ids?.length) {
+    try {
+      const auth = await getOAuth2Client()
+      const { driveError, calendarError } = await deleteStudentGoogle(
+        auth,
+        student.google_drive_link,
+        student.calendar_event_ids,
+      )
+      if (driveError) warnings.push(`Drive cleanup warning: ${driveError}`)
+      if (calendarError) warnings.push(`Calendar cleanup warning: ${calendarError}`)
+    } catch (err) {
+      warnings.push(`Google cleanup skipped: ${err instanceof Error ? err.message : 'auth error'}`)
+    }
+  }
+
   const { error } = await supabase.from('students').delete().eq('id', id)
   if (error) return { error: error.message }
-  return { success: true }
+  return { success: true, warnings: warnings.length ? warnings : undefined }
 }
 
 async function setupStudentGoogle(supabase: Supabase, studentId: string) {
@@ -188,6 +213,20 @@ async function setupStudentGoogle(supabase: Supabase, studentId: string) {
   }
 
   return { result: summary.join(', ') }
+}
+
+async function runSyncAll(supabase: Supabase) {
+  try {
+    const auth = await getOAuth2Client()
+    const results = await syncAllStudents(supabase, auth)
+    return { results }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Google auth failed'
+    if (msg.includes('invalid_grant')) {
+      return { error: 'Google auth expired — reconnect at /api/google/auth' }
+    }
+    return { error: msg }
+  }
 }
 
 // ─── Gemini tool declarations ─────────────────────────────────────────────────
@@ -324,6 +363,15 @@ const TOOL_DECLARATIONS: Tool[] = [
           required: ['student_id'],
         },
       },
+      {
+        name: 'sync_all_students',
+        description:
+          'Sync all active students\' Google Calendar events and Drive Meet docs to match the database schedule. Affects every active student — always confirm with the user before calling.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {},
+        },
+      },
     ],
   },
 ]
@@ -337,7 +385,10 @@ RULES — follow these exactly:
 4. If search_students returns multiple matches, list them and ask which student the user means.
 5. If search_students returns no results when the user wanted to update/delete, say so and offer to create instead.
 6. After successfully creating or updating a student, include their UUID at the end of your reply in this exact format: [student_id:UUID] — this lets the UI render a link to their profile.
-7. Keep replies concise and friendly.`
+7. Keep replies concise and friendly.
+8. Before calling sync_all_students, ask the user: "This will sync Google Calendar and Drive for all active students. Confirm?" and wait for explicit confirmation.
+9. When asking the user to confirm deletion (before calling delete_student), state explicitly that their Google Calendar events and Drive folder will also be permanently removed.
+10. After a successful setup_student_google, include the student UUID in your reply using the format: [student_id:UUID] — this lets the UI render a link to their profile.`
 
 // ─── Tool dispatcher ──────────────────────────────────────────────────────────
 
@@ -359,6 +410,8 @@ async function executeTool(
       return deleteStudent(supabase, args.id as string)
     case 'setup_student_google':
       return setupStudentGoogle(supabase, args.student_id as string)
+    case 'sync_all_students':
+      return runSyncAll(supabase)
     default:
       return { error: `Unknown tool: ${name}` }
   }
