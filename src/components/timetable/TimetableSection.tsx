@@ -29,7 +29,7 @@ const PNG_GAP      = 12
 const PNG_HEADER_H = 30
 const PNG_W = PNG_PAD + PNG_LABEL_W + PNG_CELL_W * 7 + PNG_PAD
 const PNG_H = PNG_PAD + PNG_TITLE_H + PNG_LEGEND_H + PNG_GAP + PNG_HEADER_H + PNG_CELL_H * TIME_SLOTS.length + PNG_PAD
-const NAVY = NAVY
+const NAVY = '#0A1A2F'
 
 const CELL_CLASSES: Record<CellKey, string> = {
   booked:    'bg-red-200 cursor-default',
