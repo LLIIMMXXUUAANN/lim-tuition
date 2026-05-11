@@ -120,7 +120,7 @@ export default function AgentChat() {
             <p className="text-3xl">✦</p>
             <p className="font-medium text-slate-600">What would you like to do?</p>
             <div className="text-sm space-y-1 mt-4">
-              <p className="text-slate-500">"Create student LX, IGCSE, Monday 3–5pm, RM 60/hr"</p>
+              <p className="text-slate-500">"Create student LX, Other Syllabus, Monday 3–5pm, RM 60/hr"</p>
               <p className="text-slate-500">"Update John's fee to RM 80"</p>
               <p className="text-slate-500">"Delete student Wei Ming"</p>
               <p className="text-slate-500">"Search for students named Tan"</p>

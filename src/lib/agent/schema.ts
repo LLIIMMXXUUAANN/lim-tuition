@@ -57,7 +57,7 @@ export const TOOL_DECLARATIONS: Tool[] = [
             name: { type: Type.STRING },
             mode: {
               type: Type.STRING,
-              enum: ['University', 'IGCSE', 'My Python Syllabus'],
+              enum: ['My Python Syllabus', 'Other Syllabus'],
             },
             fee_per_hour: { type: Type.NUMBER, description: 'Hourly fee in RM' },
             payment_method: { type: Type.STRING, enum: ['Monthly', 'Weekly'] },

@@ -11,8 +11,7 @@ interface StudentCardProps {
 
 const modeColor: Record<string, string> = {
   'My Python Syllabus': 'bg-blue-100 text-blue-800',
-  'IGCSE': 'bg-purple-100 text-purple-800',
-  'University': 'bg-green-100 text-green-800',
+  'Other Syllabus': 'bg-purple-100 text-purple-800',
 }
 
 export default function StudentCard({ student, slot }: StudentCardProps) {

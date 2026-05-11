@@ -251,8 +251,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="My Python Syllabus">My Python Syllabus</SelectItem>
-                <SelectItem value="IGCSE">IGCSE</SelectItem>
-                <SelectItem value="University">University</SelectItem>
+                <SelectItem value="Other Syllabus">Other Syllabus</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,4 +1,4 @@
-export type StudentMode = 'University' | 'IGCSE' | 'My Python Syllabus'
+export type StudentMode = 'My Python Syllabus' | 'Other Syllabus'
 export type PaymentMethod = 'Monthly' | 'Weekly'
 export type StudentStatus = 'Active' | 'On Hold' | 'Completed'
 export type WeekDay = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
