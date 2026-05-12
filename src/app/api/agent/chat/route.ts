@@ -7,6 +7,7 @@ import {
   searchStudents, getStudent, listStudents,
   createStudent, updateStudent, deleteStudent,
   setupStudentGoogle, runSyncAll, managePortalAccess,
+  getSchedule, getFeeSummary,
   type Supabase,
 } from '@/lib/agent/tools'
 import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/lib/agent/schema'
@@ -38,6 +39,10 @@ async function executeTool(
       return runSyncAll(supabase)
     case 'manage_portal_access':
       return managePortalAccess(supabase, args.student_id as string, args.action as 'add' | 'remove', args.email as string)
+    case 'get_schedule':
+      return getSchedule(supabase, args.day as string)
+    case 'get_fee_summary':
+      return getFeeSummary(supabase, args.month as number | undefined, args.year as number | undefined)
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -63,6 +68,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
 
+  const mytDate = new Intl.DateTimeFormat('en-MY', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date())
+  const systemInstruction = `Today is ${mytDate} (Malaysia Time).\n\n${SYSTEM_INSTRUCTION}`
+
   const contents: Content[] = body.messages.map(m => ({
     role: m.role,
     parts: [{ text: m.content }],
@@ -86,7 +100,7 @@ export async function POST(req: NextRequest) {
             contents,
             config: {
               tools: TOOL_DECLARATIONS,
-              systemInstruction: SYSTEM_INSTRUCTION,
+              systemInstruction,
             },
           })
 
