@@ -383,7 +383,7 @@ export async function getSchedule(supabase: Supabase, day: string) {
     .map(s => ({
       id: s.id,
       name: s.name,
-      slots: (s.class_schedule as ClassSlot[])
+      slots: ((s.class_schedule as ClassSlot[]) ?? [])
         .filter(slot => slot.day === day)
         .map(slot => ({ start: slot.start, end: slot.end })),
     }))
@@ -417,9 +417,10 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
       )
       fee += dates.length * hoursPerSession * s.fee_per_hour
     }
-    return { id: s.id, name: s.name, fee: Math.round(fee * 100) / 100 }
+    return { id: s.id, name: s.name, fee: Math.round(fee * 100) / 100, _raw: fee }
   })
 
-  const total = Math.round(students.reduce((sum, s) => sum + s.fee, 0) * 100) / 100
-  return { month: resolvedMonth, year: resolvedYear, students, total }
+  const total = Math.round(students.reduce((sum, s) => sum + s._raw, 0) * 100) / 100
+  const out = students.map(({ _raw: _, ...s }) => s)
+  return { month: resolvedMonth, year: resolvedYear, students: out, total }
 }
