@@ -104,9 +104,9 @@ export default function AgentChat() {
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, steps: [...(m.steps ?? []), event.content!] } : m
             ))
-          } else if (event.type === 'reply') {
+          } else if (event.type === 'chunk') {
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, content: event.content! } : m
+              m.id === pendingId ? { ...m, content: (m.content ?? '') + event.content! } : m
             ))
           } else if (event.type === 'error') {
             setMessages(prev => prev.map(m =>

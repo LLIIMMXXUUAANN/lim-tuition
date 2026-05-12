@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
-import type { Content } from '@google/genai'
+import type { Content, FunctionCall, Part } from '@google/genai'
 import { requireTutor } from '@/lib/supabase/server'
 import {
   errMsg,
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
       try {
         for (let round = 0; round < 10; round++) {
-          const response = await ai.models.generateContent({
+          const streamResult = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents,
             config: {
@@ -90,17 +90,38 @@ export async function POST(req: NextRequest) {
             },
           })
 
-          const fnCalls = response.functionCalls ?? []
+          let roundText = ''
+          const roundFnCalls: FunctionCall[] = []
 
-          if (fnCalls.length === 0) {
-            reply = response.text ?? ''
+          for await (const chunk of streamResult) {
+            const chunkFnCalls = chunk.functionCalls ?? []
+            roundFnCalls.push(...chunkFnCalls)
+
+            const chunkText = chunk.text ?? ''
+            if (chunkText) {
+              roundText += chunkText
+              // Only stream text when no function calls have appeared yet this round.
+              // Gemini doesn't mix text and function calls, but guard anyway.
+              if (roundFnCalls.length === 0) {
+                emit({ type: 'chunk', content: chunkText })
+              }
+            }
+          }
+
+          // Build model turn for conversation history
+          const modelParts: Part[] = []
+          if (roundText) modelParts.push({ text: roundText })
+          roundFnCalls.forEach(fc => modelParts.push({ functionCall: fc }))
+          if (modelParts.length > 0) contents.push({ role: 'model', parts: modelParts })
+
+          if (roundFnCalls.length === 0) {
+            // Pure text round — chunks already emitted, done
+            reply = roundText
             break
           }
 
-          const modelContent = response.candidates?.[0]?.content
-          if (modelContent) contents.push(modelContent)
-
-          const namedCalls = fnCalls.filter(fc => fc.name)
+          // Tool-calling round
+          const namedCalls = roundFnCalls.filter(fc => fc.name)
           for (const fc of namedCalls) {
             emit({ type: 'step', content: `🔧 ${fc.name}(${JSON.stringify(fc.args)})` })
           }
@@ -140,7 +161,8 @@ export async function POST(req: NextRequest) {
       }
 
       if (!reply) {
-        reply = "I wasn't able to complete that in the allowed steps — please try a simpler request."
+        // Fallback: emit as a single chunk so the frontend handles it uniformly
+        emit({ type: 'chunk', content: "I wasn't able to complete that in the allowed steps — please try a simpler request." })
       }
 
       if (lastMutationTool) {
@@ -153,7 +175,7 @@ export async function POST(req: NextRequest) {
         if (verification) emit({ type: 'step', content: verification })
       }
 
-      emit({ type: 'reply', content: reply })
+      emit({ type: 'done' })
       controller.close()
     },
   })
