@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
-import { timeToMins, DAY_INDEX } from '@/lib/utils'
+import { timeToMins, DAY_INDEX, getWeekdayDates } from '@/lib/utils'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/lib/google/calendar'
 import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/drive'
@@ -358,19 +358,6 @@ export async function runSyncAll(supabase: Supabase) {
   }
 }
 
-function getWeekdayDates(year: number, month: number, weekday: string): number[] {
-  const dayIndex = DAY_INDEX[weekday]
-  if (dayIndex === undefined) return []
-  const dates: number[] = []
-  const d = new Date(year, month - 1, 1)
-  while (d.getDay() !== dayIndex) d.setDate(d.getDate() + 1)
-  while (d.getMonth() === month - 1) {
-    dates.push(d.getDate())
-    d.setDate(d.getDate() + 7)
-  }
-  return dates
-}
-
 export async function getSchedule(supabase: Supabase, day: string) {
   const { data, error } = await supabase
     .from('students')
@@ -379,7 +366,6 @@ export async function getSchedule(supabase: Supabase, day: string) {
   if (error) return { error: error.message }
 
   const students = (data ?? [])
-    .filter(s => s.class_schedule?.some((slot: ClassSlot) => slot.day === day))
     .map(s => ({
       id: s.id,
       name: s.name,
@@ -387,6 +373,7 @@ export async function getSchedule(supabase: Supabase, day: string) {
         .filter(slot => slot.day === day)
         .map(slot => ({ start: slot.start, end: slot.end })),
     }))
+    .filter(s => s.slots.length > 0)
 
   return { day, students }
 }
@@ -402,11 +389,14 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
     .eq('status', 'Active')
   if (error) return { error: error.message }
 
+  const rawFees: number[] = []
   const students = (data ?? []).map(s => {
     const schedule = (s.class_schedule as ClassSlot[]) ?? []
     const slotsByDay = new Map<string, ClassSlot[]>()
     for (const slot of schedule) {
-      slotsByDay.set(slot.day, [...(slotsByDay.get(slot.day) ?? []), slot])
+      const group = slotsByDay.get(slot.day)
+      if (group) group.push(slot)
+      else slotsByDay.set(slot.day, [slot])
     }
     let fee = 0
     for (const [day, slots] of slotsByDay) {
@@ -417,10 +407,10 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
       )
       fee += dates.length * hoursPerSession * s.fee_per_hour
     }
-    return { id: s.id, name: s.name, fee: Math.round(fee * 100) / 100, _raw: fee }
+    rawFees.push(fee)
+    return { id: s.id, name: s.name, fee: Math.round(fee * 100) / 100 }
   })
 
-  const total = Math.round(students.reduce((sum, s) => sum + s._raw, 0) * 100) / 100
-  const out = students.map(({ _raw: _, ...s }) => s)
-  return { month: resolvedMonth, year: resolvedYear, students: out, total }
+  const total = Math.round(rawFees.reduce((a, b) => a + b, 0) * 100) / 100
+  return { month: resolvedMonth, year: resolvedYear, students, total }
 }

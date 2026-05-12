@@ -38,3 +38,16 @@ export const MONTH_NAMES: string[] = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ]
+
+export function getWeekdayDates(year: number, month: number, weekday: string): number[] {
+  const dayIndex = DAY_INDEX[weekday]
+  if (dayIndex === undefined) return []
+  const dates: number[] = []
+  const d = new Date(year, month - 1, 1)
+  while (d.getDay() !== dayIndex) d.setDate(d.getDate() + 1)
+  while (d.getMonth() === month - 1) {
+    dates.push(d.getDate())
+    d.setDate(d.getDate() + 7)
+  }
+  return dates
+}

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { timeToMins, MONTH_NAMES, DAY_INDEX } from '@/lib/utils'
+import { timeToMins, MONTH_NAMES, DAY_INDEX, getWeekdayDates } from '@/lib/utils'
 import type { ClassSlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -13,19 +13,6 @@ interface RequestBody {
   carryover?: number
 }
 
-
-function getWeekdayDates(year: number, month: number, weekday: string): number[] {
-  const dayIndex = DAY_INDEX[weekday]
-  if (dayIndex === undefined) return []
-  const dates: number[] = []
-  const d = new Date(year, month - 1, 1)
-  while (d.getDay() !== dayIndex) d.setDate(d.getDate() + 1)
-  while (d.getMonth() === month - 1) {
-    dates.push(d.getDate())
-    d.setDate(d.getDate() + 7)
-  }
-  return dates
-}
 
 
 function formatFee(fee: number): string {
