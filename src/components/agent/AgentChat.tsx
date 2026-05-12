@@ -64,12 +64,13 @@ export default function AgentChat() {
     const pendingId = crypto.randomUUID()
     const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [] }
 
-    const next = [...messages, userMsg]
-    setMessages([...next, pendingMsg])
+    setMessages([...messages, userMsg, pendingMsg])
     setLoading(true)
 
+    let received = false
+
     try {
-      const apiMessages = next.map(m => ({
+      const apiMessages = [...messages, userMsg].map(m => ({
         role: m.role === 'agent' ? ('model' as const) : ('user' as const),
         content: m.content,
       }))
@@ -105,10 +106,12 @@ export default function AgentChat() {
               m.id === pendingId ? { ...m, steps: [...(m.steps ?? []), event.content!] } : m
             ))
           } else if (event.type === 'chunk') {
+            received = true
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, content: (m.content ?? '') + event.content! } : m
             ))
           } else if (event.type === 'error') {
+            received = true
             setMessages(prev => prev.map(m =>
               m.id === pendingId
                 ? { ...m, content: `Something went wrong: ${event.message}` }
@@ -124,12 +127,11 @@ export default function AgentChat() {
           : m
       ))
     } finally {
-      // Fallback: stream closed without a reply event
-      setMessages(prev => prev.map(m =>
-        m.id === pendingId && !m.content
-          ? { ...m, content: 'No response received — please try again.' }
-          : m
-      ))
+      if (!received) {
+        setMessages(prev => prev.map(m =>
+          m.id === pendingId ? { ...m, content: 'No response received — please try again.' } : m
+        ))
+      }
       setLoading(false)
     }
   }

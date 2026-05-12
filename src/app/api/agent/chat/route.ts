@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
 
-      let reply = ''
+      let gotReply = false
       let lastMutationTool: { name: string; args: Record<string, unknown>; createdId?: string } | null = null
 
       try {
@@ -100,27 +100,23 @@ export async function POST(req: NextRequest) {
             const chunkText = chunk.text ?? ''
             if (chunkText) {
               roundText += chunkText
-              // Only stream text when no function calls have appeared yet this round.
-              // Gemini doesn't mix text and function calls, but guard anyway.
+              // Guard: Gemini doesn't mix text and fn-calls, but don't emit text once calls appear
               if (roundFnCalls.length === 0) {
                 emit({ type: 'chunk', content: chunkText })
               }
             }
           }
 
-          // Build model turn for conversation history
           const modelParts: Part[] = []
           if (roundText) modelParts.push({ text: roundText })
           roundFnCalls.forEach(fc => modelParts.push({ functionCall: fc }))
           if (modelParts.length > 0) contents.push({ role: 'model', parts: modelParts })
 
           if (roundFnCalls.length === 0) {
-            // Pure text round — chunks already emitted, done
-            reply = roundText
+            gotReply = true
             break
           }
 
-          // Tool-calling round
           const namedCalls = roundFnCalls.filter(fc => fc.name)
           for (const fc of namedCalls) {
             emit({ type: 'step', content: `🔧 ${fc.name}(${JSON.stringify(fc.args)})` })
@@ -160,8 +156,7 @@ export async function POST(req: NextRequest) {
         return
       }
 
-      if (!reply) {
-        // Fallback: emit as a single chunk so the frontend handles it uniformly
+      if (!gotReply) {
         emit({ type: 'chunk', content: "I wasn't able to complete that in the allowed steps — please try a simpler request." })
       }
 
