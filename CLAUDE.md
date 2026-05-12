@@ -193,6 +193,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
+**Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~15 to avoid description-space crowding that degrades tool-selection accuracy.
+
 **Tools (all 11):**
 
 | Tool | Required | Optional | Returns |
