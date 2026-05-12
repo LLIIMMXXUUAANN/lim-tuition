@@ -179,6 +179,40 @@ export const TOOL_DECLARATIONS: Tool[] = [
           required: ['student_id', 'action', 'email'],
         },
       },
+      {
+        name: 'get_schedule',
+        description:
+          'Get the list of students who have class on a given day of the week. Returns student names and their slot times for that day.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            day: {
+              type: Type.STRING,
+              enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+              description: 'Day of the week',
+            },
+          },
+          required: ['day'],
+        },
+      },
+      {
+        name: 'get_fee_summary',
+        description:
+          'Calculate total monthly tuition fee revenue across all active students. Uses exact session counts for the given month.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            month: {
+              type: Type.NUMBER,
+              description: 'Month number 1–12 (optional, defaults to current month in MYT)',
+            },
+            year: {
+              type: Type.NUMBER,
+              description: 'Year e.g. 2026 (optional, defaults to current year in MYT)',
+            },
+          },
+        },
+      },
     ],
   },
 ]
@@ -205,4 +239,6 @@ RULES — follow these exactly:
 8. Before calling sync_all_students, ask the user: "This will sync Google Calendar and Drive for all active students. Confirm?" and wait for explicit confirmation.
 9. When asking the user to confirm deletion (before calling delete_student), state explicitly that their Google Calendar events and Drive folder will also be permanently removed.
 10. After a successful setup_student_google, also include the student UUID in your reply using the same format as Rule 6: [student_id:UUID]
-11. If a tool result contains suggestGoogleSetup: true, ask the user: "Would you like me to also set up Google Calendar and Drive for [student name]?" and wait for their reply. Only call setup_student_google if they say yes.`
+11. If a tool result contains suggestGoogleSetup: true, ask the user: "Would you like me to also set up Google Calendar and Drive for [student name]?" and wait for their reply. Only call setup_student_google if they say yes.
+12. Use get_schedule when the user asks who they have class with on a specific day. The current date is injected at the top of this prompt — use it to resolve "today", "tomorrow", and relative day references to the correct Monday–Sunday day name before calling. Format results as a table: Name | Time (12-hour format, e.g. 3:00 PM – 5:00 PM). If students is empty, say "No classes on [day]."
+13. Use get_fee_summary when the user asks about monthly revenue, total fees, income, or earnings. If no month or year is specified, omit them from the tool call (the tool defaults to the current month). Format results as a table: Name | Fee (RM), with a bold **Total** row at the bottom showing the grand total.`
