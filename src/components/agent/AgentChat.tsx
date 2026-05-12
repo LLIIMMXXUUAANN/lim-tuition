@@ -28,7 +28,6 @@ function loadStoredMessages(): ChatMessage[] {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return []
     const parsed = JSON.parse(stored) as ChatMessage[]
-    // ensure all messages have ids (migration for old stored data)
     return parsed.map(m => m.id ? m : { ...m, id: crypto.randomUUID() })
   } catch {
     return []
@@ -61,8 +60,12 @@ export default function AgentChat() {
     if (!text || loading) return
     setInput('')
 
-    const next: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: 'user', content: text }]
-    setMessages(next)
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text }
+    const pendingId = crypto.randomUUID()
+    const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [] }
+
+    const next = [...messages, userMsg]
+    setMessages([...next, pendingMsg])
     setLoading(true)
 
     try {
@@ -77,23 +80,56 @@ export default function AgentChat() {
         body: JSON.stringify({ messages: apiMessages }),
       })
 
-      const data = await res.json() as { reply?: string; steps?: string[]; error?: string }
-      if (!res.ok) throw new Error(data.error ?? 'Request failed')
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error ?? 'Request failed')
+      }
 
-      setMessages(prev => [
-        ...prev,
-        { id: crypto.randomUUID(), role: 'agent', content: data.reply ?? '', steps: data.steps ?? [] },
-      ])
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()!
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const json = line.slice(6).trim()
+          if (!json) continue
+          const event = JSON.parse(json) as { type: string; content?: string; message?: string }
+          if (event.type === 'step') {
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId ? { ...m, steps: [...(m.steps ?? []), event.content!] } : m
+            ))
+          } else if (event.type === 'reply') {
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId ? { ...m, content: event.content! } : m
+            ))
+          } else if (event.type === 'error') {
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId
+                ? { ...m, content: `Something went wrong: ${event.message}` }
+                : m
+            ))
+          }
+        }
+      }
     } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'agent',
-          content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        },
-      ])
+      setMessages(prev => prev.map(m =>
+        m.id === pendingId
+          ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}` }
+          : m
+      ))
     } finally {
+      // Fallback: stream closed without a reply event
+      setMessages(prev => prev.map(m =>
+        m.id === pendingId && !m.content
+          ? { ...m, content: 'No response received — please try again.' }
+          : m
+      ))
       setLoading(false)
     }
   }
@@ -152,40 +188,38 @@ export default function AgentChat() {
                       ))}
                     </div>
                   )}
-                  <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ href, children }) => {
-                          if (href?.startsWith('mailto:')) return <span>{children}</span>
-                          return <a href={href} className="text-navy underline">{children}</a>
-                        },
-                      }}
-                    >{msgText}</ReactMarkdown>
-                  </div>
-                  {studentId && (
-                    <div className="flex justify-end mt-2">
-                      <Link
-                        href={`/admin/students/${studentId}`}
-                        className="text-xs font-medium text-navy hover:underline"
-                      >
-                        View student →
-                      </Link>
-                    </div>
+                  {!msg.content ? (
+                    <span className="animate-pulse text-slate-400 text-sm">⋯</span>
+                  ) : (
+                    <>
+                      <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ href, children }) => {
+                              if (href?.startsWith('mailto:')) return <span>{children}</span>
+                              return <a href={href} className="text-navy underline">{children}</a>
+                            },
+                          }}
+                        >{msgText}</ReactMarkdown>
+                      </div>
+                      {studentId && (
+                        <div className="flex justify-end mt-2">
+                          <Link
+                            href={`/admin/students/${studentId}`}
+                            className="text-xs font-medium text-navy hover:underline"
+                          >
+                            View student →
+                          </Link>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
             </div>
           )
         })}
-
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-400 shadow-sm">
-              <span className="animate-pulse text-sm">⋯</span>
-            </div>
-          </div>
-        )}
 
         <div ref={bottomRef} />
       </div>

@@ -45,6 +45,11 @@ async function executeTool(
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
 const MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  'Connection': 'keep-alive',
+}
 
 export async function POST(req: NextRequest) {
   const { supabase, error } = await requireTutor()
@@ -63,74 +68,95 @@ export async function POST(req: NextRequest) {
     parts: [{ text: m.content }],
   }))
 
-  const steps: string[] = []
-  let reply = ''
-  let lastMutationTool: { name: string; args: Record<string, unknown>; createdId?: string } | null = null
+  const encoder = new TextEncoder()
 
-  try {
-    for (let round = 0; round < 10; round++) {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents,
-        config: {
-          tools: TOOL_DECLARATIONS,
-          systemInstruction: SYSTEM_INSTRUCTION,
-        },
-      })
-
-      const fnCalls = response.functionCalls ?? []
-
-      if (fnCalls.length === 0) {
-        reply = response.text ?? ''
-        break
+  const stream = new ReadableStream({
+    async start(controller) {
+      function emit(data: object) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
 
-      const modelContent = response.candidates?.[0]?.content
-      if (modelContent) contents.push(modelContent)
+      let reply = ''
+      let lastMutationTool: { name: string; args: Record<string, unknown>; createdId?: string } | null = null
 
-      const namedCalls = fnCalls.filter(fc => fc.name)
-      for (const fc of namedCalls) steps.push(`🔧 ${fc.name}(${JSON.stringify(fc.args)})`)
+      try {
+        for (let round = 0; round < 10; round++) {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents,
+            config: {
+              tools: TOOL_DECLARATIONS,
+              systemInstruction: SYSTEM_INSTRUCTION,
+            },
+          })
 
-      const toolResults = await Promise.all(
-        namedCalls.map(fc => executeTool(fc.name!, fc.args as Record<string, unknown>, supabase))
-      )
+          const fnCalls = response.functionCalls ?? []
 
-      const fnResponseParts: Array<{
-        functionResponse: { name: string; id?: string; response: Record<string, unknown> }
-      }> = []
+          if (fnCalls.length === 0) {
+            reply = response.text ?? ''
+            break
+          }
 
-      for (let i = 0; i < namedCalls.length; i++) {
-        const fc = namedCalls[i]
-        const result = toolResults[i]
-        fnResponseParts.push({
-          functionResponse: {
-            name: fc.name!,
-            ...(fc.id ? { id: fc.id } : {}),
-            response: { result },
-          },
-        })
-        if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
-          const created = (result as { student: { id: string } }).student
-          lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
-        } else if (MUTATION_TOOLS.has(fc.name!)) {
-          lastMutationTool = { name: fc.name!, args: fc.args as Record<string, unknown> }
+          const modelContent = response.candidates?.[0]?.content
+          if (modelContent) contents.push(modelContent)
+
+          const namedCalls = fnCalls.filter(fc => fc.name)
+          for (const fc of namedCalls) {
+            emit({ type: 'step', content: `🔧 ${fc.name}(${JSON.stringify(fc.args)})` })
+          }
+
+          const toolResults = await Promise.all(
+            namedCalls.map(fc => executeTool(fc.name!, fc.args as Record<string, unknown>, supabase))
+          )
+
+          const fnResponseParts: Array<{
+            functionResponse: { name: string; id?: string; response: Record<string, unknown> }
+          }> = []
+
+          for (let i = 0; i < namedCalls.length; i++) {
+            const fc = namedCalls[i]
+            const result = toolResults[i]
+            fnResponseParts.push({
+              functionResponse: {
+                name: fc.name!,
+                ...(fc.id ? { id: fc.id } : {}),
+                response: { result },
+              },
+            })
+            if (fc.name === 'create_student' && typeof result === 'object' && result !== null && 'student' in result) {
+              const created = (result as { student: { id: string } }).student
+              lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
+            } else if (MUTATION_TOOLS.has(fc.name!)) {
+              lastMutationTool = { name: fc.name!, args: fc.args as Record<string, unknown> }
+            }
+          }
+
+          contents.push({ role: 'user', parts: fnResponseParts })
         }
+      } catch (err) {
+        emit({ type: 'error', message: errMsg(err, 'Gemini API error') })
+        controller.close()
+        return
       }
 
-      contents.push({ role: 'user', parts: fnResponseParts })
-    }
-  } catch (err) {
-    return NextResponse.json({ error: errMsg(err, 'Gemini API error') }, { status: 500 })
-  }
+      if (!reply) {
+        reply = "I wasn't able to complete that in the allowed steps — please try a simpler request."
+      }
 
-  if (!reply) {
-    reply = "I wasn't able to complete that in the allowed steps — please try a simpler request."
-  }
+      if (lastMutationTool) {
+        const verification = await selfEval(
+          lastMutationTool.name,
+          lastMutationTool.args,
+          supabase,
+          lastMutationTool.createdId,
+        )
+        if (verification) emit({ type: 'step', content: verification })
+      }
 
-  if (lastMutationTool) {
-    const verification = await selfEval(lastMutationTool.name, lastMutationTool.args, supabase, lastMutationTool.createdId)
-    if (verification) steps.push(verification)
-  }
+      emit({ type: 'reply', content: reply })
+      controller.close()
+    },
+  })
 
-  return NextResponse.json({ reply, steps })
+  return new Response(stream, { headers: SSE_HEADERS })
 }
