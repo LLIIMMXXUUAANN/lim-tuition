@@ -82,7 +82,7 @@ export async function managePortalAccess(
 
 export async function listStudents(
   supabase: Supabase,
-  params: { status?: string; day?: string },
+  params: { status?: string },
 ) {
   const VALID_STATUSES = new Set(['Active', 'On Hold', 'Completed'])
   if (params.status && !VALID_STATUSES.has(params.status)) {
@@ -99,14 +99,7 @@ export async function listStudents(
   const { data, error } = await query
   if (error) return { error: error.message }
 
-  let students = data ?? []
-  if (params.day) {
-    students = students.filter((s: { class_schedule: ClassSlot[] | null }) =>
-      s.class_schedule?.some((slot: ClassSlot) => slot.day === params.day)
-    )
-  }
-
-  return { students }
+  return { students: data ?? [] }
 }
 
 export async function createStudent(

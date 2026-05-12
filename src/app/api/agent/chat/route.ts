@@ -26,7 +26,7 @@ async function executeTool(
     case 'get_student':
       return getStudent(supabase, args.id as string)
     case 'list_students':
-      return listStudents(supabase, args as { status?: string; day?: string })
+      return listStudents(supabase, args as { status?: string })
     case 'create_student':
       return createStudent(supabase, args as Parameters<typeof createStudent>[1])
     case 'update_student':
