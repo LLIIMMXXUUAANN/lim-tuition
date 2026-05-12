@@ -210,12 +210,14 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 **Function-calling loop (`api/agent/chat/route.ts`):**
 - Receives full `messages[]` history on every request (stateless — frontend owns history)
 - Maps frontend `role: 'agent'` → Gemini `role: 'model'` before sending
-- Runs up to 10 rounds; exits early when Gemini returns no function calls
-- Within each round, all function calls are executed in parallel via `Promise.all` (Gemini can return multiple calls per round)
-- Steps are pushed in call order before parallel execution so display order is stable
+- Returns a `text/event-stream` SSE `Response` (not JSON). SSE event types: `{ type: 'step', content }` for tool calls, `{ type: 'chunk', content }` for streamed text tokens, `{ type: 'done' }` on completion, `{ type: 'error', message }` on failure.
+- Runs up to 10 rounds using `generateContentStream` for all rounds. Tool-calling rounds accumulate `FunctionCall[]` from chunks and emit `step` events immediately after each tool fires. The final text-only round (`roundFnCalls.length === 0`) streams `chunk` events token-by-token as Gemini produces them. Guard: text is only emitted while no function calls have appeared in the current round (`roundFnCalls.length === 0` inside the chunk loop).
+- After each round, model content (text + fn-call parts) is reconstructed from the accumulated chunks and pushed to `contents` for conversation history.
+- Within each tool-calling round, all function calls are executed in parallel via `Promise.all` (Gemini can return multiple calls per round); steps are emitted in call order before parallel execution so display order is stable.
+- `gotReply` boolean tracks whether a text round completed; if false after the loop, emits a fallback `chunk` event.
 - `lastMutationTool` tracks the final mutation in the loop for `selfEval` (create captures `createdId` from the tool result; update/delete/setup use `MUTATION_TOOLS` set)
 - `MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])` — named constant at module level; used for both mutation tracking and selfEval dispatch
-- Returns `{ reply: string, steps: string[] }` — steps are displayed above the reply in the UI
+- `selfEval` result is emitted as a final `step` event before `done`
 
 **Self-evaluation (`lib/agent/eval.ts`):**
 - `selfEval(toolName, args, supabase, createdId?)` — runs after the loop completes if any mutation occurred
@@ -255,6 +257,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `messages` state lazy-initialised from `localStorage` (key: `agent_chat_messages`); persisted on every change via `useEffect`
 - Stored messages include `id` (UUID), `role` (`'user'` | `'agent'`), `content`, and `steps[]`
 - `loadStoredMessages` migrates old stored messages without `id` by generating UUIDs on load
+- **SSE streaming:** on send, a placeholder agent message (`content: ''`, `steps: []`) is added immediately. `send()` reads the SSE response body via `ReadableStream` reader + `TextDecoder` with a line-buffer. `step` events append to the placeholder's `steps[]`; `chunk` events append to `content` (text builds up progressively); `error` events set `content` to the error string. A `received` flag is set on first `chunk` or `error` event; the `finally` block only sets a fallback message if `!received` (avoids a no-op map on every successful request).
+- The placeholder bubble shows `⋯` while `content === ''`; it transitions directly to steps + streaming text as events arrive. There is no separate loading bubble.
 - Reply rendered via `<ReactMarkdown remarkPlugins={[remarkGfm]}>` — supports GFM tables, bold, blockquotes, links
 - Custom `a` renderer: `mailto:` links render as `<span>` (prevents remark-gfm from auto-linking email addresses as clickable mailto links)
 - Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)

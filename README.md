@@ -46,6 +46,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. For students with no stored event IDs it first searches Calendar by name to find and save them, then patches. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
 - **AI Agent** — natural language interface at `/admin/agent` powered by Gemini 2.5 Flash function calling. Type commands like "Create student LX, Other Syllabus, Monday 3–5pm, RM 60/hr", "Update John's fee to RM 80", or "Show all active Monday students". Gemini drives a multi-round tool loop (up to 10 rounds) that executes against Supabase and Google APIs, then self-evaluates that mutations persisted. Conversation history is sent on every request and persisted to localStorage across page refreshes.
   - **9 tools:** `search_students`, `get_student`, `list_students`, `create_student`, `update_student`, `delete_student`, `setup_student_google`, `sync_all_students`, `manage_portal_access`
+  - **SSE streaming:** the route returns `text/event-stream` — tool steps appear immediately as each tool fires, and the final reply streams token-by-token via `generateContentStream`. The frontend patches a placeholder message in place as events arrive.
   - **Auto Google sync:** updating a student's `class_schedule` via the agent automatically patches Calendar events and rewrites the Drive Meet doc (parallel, non-fatal)
   - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
   - **Safety:** `delete_student` requires explicit "yes" in conversation + warns about Calendar/Drive removal; `update_student` uses `ALLOWED_UPDATE_KEYS` allowlist to prevent prompt injection; `sync_all_students` requires explicit confirmation
@@ -95,7 +96,7 @@ src/
     admin/(app)/templates/        → message templates + payment generator
     admin/(app)/timetable/        → weekly availability grid
     admin/(app)/agent/            → AI agent chat UI
-    api/agent/                    → Gemini function-calling loop (max 10 rounds, parallel tool execution)
+    api/agent/                    → Gemini function-calling loop (max 10 rounds, SSE streaming, parallel tool execution)
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
