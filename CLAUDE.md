@@ -199,7 +199,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 |---|---|---|---|
 | `search_students` | `query` | — | `{ students: [{ id, name, status, class_schedule }] }` |
 | `get_student` | `id` | — | `{ student: <all fields> }` |
-| `list_students` | — | `status`, `day` | `{ students: [{ id, name, status, mode, fee_per_hour, class_schedule }] }` |
+| `list_students` | — | `status` | `{ students: [{ id, name, status, mode, fee_per_hour, class_schedule }] }` |
 | `create_student` | `name`, `mode`, `fee_per_hour` | all other fields | `{ student: { id, name }, suggestGoogleSetup?: true }` |
 | `update_student` | `id`, `fields` | — | `{ success: true, googleWarnings?: string[], suggestGoogleSetup?: true }` |
 | `delete_student` | `id` | — | `{ success: true, warnings?: string[] }` |
