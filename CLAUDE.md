@@ -189,11 +189,11 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`agent/page.tsx`** — thin server component wrapper; renders `<AgentChat />`
 - **`components/agent/AgentChat.tsx`** — client component; see UI section below
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
-- **`lib/agent/tools.ts`** — all 9 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`lib/agent/tools.ts`** — all 11 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
 - **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
-**Tools (all 9):**
+**Tools (all 11):**
 
 | Tool | Required | Optional | Returns |
 |---|---|---|---|
@@ -206,8 +206,11 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 | `setup_student_google` | `student_id` | — | `{ result: string }` or `{ error: string }` |
 | `sync_all_students` | — | — | `{ results: [...] }` |
 | `manage_portal_access` | `student_id`, `action`, `email` | — | `{ result: string }` |
+| `get_schedule` | `day` (Monday–Sunday) | — | `{ day, students: [{ id, name, slots: [{ start, end }] }] }` |
+| `get_fee_summary` | — | `month`, `year` | `{ month, year, students: [{ id, name, fee }], total }` |
 
 **Function-calling loop (`api/agent/chat/route.ts`):**
+- Current MYT date is prepended to `SYSTEM_INSTRUCTION` at request time via `Intl.DateTimeFormat('en-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long', ... })` so Gemini can resolve "today"/"tomorrow" before calling `get_schedule`
 - Receives full `messages[]` history on every request (stateless — frontend owns history)
 - Maps frontend `role: 'agent'` → Gemini `role: 'model'` before sending
 - Returns a `text/event-stream` SSE `Response` (not JSON). SSE event types: `{ type: 'step', content }` for tool calls, `{ type: 'chunk', content }` for streamed text tokens, `{ type: 'done' }` on completion, `{ type: 'error', message }` on failure.
@@ -234,6 +237,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `setup_student_google` fetches the student's `mode` from the DB and passes it to `createStudentDriveFolder` — so Other Syllabus students get a Meet-doc-only folder, Python Syllabus students get the full 4-subfolder structure
 - `delete_student` attempts Google cleanup (Drive trash + Calendar delete) before the DB delete; Google failure is non-fatal
 - `errMsg(err, fallback)` — `err instanceof Error ? err.message : fallback` — use this everywhere instead of inlining
+- `getSchedule` fetches all active students, maps to `{ id, name, slots }` filtering slots to the requested day, then filters out students with no matching slots — single pass (map then filter), no redundant `.some()` pre-check
+- `getFeeSummary` uses `getWeekdayDates` (from `src/lib/utils.ts`) for exact session counting; tracks raw fees in a parallel array to avoid per-student rounding accumulation before summing the total
 
 **System instruction rules summary (`lib/agent/schema.ts`):**
 1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
@@ -247,6 +252,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 9. Delete confirmation must mention Google Calendar/Drive removal
 10. After `setup_student_google` → also append `[student_id:UUID]`
 11. If tool result has `suggestGoogleSetup: true` → ask user if they want Google setup; only call `setup_student_google` on yes
+12. `get_schedule`: resolve "today"/"tomorrow" using injected date; format as Name | Time table (12-hour); say "No classes on [day]" if empty
+13. `get_fee_summary`: use for any revenue/fee/income query (all students or a specific student); omit month/year if not specified; format as Name | Fee (RM) table with bold Total row; for single-student query, find the student in the returned list and report only their fee
 
 **`[student_id:UUID]` token protocol:**
 - Gemini appends `[student_id:UUID]` literally at the end of replies after create/update/setup
@@ -284,5 +291,5 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
 - The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.
 - Times are stored as `"HH:MM"` strings in Supabase but displayed in 12-hour format. Use `formatTime` from `src/lib/utils.ts` for all display. Do **not** apply it to `ClassScheduleEditor` inputs or `PaymentGenerator` (those need raw `HH:MM`).
-- `DAYS`, `TIME_SLOTS`, `timeToMins`, `DAY_INDEX`, and `MONTH_NAMES` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. `DAY_INDEX` maps day name → `Date.getDay()` number (Sunday = 0). `MONTH_NAMES` is the 12-element month name array. Never redeclare these constants in route files or components.
+- `DAYS`, `TIME_SLOTS`, `timeToMins`, `DAY_INDEX`, `MONTH_NAMES`, and `getWeekdayDates` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. `getWeekdayDates(year, month, weekday)` returns all dates (as day-of-month numbers) in that month that fall on the given weekday — used by both `getFeeSummary` and the payment generator. `DAY_INDEX` maps day name → `Date.getDay()` number (Sunday = 0). `MONTH_NAMES` is the 12-element month name array. Never redeclare these constants in route files or components.
 - `useClipboard()` hook lives in `src/lib/hooks/useClipboard.ts` — returns `{ copied, copy }`. Use it anywhere a copy-to-clipboard button is needed; it handles the `navigator.clipboard` promise and the reset timer internally.
