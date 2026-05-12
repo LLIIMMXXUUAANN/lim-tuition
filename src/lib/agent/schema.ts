@@ -31,7 +31,7 @@ export const TOOL_DECLARATIONS: Tool[] = [
       {
         name: 'list_students',
         description:
-          'List students with optional filters. Use when the user asks to see all students, students on a specific day, or students with a specific status. Supports combining both filters.',
+          'List students with an optional status filter. Use when the user asks to see all students or students with a specific status. For day-based schedule queries ("who do I have on Monday?"), use get_schedule instead.',
         parameters: {
           type: Type.OBJECT,
           properties: {
@@ -39,11 +39,6 @@ export const TOOL_DECLARATIONS: Tool[] = [
               type: Type.STRING,
               enum: ['Active', 'On Hold', 'Completed'],
               description: 'Filter by student status (optional)',
-            },
-            day: {
-              type: Type.STRING,
-              enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-              description: 'Filter by class day (optional)',
             },
           },
         },
@@ -234,7 +229,7 @@ RULES — follow these exactly:
     - Render Google Meet and Drive URLs as markdown links: [Meet link](url), [Drive folder](url).
     - For multi-line fields like notes or homework, use a blockquote (> text).
     - When displaying list_students results, use a table with columns: Name | Mode | Fee/hr | Schedule. Compress schedule into one cell e.g. "Mon 18:45–19:45, Wed 11:00–12:00". Do NOT call get_student for each result.
-    - Use list_students (not search_students) whenever the user asks to see all students, active students, students by day, or any roster-style query — even if they don't say the word "list".
+    - Use list_students (not search_students) whenever the user asks to see all students, active students, or any roster-style query — even if they don't say the word "list". For day-based queries ("who do I have on Monday?"), use get_schedule instead.
     - When displaying a single student's full details, group fields: basic info → contact → schedule → Google → other.
 8. Before calling sync_all_students, ask the user: "This will sync Google Calendar and Drive for all active students. Confirm?" and wait for explicit confirmation.
 9. When asking the user to confirm deletion (before calling delete_student), state explicitly that their Google Calendar events and Drive folder will also be permanently removed.
