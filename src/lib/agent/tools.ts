@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
-import { timeToMins, DAY_INDEX, getWeekdayDates } from '@/lib/utils'
+import { timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, formatFee, ordinal, oxfordList, groupSlotsByDay } from '@/lib/utils'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/lib/google/calendar'
 import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/drive'
@@ -390,6 +390,64 @@ export async function getTemplate(supabase: Supabase, id: string) {
   return { template: { id: data.id, ...templateMeta(data.id), content: data.content as string } }
 }
 
+export async function generatePaymentMessage(
+  supabase: Supabase,
+  params: {
+    student_id: string
+    month?: number
+    year?: number
+    template_type?: 1 | 2
+    carryover?: number
+  }
+) {
+  const myt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }))
+  myt.setMonth(myt.getMonth() + 1)
+  const resolvedMonth = params.month ?? (myt.getMonth() + 1)
+  const resolvedYear = params.year ?? myt.getFullYear()
+  const templateType = params.template_type ?? 1
+  const carryover = params.carryover ?? 0
+
+  const { data: student, error } = await supabase
+    .from('students')
+    .select('name, contact_person, class_schedule, fee_per_hour, status')
+    .eq('id', params.student_id)
+    .single()
+
+  if (error || !student) return { error: 'Student not found' }
+  if (student.status !== 'Active') return { error: 'Student is not active' }
+
+  const schedule = (student.class_schedule as ClassSlot[]) ?? []
+  const slotsByDay = groupSlotsByDay(schedule)
+
+  const allDates: number[] = []
+  let sessionFeeTotal = 0
+  for (const [day, slots] of slotsByDay) {
+    const dates = getWeekdayDates(resolvedYear, resolvedMonth, day)
+    allDates.push(...dates)
+    const hoursPerSession = slots.reduce((sum, s) => sum + (timeToMins(s.end) - timeToMins(s.start)) / 60, 0)
+    sessionFeeTotal += dates.length * hoursPerSession * student.fee_per_hour
+  }
+  allDates.sort((a, b) => a - b)
+
+  if (allDates.length === 0) return { error: 'No scheduled class days found for this student' }
+
+  const dateList = oxfordList(allDates.map(ordinal))
+  const monthName = MONTH_NAMES[resolvedMonth - 1]
+  const cp = student.contact_person?.trim()
+  const recipient = (!cp || cp === '-') ? student.name : cp
+  const sessionCount = allDates.length
+
+  const message = templateType === 1
+    ? `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}), bringing the total to RM${formatFee(sessionFeeTotal)}. Thank you 😄`
+    : (() => {
+        const coFee = carryover * (sessionFeeTotal / sessionCount)
+        const coLabel = `${carryover} session${carryover === 1 ? '' : 's'}`
+        return `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(sessionFeeTotal - coFee)}. Thank you. 😄`
+      })()
+
+  return { message, month: resolvedMonth, year: resolvedYear, monthName }
+}
+
 export async function getFeeSummary(supabase: Supabase, month?: number, year?: number) {
   const myt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }))
   const resolvedMonth = month ?? (myt.getMonth() + 1)
@@ -404,12 +462,7 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
   const rawFees: number[] = []
   const students = (data ?? []).map(s => {
     const schedule = (s.class_schedule as ClassSlot[]) ?? []
-    const slotsByDay = new Map<string, ClassSlot[]>()
-    for (const slot of schedule) {
-      const group = slotsByDay.get(slot.day)
-      if (group) group.push(slot)
-      else slotsByDay.set(slot.day, [slot])
-    }
+    const slotsByDay = groupSlotsByDay(schedule)
     let fee = 0
     for (const [day, slots] of slotsByDay) {
       const dates = getWeekdayDates(resolvedYear, resolvedMonth, day)

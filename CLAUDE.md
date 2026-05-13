@@ -57,7 +57,7 @@ src/app/
       students/                   → student list (grouped by day), detail, new form
       templates/                  → Supabase-backed editable message templates
       timetable/                  → weekly availability grid + two PNG exports
-      agent/                      → AI agent chat UI (v1: students CRUD only)
+      agent/                      → AI agent chat UI (students CRUD, templates, payment messages)
   student/
     login/page.tsx                → student portal magic link login
     (portal)/                     → route group: portal pages share portal nav layout
@@ -176,10 +176,10 @@ Admin-only features for creating a student's Google Drive folder and weekly recu
 ### Payment generator (`src/app/api/generate-payment/route.ts`)
 
 POST route handler. No external AI — pure JS date arithmetic:
-- Groups `class_schedule` slots by day, finds all occurrences of each weekday in the given month
+- Groups `class_schedule` slots by day via `groupSlotsByDay` (from `src/lib/utils.ts`), finds all occurrences of each weekday in the given month
 - Fee = `fee_per_hour × duration_hours × session_count` per day, summed across all days
 - Template 2 (carryover): deducts `carryover × avg_fee_per_session` from the total (tutor owes student those sessions)
-- `formatFee` rounds to 2 d.p. before integer check to avoid floating-point noise
+- `formatFee`, `ordinal`, `oxfordList` are shared utilities from `src/lib/utils.ts` — do not redefine them locally
 
 ### AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/`, `src/lib/agent/`)
 
@@ -189,13 +189,13 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`agent/page.tsx`** — thin server component wrapper; renders `<AgentChat />`
 - **`components/agent/AgentChat.tsx`** — client component; see UI section below
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
-- **`lib/agent/tools.ts`** — all 13 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`lib/agent/tools.ts`** — all 14 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
 - **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
 **Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`, `list_templates`, `get_template`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~15 to avoid description-space crowding that degrades tool-selection accuracy.
 
-**Tools (all 13):**
+**Tools (all 14):**
 
 | Tool | Required | Optional | Returns |
 |---|---|---|---|
@@ -212,6 +212,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 | `get_fee_summary` | — | `month`, `year` | `{ month, year, students: [{ id, name, fee }], total }` |
 | `list_templates` | — | — | `{ templates: [{ id, title, description }] }` |
 | `get_template` | `id` | — | `{ template: { id, title, description, content } }` |
+| `generate_payment_message` | `student_id` | `month`, `year`, `template_type`, `carryover` | `{ message, month, year, monthName }` |
 
 **Function-calling loop (`api/agent/chat/route.ts`):**
 - Current MYT date is prepended to `SYSTEM_INSTRUCTION` at request time via `Intl.DateTimeFormat('en-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long', ... })` so Gemini can resolve "today"/"tomorrow" before calling `get_schedule`
@@ -246,6 +247,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `getFeeSummary` uses `getWeekdayDates` (from `src/lib/utils.ts`) for exact session counting; tracks raw fees in a parallel array to avoid per-student rounding accumulation before summing the total
 - `listTemplates` is a pure synchronous function — no DB call. All metadata (id, title, description) lives in the in-memory `TEMPLATE_META` from `src/lib/templates.ts`; only `get_template` hits the DB to fetch `content`
 - `getTemplate` uses `.maybeSingle()` and returns `{ id, title, description, content }` via `templateMeta(id)` helper from `src/lib/templates.ts`
+- `generatePaymentMessage` defaults to next calendar month (MYT) when `month`/`year` are omitted; uses `groupSlotsByDay`, `formatFee`, `ordinal`, `oxfordList` from `src/lib/utils.ts`; `template_type 2` deducts `carryover × avg_fee_per_session`; returns `{ message, month, year, monthName }`
 
 **System instruction rules summary (`lib/agent/schema.ts`):**
 1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
@@ -263,6 +265,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 13. `get_fee_summary`: use for any revenue/fee/income query (all students or a specific student); omit month/year if not specified; format as Name | Fee (RM) table with bold Total row; for single-student query, find the student in the returned list and report only their fee
 14. When the user's request involves multiple independent operations, call all relevant tools in a single round (e.g. search two students at once, update two students at once). Only serialise when one call's output is required as input for the next.
 15. Templates: call `get_template` directly when the template is clear (e.g. "first approach", "payment"); call `list_templates` first only when ambiguous. Display template as bold title on its own line, then content in a fenced code block (no language tag).
+16. `generate_payment_message`: use when the user asks to generate a payment message/reminder for a student. Omit month/year if not specified (defaults to next month). Ask about carryover only if the user mentions it — otherwise default to `template_type 1`. Display result as bold header (e.g. "**Payment reminder — June 2026**") then message in a fenced code block.
 
 **`[student_id:NAME:UUID]` token protocol:**
 - Gemini appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update/setup
@@ -302,5 +305,5 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
 - The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.
 - Times are stored as `"HH:MM"` strings in Supabase but displayed in 12-hour format. Use `formatTime` from `src/lib/utils.ts` for all display. Do **not** apply it to `ClassScheduleEditor` inputs or `PaymentGenerator` (those need raw `HH:MM`).
-- `DAYS`, `TIME_SLOTS`, `timeToMins`, `DAY_INDEX`, `MONTH_NAMES`, and `getWeekdayDates` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. `getWeekdayDates(year, month, weekday)` returns all dates (as day-of-month numbers) in that month that fall on the given weekday — used by both `getFeeSummary` and the payment generator. `DAY_INDEX` maps day name → `Date.getDay()` number (Sunday = 0). `MONTH_NAMES` is the 12-element month name array. Never redeclare these constants in route files or components.
+- `DAYS`, `TIME_SLOTS`, `timeToMins`, `DAY_INDEX`, `MONTH_NAMES`, `getWeekdayDates`, `formatFee`, `ordinal`, `oxfordList`, and `groupSlotsByDay` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. `getWeekdayDates(year, month, weekday)` returns all dates (as day-of-month numbers) in that month that fall on the given weekday. `groupSlotsByDay(schedule)` groups a `ClassSlot[]` into a `Map<string, ClassSlot[]>` keyed by day — used by `generatePaymentMessage`, `getFeeSummary`, and the payment route. `formatFee` rounds to 2 d.p. and strips trailing `.00`. `ordinal` converts a number to ordinal string (`1st`, `2nd`, …). `oxfordList` joins an array with Oxford comma. Never redeclare any of these in route files or components.
 - `useClipboard()` hook lives in `src/lib/hooks/useClipboard.ts` — returns `{ copied, copy }`. Use it anywhere a copy-to-clipboard button is needed; it handles the `navigator.clipboard` promise and the reset timer internally.

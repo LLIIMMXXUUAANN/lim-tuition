@@ -234,6 +234,34 @@ export const TOOL_DECLARATIONS: Tool[] = [
           required: ['id'],
         },
       },
+      {
+        name: 'generate_payment_message',
+        description:
+          'Generate a ready-to-send payment reminder message for a student. Automatically calculates session dates and total fee from the student\'s schedule and fee rate. Defaults to next calendar month if month/year are not specified.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            student_id: { type: Type.STRING, description: 'Student UUID' },
+            month: {
+              type: Type.NUMBER,
+              description: 'Month 1–12 (optional, defaults to next month in MYT)',
+            },
+            year: {
+              type: Type.NUMBER,
+              description: 'Year e.g. 2026 (optional, defaults to next month\'s year in MYT)',
+            },
+            template_type: {
+              type: Type.NUMBER,
+              description: '1 = standard reminder, 2 = with carryover sessions deducted from total (optional, defaults to 1)',
+            },
+            carryover: {
+              type: Type.NUMBER,
+              description: 'Number of sessions from the previous month to carry over and deduct (only used when template_type is 2)',
+            },
+          },
+          required: ['student_id'],
+        },
+      },
     ],
   },
 ]
@@ -264,4 +292,5 @@ RULES — follow these exactly:
 12. Use get_schedule when the user asks who they have class with on a specific day. The current date is injected at the top of this prompt — use it to resolve "today", "tomorrow", and relative day references to the correct Monday–Sunday day name before calling. Format results as a table: Name | Time (12-hour format, e.g. 3:00 PM – 5:00 PM). If students is empty, say "No classes on [day]."
 13. Use get_fee_summary when the user asks about monthly revenue, total fees, income, or earnings — whether for all students or a specific student. If no month or year is specified, omit them from the tool call (the tool defaults to the current month). The tool returns per-student fees; if the user asked about a specific student, find that student in the returned list and report only their fee. Format all-student results as a table: Name | Fee (RM) with a bold **Total** row. For a single-student query, just state their fee directly.
 14. When the user's request involves multiple independent operations, call all the relevant tools in a single response round rather than one at a time. For example: if asked to search for two students, call search_students for both in the same round; if asked to update two students whose IDs are already known, call update_student for both in the same round. Only serialise tool calls when one call's output is required as input for the next call.
-15. For template requests: if the user names a specific template (e.g. "payment", "first approach", "review"), call get_template directly with the matching id. If it is unclear which template they mean, call list_templates first. When displaying a template, format your reply as: one line with the title (e.g. "**First Approach**"), then a blank line, then the full content inside a fenced code block (triple backticks, no language tag) so it is easy to copy. Never put the title and "Content:" label on the same line.`
+15. For template requests: if the user names a specific template (e.g. "payment", "first approach", "review"), call get_template directly with the matching id. If it is unclear which template they mean, call list_templates first. When displaying a template, format your reply as: one line with the title (e.g. "**First Approach**"), then a blank line, then the full content inside a fenced code block (triple backticks, no language tag) so it is easy to copy. Never put the title and "Content:" label on the same line.
+16. Use generate_payment_message when the user asks to generate a payment message or reminder for a student. If no month or year is specified, omit them (the tool defaults to next month). Ask whether to use carryover (template_type 2) only if the user mentions it — otherwise default to template_type 1. Display the result with a one-line header (e.g. "**Payment reminder — June 2026**") then the message in a fenced code block for easy copying.`

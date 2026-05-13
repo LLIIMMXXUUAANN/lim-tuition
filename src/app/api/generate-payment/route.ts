@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { timeToMins, MONTH_NAMES, DAY_INDEX, getWeekdayDates } from '@/lib/utils'
+import { timeToMins, MONTH_NAMES, getWeekdayDates, formatFee, ordinal, oxfordList, groupSlotsByDay } from '@/lib/utils'
 import type { ClassSlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -11,31 +11,6 @@ interface RequestBody {
   year: number
   templateType: 1 | 2
   carryover?: number
-}
-
-
-
-function formatFee(fee: number): string {
-  const rounded = Math.round(fee * 100) / 100
-  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(2)
-}
-
-function ordinal(n: number): string {
-  const v = n % 100
-  if (v >= 11 && v <= 13) return `${n}th`
-  switch (n % 10) {
-    case 1: return `${n}st`
-    case 2: return `${n}nd`
-    case 3: return `${n}rd`
-    default: return `${n}th`
-  }
-}
-
-function oxfordList(items: string[]): string {
-  if (items.length === 0) return ''
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} and ${items[1]}`
-  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
 }
 
 export async function POST(request: NextRequest) {
@@ -76,13 +51,7 @@ export async function POST(request: NextRequest) {
   }
 
   const schedule = (student.class_schedule as ClassSlot[]) ?? []
-
-  // Group slots by day to avoid duplicate dates
-  const slotsByDay = new Map<string, ClassSlot[]>()
-  for (const slot of schedule) {
-    const existing = slotsByDay.get(slot.day) ?? []
-    slotsByDay.set(slot.day, [...existing, slot])
-  }
+  const slotsByDay = groupSlotsByDay(schedule)
 
   const allDates: number[] = []
   let sessionFeeTotal = 0

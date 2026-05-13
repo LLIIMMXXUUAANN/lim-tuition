@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { WeekDay } from "@/lib/types"
+import type { WeekDay, ClassSlot } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -38,6 +38,39 @@ export const MONTH_NAMES: string[] = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ]
+
+export function formatFee(fee: number): string {
+  const rounded = Math.round(fee * 100) / 100
+  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(2)
+}
+
+export function ordinal(n: number): string {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return `${n}th`
+  switch (n % 10) {
+    case 1: return `${n}st`
+    case 2: return `${n}nd`
+    case 3: return `${n}rd`
+    default: return `${n}th`
+  }
+}
+
+export function oxfordList(items: string[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
+}
+
+export function groupSlotsByDay(schedule: ClassSlot[]): Map<string, ClassSlot[]> {
+  const map = new Map<string, ClassSlot[]>()
+  for (const slot of schedule) {
+    const existing = map.get(slot.day)
+    if (existing) existing.push(slot)
+    else map.set(slot.day, [slot])
+  }
+  return map
+}
 
 export function getWeekdayDates(year: number, month: number, weekday: string): number[] {
   const dayIndex = DAY_INDEX[weekday]

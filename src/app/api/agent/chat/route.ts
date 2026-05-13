@@ -8,7 +8,7 @@ import {
   createStudent, updateStudent, deleteStudent,
   setupStudentGoogle, runSyncAll, managePortalAccess,
   getSchedule, getFeeSummary,
-  listTemplates, getTemplate,
+  listTemplates, getTemplate, generatePaymentMessage,
   type Supabase,
 } from '@/lib/agent/tools'
 import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/lib/agent/schema'
@@ -48,6 +48,8 @@ async function executeTool(
       return listTemplates()
     case 'get_template':
       return getTemplate(supabase, args.id as string)
+    case 'generate_payment_message':
+      return generatePaymentMessage(supabase, args as Parameters<typeof generatePaymentMessage>[1])
     default:
       return { error: `Unknown tool: ${name}` }
   }
