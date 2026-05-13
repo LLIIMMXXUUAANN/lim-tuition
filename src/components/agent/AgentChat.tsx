@@ -15,6 +15,8 @@ interface ChatMessage {
   role: 'user' | 'agent'
   content: string
   steps?: string[]
+  scheduleDownload?: boolean
+  slotData?: { day: string; time: string; state: string }[]
 }
 
 function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
@@ -44,6 +46,20 @@ function loadStoredMessages(): ChatMessage[] {
   } catch {
     return []
   }
+}
+
+async function downloadPng(url: string, filename: string, body?: object) {
+  const res = await fetch(url, body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : undefined
+  )
+  if (!res.ok) return
+  const blob = await res.blob()
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(link.href)
 }
 
 export default function AgentChat() {
@@ -167,6 +183,15 @@ export default function AgentChat() {
                 ? { ...m, content: `Something went wrong: ${event.message}` }
                 : m
             ))
+          } else if (event.type === 'download_schedule') {
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId ? { ...m, scheduleDownload: true } : m
+            ))
+          } else if (event.type === 'slots_ready') {
+            const evt = event as { type: string; slots?: { day: string; time: string; state: string }[] }
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId ? { ...m, slotData: evt.slots ?? [] } : m
+            ))
           }
         }
       }
@@ -217,6 +242,8 @@ export default function AgentChat() {
               <p className="text-slate-500">"Update John's fee to RM 80"</p>
               <p className="text-slate-500">"Delete student Wei Ming"</p>
               <p className="text-slate-500">"Search for students named Tan"</p>
+              <p className="text-slate-500">"Download the weekly schedule image"</p>
+              <p className="text-slate-500">"Generate slot availability — student free Tuesday/Thursday after 4pm"</p>
             </div>
           </div>
         )}
@@ -255,6 +282,26 @@ export default function AgentChat() {
                           }}
                         >{msgText}</ReactMarkdown>
                       </div>
+                      {(msg.scheduleDownload || msg.slotData) && (
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {msg.scheduleDownload && (
+                            <button
+                              onClick={() => void downloadPng('/api/timetable/schedule-image', 'weekly_schedule.png')}
+                              className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
+                            >
+                              ↓ Download Schedule PNG
+                            </button>
+                          )}
+                          {msg.slotData && (
+                            <button
+                              onClick={() => void downloadPng('/api/timetable/slots-image', 'slot_availability.png', { slots: msg.slotData })}
+                              className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
+                            >
+                              ↓ Download Slot Availability PNG
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {msgStudents.length > 0 && (
                         <div className="flex justify-end gap-3 mt-2">
                           {msgStudents.map(s => (
