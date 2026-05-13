@@ -9,6 +9,8 @@ import {
   setupStudentGoogle, runSyncAll, managePortalAccess,
   getSchedule, getFeeSummary,
   listTemplates, getTemplate, generatePaymentMessage,
+  getTimetableSettings, updateTimetableRules, updateBufferMins,
+  generateSlotAvailability, downloadTimetableImage,
   type Supabase,
 } from '@/lib/agent/tools'
 import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/lib/agent/schema'
@@ -50,6 +52,16 @@ async function executeTool(
       return getTemplate(supabase, args.id as string)
     case 'generate_payment_message':
       return generatePaymentMessage(supabase, args as Parameters<typeof generatePaymentMessage>[1])
+    case 'get_timetable_settings':
+      return getTimetableSettings(supabase)
+    case 'update_timetable_rules':
+      return updateTimetableRules(supabase, args.rules as string)
+    case 'update_buffer_mins':
+      return updateBufferMins(supabase, args.buffer_mins as number)
+    case 'generate_slot_availability':
+      return generateSlotAvailability(supabase, (args.student_availability as string | undefined) ?? '')
+    case 'download_timetable_image':
+      return downloadTimetableImage()
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -180,6 +192,15 @@ export async function POST(req: NextRequest) {
               lastMutationTool = { name: fc.name, args: fc.args as Record<string, unknown>, createdId: created.id }
             } else if (MUTATION_TOOLS.has(fc.name!)) {
               lastMutationTool = { name: fc.name!, args: fc.args as Record<string, unknown> }
+            }
+            if (fc.name === 'download_timetable_image') {
+              emit({ type: 'download_schedule' })
+            }
+            if (fc.name === 'generate_slot_availability') {
+              const r = result as { slots?: unknown[] } | { error?: string }
+              if ('slots' in r && Array.isArray(r.slots)) {
+                emit({ type: 'slots_ready', slots: r.slots })
+              }
             }
           }
 
