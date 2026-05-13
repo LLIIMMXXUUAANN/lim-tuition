@@ -61,7 +61,7 @@ async function executeTool(
     case 'generate_slot_availability':
       return generateSlotAvailability(supabase, (args.student_availability as string | undefined) ?? '')
     case 'download_timetable_image':
-      return downloadTimetableImage()
+      return downloadTimetableImage(supabase)
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -194,7 +194,10 @@ export async function POST(req: NextRequest) {
               lastMutationTool = { name: fc.name!, args: fc.args as Record<string, unknown> }
             }
             if (fc.name === 'download_timetable_image') {
-              emit({ type: 'download_schedule' })
+              const r = result as { students?: unknown[] } | { error?: string }
+              if ('students' in r && Array.isArray(r.students)) {
+                emit({ type: 'download_schedule', students: r.students })
+              }
             }
             if (fc.name === 'generate_slot_availability') {
               const r = result as { slots?: unknown[] } | { error?: string }

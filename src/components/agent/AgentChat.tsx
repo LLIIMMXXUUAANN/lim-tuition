@@ -7,6 +7,11 @@ import remarkGfm from 'remark-gfm'
 import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  PNG_W, PNG_H, SCALE,
+  cellKey, type SlotType,
+  drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight,
+} from '@/lib/timetable-canvas'
 
 const STORAGE_KEY = 'agent_chat_messages'
 
@@ -15,7 +20,7 @@ interface ChatMessage {
   role: 'user' | 'agent'
   content: string
   steps?: string[]
-  scheduleDownload?: boolean
+  scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
 }
 
@@ -48,18 +53,40 @@ function loadStoredMessages(): ChatMessage[] {
   }
 }
 
-async function downloadPng(url: string, filename: string, body?: object) {
-  const res = await fetch(url, body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    : undefined
-  )
-  if (!res.ok) return
-  const blob = await res.blob()
+function canvasDownload(canvas: HTMLCanvasElement, filename: string) {
   const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
+  link.href = canvas.toDataURL('image/png')
   link.download = filename
   link.click()
-  URL.revokeObjectURL(link.href)
+}
+
+function downloadSchedulePng(students: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]) {
+  const sch_h = scheduleCanvasHeight(students)
+  const canvas = document.createElement('canvas')
+  canvas.width = PNG_W * SCALE
+  canvas.height = sch_h * SCALE
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.scale(SCALE, SCALE)
+  drawScheduleToCtx(ctx, students)
+  canvasDownload(canvas, 'weekly_schedule.png')
+}
+
+function downloadSlotsPng(slotData: { day: string; time: string; state: string }[]) {
+  const grid = new Map<string, SlotType>()
+  for (const s of slotData) {
+    if (s.state === 'preferred' || s.state === 'normal') {
+      grid.set(cellKey(s.day, s.time), s.state as SlotType)
+    }
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = PNG_W * SCALE
+  canvas.height = PNG_H * SCALE
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.scale(SCALE, SCALE)
+  drawSlotsToCtx(ctx, grid, new Set<string>())
+  canvasDownload(canvas, 'slot_availability.png')
 }
 
 export default function AgentChat() {
@@ -184,8 +211,9 @@ export default function AgentChat() {
                 : m
             ))
           } else if (event.type === 'download_schedule') {
+            const evt = event as { type: string; students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[] }
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, scheduleDownload: true } : m
+              m.id === pendingId ? { ...m, scheduleStudents: evt.students ?? [] } : m
             ))
           } else if (event.type === 'slots_ready') {
             const evt = event as { type: string; slots?: { day: string; time: string; state: string }[] }
@@ -282,11 +310,11 @@ export default function AgentChat() {
                           }}
                         >{msgText}</ReactMarkdown>
                       </div>
-                      {(msg.scheduleDownload || msg.slotData) && (
+                      {(msg.scheduleStudents || msg.slotData) && (
                         <div className="flex gap-2 mt-2 flex-wrap">
-                          {msg.scheduleDownload && (
+                          {msg.scheduleStudents && (
                             <button
-                              onClick={() => void downloadPng('/api/timetable/schedule-image', 'weekly_schedule.png')}
+                              onClick={() => downloadSchedulePng(msg.scheduleStudents!)}
                               className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
                             >
                               ↓ Download Schedule PNG
@@ -294,7 +322,7 @@ export default function AgentChat() {
                           )}
                           {msg.slotData && (
                             <button
-                              onClick={() => void downloadPng('/api/timetable/slots-image', 'slot_availability.png', { slots: msg.slotData })}
+                              onClick={() => downloadSlotsPng(msg.slotData!)}
                               className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
                             >
                               ↓ Download Slot Availability PNG

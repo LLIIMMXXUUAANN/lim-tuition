@@ -544,6 +544,17 @@ export async function generateSlotAvailability(
   }
 }
 
-export function downloadTimetableImage() {
-  return { downloadReady: true }
+export async function downloadTimetableImage(supabase: Supabase) {
+  const { data, error } = await supabase
+    .from('students')
+    .select('name, class_schedule')
+    .eq('status', 'Active')
+    .order('name')
+  if (error) return { error: error.message }
+  return {
+    students: (data ?? []).map(s => ({
+      name: s.name as string,
+      class_schedule: (s.class_schedule as ClassSlot[]) ?? [],
+    })),
+  }
 }
