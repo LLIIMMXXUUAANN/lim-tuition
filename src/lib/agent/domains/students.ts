@@ -1,5 +1,5 @@
-import { Type } from '@google/genai'
-import type { FunctionDeclaration } from '@google/genai'
+import { Type, type FunctionDeclaration } from '@google/genai'
+import { DAYS } from '@/lib/utils'
 
 export const STUDENT_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -65,10 +65,7 @@ export const STUDENT_DECLARATIONS: FunctionDeclaration[] = [
             properties: {
               day: {
                 type: Type.STRING,
-                enum: [
-                  'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-                  'Friday', 'Saturday', 'Sunday',
-                ],
+                enum: DAYS,
               },
               start: {
                 type: Type.STRING,
@@ -181,7 +178,7 @@ export const STUDENT_DECLARATIONS: FunctionDeclaration[] = [
       properties: {
         day: {
           type: Type.STRING,
-          enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+          enum: DAYS,
           description: 'Day of the week',
         },
       },
