@@ -262,6 +262,68 @@ export const TOOL_DECLARATIONS: Tool[] = [
           required: ['student_id'],
         },
       },
+      {
+        name: 'get_timetable_settings',
+        description:
+          'Read the current timetable scheduling rules and buffer minutes from the database. Call this before update_timetable_rules or update_buffer_mins to show the user the current values.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {},
+        },
+      },
+      {
+        name: 'update_timetable_rules',
+        description:
+          'Save new scheduling rules text to the database. These rules guide the AI slot generator (preferred/normal/unavailable classification). Always show the user the new rules before calling.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            rules: {
+              type: Type.STRING,
+              description: 'Full scheduling rules text to save',
+            },
+          },
+          required: ['rules'],
+        },
+      },
+      {
+        name: 'update_buffer_mins',
+        description:
+          'Save a new buffer duration (in minutes) to the database. Buffer zones block slots immediately before/after booked classes. Valid range: 0–60.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            buffer_mins: {
+              type: Type.NUMBER,
+              description: 'Buffer duration in minutes (0–60)',
+            },
+          },
+          required: ['buffer_mins'],
+        },
+      },
+      {
+        name: 'generate_slot_availability',
+        description:
+          "Run the AI slot-availability generator. Reads current rules, buffer, and all active students' schedules from the database, then classifies every free 30-minute slot as preferred, normal, or unavailable. Optionally accepts a description of a new student's availability to bias the classification. After the tool completes, a \"Download PNG\" button appears automatically in the chat.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            student_availability: {
+              type: Type.STRING,
+              description: 'Free-text description of when a prospective student can attend (optional). Example: "free Tuesday and Thursday after 4pm".',
+            },
+          },
+        },
+      },
+      {
+        name: 'download_timetable_image',
+        description:
+          "Download the weekly schedule as a PNG image showing all active students' class blocks. After the tool completes, a \"Download PNG\" button appears automatically in the chat.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {},
+        },
+      },
     ],
   },
 ]
@@ -293,4 +355,6 @@ RULES — follow these exactly:
 13. Use get_fee_summary when the user asks about monthly revenue, total fees, income, or earnings — whether for all students or a specific student. If no month or year is specified, omit them from the tool call (the tool defaults to the current month). The tool returns per-student fees; if the user asked about a specific student, find that student in the returned list and report only their fee. Format all-student results as a table: Name | Fee (RM) with a bold **Total** row. For a single-student query, just state their fee directly.
 14. When the user's request involves multiple independent operations, call all the relevant tools in a single response round rather than one at a time. For example: if asked to search for two students, call search_students for both in the same round; if asked to update two students whose IDs are already known, call update_student for both in the same round. Only serialise tool calls when one call's output is required as input for the next call.
 15. For template requests: if the user names a specific template (e.g. "payment", "first approach", "review"), call get_template directly with the matching id. If it is unclear which template they mean, call list_templates first. When displaying a template, format your reply as: one line with the title (e.g. "**First Approach**"), then a blank line, then the full content inside a fenced code block (triple backticks, no language tag) so it is easy to copy. Never put the title and "Content:" label on the same line.
-16. Use generate_payment_message when the user asks to generate a payment message or reminder for a student. If no month or year is specified, omit them (the tool defaults to next month). Ask whether to use carryover (template_type 2) only if the user mentions it — otherwise default to template_type 1. Display the result with a one-line header (e.g. "**Payment reminder — June 2026**") then the message in a fenced code block for easy copying.`
+16. Use generate_payment_message when the user asks to generate a payment message or reminder for a student. If no month or year is specified, omit them (the tool defaults to next month). Ask whether to use carryover (template_type 2) only if the user mentions it — otherwise default to template_type 1. Display the result with a one-line header (e.g. "**Payment reminder — June 2026**") then the message in a fenced code block for easy copying.
+17. Timetable settings: use get_timetable_settings to read current rules and buffer before updating. When the user asks to update rules, show them the proposed new rules and confirm before calling update_timetable_rules. For update_buffer_mins, validate the value is 0–60 before calling.
+18. After calling generate_slot_availability or download_timetable_image, tell the user a download button has appeared in the chat. Do NOT describe the slot counts or classification details unless the user asks — keep the reply brief (one sentence).`
