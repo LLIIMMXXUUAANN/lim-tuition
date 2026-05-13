@@ -111,7 +111,10 @@ export async function POST(req: NextRequest) {
             const chunkFnCalls = chunk.functionCalls ?? []
             roundFnCalls.push(...chunkFnCalls)
 
-            const chunkText = chunk.text ?? ''
+            const chunkText = (chunk.candidates?.[0]?.content?.parts ?? [])
+              .filter(p => p.text)
+              .map(p => p.text)
+              .join('')
             if (chunkText) {
               roundText += chunkText
               // Guard: Gemini doesn't mix text and fn-calls, but don't emit text once calls appear
@@ -136,9 +139,20 @@ export async function POST(req: NextRequest) {
             emit({ type: 'step', content: `🔧 ${fc.name}(${JSON.stringify(fc.args)})` })
           }
 
+          const timings: { name: string; ms: number }[] = new Array(namedCalls.length)
+          const roundStart = Date.now()
           const toolResults = await Promise.all(
-            namedCalls.map(fc => executeTool(fc.name!, fc.args as Record<string, unknown>, supabase))
+            namedCalls.map(async (fc, i) => {
+              const t0 = Date.now()
+              const result = await executeTool(fc.name!, fc.args as Record<string, unknown>, supabase)
+              timings[i] = { name: fc.name!, ms: Date.now() - t0 }
+              return result
+            })
           )
+          if (namedCalls.length > 1) {
+            const roundMs = Date.now() - roundStart
+            emit({ type: 'step', content: `⏱ parallel ×${namedCalls.length} — ${timings.map(t => `${t.name} ${t.ms}ms`).join(', ')} (total ${roundMs}ms)` })
+          }
 
           const fnResponseParts: Array<{
             functionResponse: { name: string; id?: string; response: Record<string, unknown> }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -17,10 +17,21 @@ interface ChatMessage {
   steps?: string[]
 }
 
-function parseAgentReply(content: string): { text: string; studentId: string | null } {
-  const match = content.match(/\[student_id:([0-9a-f-]+)\]/i)
-  if (!match) return { text: content, studentId: null }
-  return { text: content.replace(match[0], '').trim(), studentId: match[1] }
+function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
+  const students: { name: string; id: string }[] = []
+  // New format: [student_id:NAME:UUID]
+  const newFormat = /\[student_id:([^:\]]+):([0-9a-f-]+)\]/gi
+  let match
+  while ((match = newFormat.exec(content)) !== null) {
+    students.push({ name: match[1].trim(), id: match[2] })
+  }
+  // Legacy format: [student_id:UUID] — present in messages persisted before the NAME:UUID change
+  if (students.length === 0) {
+    const legacy = content.match(/\[student_id:([0-9a-f-]{36})\]/i)
+    if (legacy) students.push({ name: 'student', id: legacy[1] })
+  }
+  const text = content.replace(/\[student_id:[^\]]+\]/gi, '').trim()
+  return { text, students }
 }
 
 function loadStoredMessages(): ChatMessage[] {
@@ -40,10 +51,10 @@ export default function AgentChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
-  const speechSupported = useMemo(
-    () => typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window),
-    []
-  )
+  const [speechSupported, setSpeechSupported] = useState(false)
+  useEffect(() => {
+    setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  }, [])
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -211,9 +222,9 @@ export default function AgentChat() {
         )}
 
         {messages.map((msg) => {
-          const { text: msgText, studentId } = msg.role === 'agent'
+          const { text: msgText, students: msgStudents } = msg.role === 'agent'
             ? parseAgentReply(msg.content)
-            : { text: msg.content, studentId: null }
+            : { text: msg.content, students: [] }
           return (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'user' ? (
@@ -244,14 +255,17 @@ export default function AgentChat() {
                           }}
                         >{msgText}</ReactMarkdown>
                       </div>
-                      {studentId && (
-                        <div className="flex justify-end mt-2">
-                          <Link
-                            href={`/admin/students/${studentId}`}
-                            className="text-xs font-medium text-navy hover:underline"
-                          >
-                            View student →
-                          </Link>
+                      {msgStudents.length > 0 && (
+                        <div className="flex justify-end gap-3 mt-2">
+                          {msgStudents.map(s => (
+                            <Link
+                              key={s.id}
+                              href={`/admin/students/${s.id}`}
+                              className="text-xs font-medium text-navy hover:underline"
+                            >
+                              View {s.name} →
+                            </Link>
+                          ))}
                         </div>
                       )}
                     </>

@@ -218,7 +218,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - Returns a `text/event-stream` SSE `Response` (not JSON). SSE event types: `{ type: 'step', content }` for tool calls, `{ type: 'chunk', content }` for streamed text tokens, `{ type: 'done' }` on completion, `{ type: 'error', message }` on failure.
 - Runs up to 10 rounds using `generateContentStream` for all rounds. Tool-calling rounds accumulate `FunctionCall[]` from chunks and emit `step` events immediately after each tool fires. The final text-only round (`roundFnCalls.length === 0`) streams `chunk` events token-by-token as Gemini produces them. Guard: text is only emitted while no function calls have appeared in the current round (`roundFnCalls.length === 0` inside the chunk loop).
 - After each round, model content (text + fn-call parts) is reconstructed from the accumulated chunks and pushed to `contents` for conversation history.
-- Within each tool-calling round, all function calls are executed in parallel via `Promise.all` (Gemini can return multiple calls per round); steps are emitted in call order before parallel execution so display order is stable.
+- Within each tool-calling round, all function calls are executed in parallel via `Promise.all` (Gemini can return multiple calls per round); steps are emitted in call order before parallel execution so display order is stable. After parallel rounds, a timing step is emitted: `⏱ parallel ×N — tool1 Xms, tool2 Yms (total Zms)`. Single-tool rounds emit no timing step. `timings` is pre-allocated as `new Array(namedCalls.length)` and written by index (not pushed) to preserve call order regardless of completion order.
+- `chunk.text` is not used on streaming chunks — text is extracted manually from `chunk.candidates?.[0]?.content?.parts` filtering only text parts, to avoid SDK warnings when function-call parts are present in the same chunk.
 - `gotReply` boolean tracks whether a text round completed; if false after the loop, emits a fallback `chunk` event.
 - `lastMutationTool` tracks the final mutation in the loop for `selfEval` (create captures `createdId` from the tool result; update/delete/setup use `MUTATION_TOOLS` set)
 - `MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])` — named constant at module level; used for both mutation tracking and selfEval dispatch
@@ -248,19 +249,21 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 3. Ask for missing required fields (`mode`, `fee_per_hour`) before calling `create_student`
 4. Multiple search matches → list and ask which student
 5. No search results for update/delete → say so, offer to create instead
-6. After create/update → append `[student_id:UUID]` to reply (UI renders "View student →" link)
+6. After create/update → append one `[student_id:NAME:UUID]` token per affected student at the end of the reply (UI renders a "View NAME →" link per token). Example for two students: `[student_id:Lynn:uuid-1] [student_id:Ang:uuid-2]`
 7. Formatting rules: tables for lists, bold labels for single records, skip null/empty fields, render Meet/Drive as markdown links, blockquote for notes/homework, list_students for roster queries
 8. `sync_all_students` requires explicit confirmation before calling
 9. Delete confirmation must mention Google Calendar/Drive removal
-10. After `setup_student_google` → also append `[student_id:UUID]`
+10. After `setup_student_google` → also append `[student_id:NAME:UUID]`
 11. If tool result has `suggestGoogleSetup: true` → ask user if they want Google setup; only call `setup_student_google` on yes
 12. `get_schedule`: resolve "today"/"tomorrow" using injected date; format as Name | Time table (12-hour); say "No classes on [day]" if empty
 13. `get_fee_summary`: use for any revenue/fee/income query (all students or a specific student); omit month/year if not specified; format as Name | Fee (RM) table with bold Total row; for single-student query, find the student in the returned list and report only their fee
+14. When the user's request involves multiple independent operations, call all relevant tools in a single round (e.g. search two students at once, update two students at once). Only serialise when one call's output is required as input for the next.
 
-**`[student_id:UUID]` token protocol:**
-- Gemini appends `[student_id:UUID]` literally at the end of replies after create/update/setup
-- `parseAgentReply(content)` in `AgentChat.tsx` extracts the UUID via regex, strips the token from the display text, and returns `{ text, studentId }`
-- If `studentId` is non-null, a "View student →" `<Link>` is rendered bottom-right of the agent bubble
+**`[student_id:NAME:UUID]` token protocol:**
+- Gemini appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update/setup
+- `parseAgentReply(content)` in `AgentChat.tsx` extracts all tokens via regex, strips them from the display text, and returns `{ text, students: [{ name, id }] }`
+- Legacy `[student_id:UUID]` tokens (no name, stored in localStorage before the format change) are matched by a fallback branch that produces `{ name: 'student', id }` so old messages still render a link
+- One `"View NAME →"` `<Link>` is rendered per entry in `students[]`, displayed side-by-side bottom-right of the agent bubble
 
 **AgentChat UI (`components/agent/AgentChat.tsx`):**
 - `messages` state lazy-initialised from `localStorage` (key: `agent_chat_messages`); persisted on every change via `useEffect`
@@ -272,7 +275,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - Custom `a` renderer: `mailto:` links render as `<span>` (prevents remark-gfm from auto-linking email addresses as clickable mailto links)
 - Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)
 - Input auto-focuses on mount and after each agent response via `useEffect([loading])`; disabled (and not focused) while the agent is executing
-- **Voice input:** `speechSupported` is computed once via `useMemo` (checks `SpeechRecognition` / `webkitSpeechRecognition` on `window`; works in Chrome, Edge, Safari — not Firefox). Mic button is hidden when unsupported. `toggleVoice()` starts/stops a `SpeechRecognition` instance stored in `recognitionRef`. `cleanupRecognition(focus?)` is a shared helper called by both `onend` and `onerror` to deduplicate state reset. An unmount-cleanup `useEffect` calls `recognitionRef.current?.stop()` to release the mic if the component unmounts while listening.
+- **Voice input:** `speechSupported` is a `useState(false)` set to `true` in a `useEffect` after mount (checks `SpeechRecognition` / `webkitSpeechRecognition` on `window`; works in Chrome, Edge, Safari — not Firefox). Using `useEffect` rather than `useMemo` is required to avoid SSR/client hydration mismatch — the server renders `false` and the client corrects it after hydration. Mic button is hidden when unsupported. `toggleVoice()` starts/stops a `SpeechRecognition` instance stored in `recognitionRef`. `cleanupRecognition(focus?)` is a shared helper called by both `onend` and `onerror` to deduplicate state reset. An unmount-cleanup `useEffect` calls `recognitionRef.current?.stop()` to release the mic if the component unmounts while listening.
 - "Clear chat" wipes `messages` state → next send has no history context for Gemini
 
 ### Brand theming conventions
