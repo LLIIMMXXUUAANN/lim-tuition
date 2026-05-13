@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -40,7 +40,10 @@ export default function AgentChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
-  const [speechSupported, setSpeechSupported] = useState(false)
+  const speechSupported = useMemo(
+    () => typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window),
+    []
+  )
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,9 +63,13 @@ export default function AgentChat() {
     if (!loading) inputRef.current?.focus()
   }, [loading])
 
-  useEffect(() => {
-    setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-  }, [])
+  useEffect(() => () => { recognitionRef.current?.stop() }, [])
+
+  function cleanupRecognition(focus = false) {
+    setListening(false)
+    recognitionRef.current = null
+    if (focus) inputRef.current?.focus()
+  }
 
   function toggleVoice() {
     if (listening) {
@@ -80,15 +87,8 @@ export default function AgentChat() {
       const transcript = event.results[0][0].transcript
       setInput(prev => prev ? `${prev} ${transcript}` : transcript)
     }
-    recognition.onend = () => {
-      setListening(false)
-      recognitionRef.current = null
-      inputRef.current?.focus()
-    }
-    recognition.onerror = () => {
-      setListening(false)
-      recognitionRef.current = null
-    }
+    recognition.onend = () => cleanupRecognition(true)
+    recognition.onerror = () => cleanupRecognition()
     recognitionRef.current = recognition
     recognition.start()
     setListening(true)

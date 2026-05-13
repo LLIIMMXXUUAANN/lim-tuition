@@ -51,7 +51,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
   - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
   - **Safety:** `delete_student` requires explicit "yes" in conversation + warns about Calendar/Drive removal; `update_student` uses `ALLOWED_UPDATE_KEYS` allowlist to prevent prompt injection; `sync_all_students` requires explicit confirmation
   - **Self-evaluation:** after every mutation, a post-loop DB query verifies the change persisted and appends a `✓` or `⚠` status to the tool steps display
-  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; "View student →" link rendered from `[student_id:UUID]` token Gemini appends to replies
+  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; "View student →" link rendered from `[student_id:UUID]` token Gemini appends to replies; voice input via Web Speech API (Chrome/Edge/Safari) — mic button hidden when unsupported
 - **Timetable** — two-tab layout:
   - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy `#0A1A2F`, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
