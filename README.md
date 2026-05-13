@@ -117,7 +117,7 @@ src/
     supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
     google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
     hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
-    agent/      → tools.ts (14 tool implementations), schema.ts (TOOL_DECLARATIONS + SYSTEM_INSTRUCTION), eval.ts (selfEval)
+    agent/      → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval)
     templates.ts → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
     gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
     types.ts    → shared TypeScript types (Student, ClassSlot, etc.)

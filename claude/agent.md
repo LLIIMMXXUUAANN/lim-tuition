@@ -15,7 +15,10 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`components/agent/AgentChat.tsx`** — client component; see UI section below
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
 - **`lib/agent/tools.ts`** — all 19 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
-- **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
+- **`lib/agent/schema.ts`** — thin composer: exports `TOOL_DECLARATIONS` and `SYSTEM_INSTRUCTION` by spreading the three domain arrays and interpolating the three rule strings; rule 14 (parallel calls) lives inline here as it is cross-domain
+- **`lib/agent/domains/students.ts`** — `STUDENT_DECLARATIONS` (11 tools: `search_students` … `get_fee_summary`) + `STUDENT_RULES` (rules 1–13); imports `DAYS` from `src/lib/utils`
+- **`lib/agent/domains/templates.ts`** — `TEMPLATE_DECLARATIONS` (3 tools: `list_templates`, `get_template`, `generate_payment_message`) + `TEMPLATE_RULES` (rules 15–16); imports `TEMPLATE_META` for the `get_template` enum
+- **`lib/agent/domains/timetable.ts`** — `TIMETABLE_DECLARATIONS` (5 tools: `get_timetable_settings` … `download_timetable_image`) + `TIMETABLE_RULES` (rules 17–18)
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
 **Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`, `list_templates`, `get_template`, `get_timetable_settings`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~20 to avoid description-space crowding that degrades tool-selection accuracy.
@@ -88,7 +91,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`src/lib/timetable-slots.ts`** — `BookedSlot`, `SlotState`, `ClassifiedSlot` types; `computeBufferSlots`, `buildBookedCellSet`, `buildSlotPrompt`, `runSlotGeneration` — used by both `api/timetable/generate-slots/route.ts` and the agent's `generateSlotAvailability` tool
 - **`src/lib/timetable-canvas.ts`** — shared drawing constants and functions (`NAVY`, `SCALE`, `PNG_*` constants, `cellKey`, `fmt12`, `downloadCanvas`, `computeScheduleWindow`, `scheduleCanvasHeight`, `drawSlotsToCtx`, `drawScheduleToCtx`) — used by `TimetableSection.tsx`, `AgentChat.tsx`, and the server PNG routes. `type AnyCtx = any` bridges browser Canvas2D and `@napi-rs/canvas` context types.
 
-**System instruction rules summary (`lib/agent/schema.ts`):**
+**System instruction rules summary (domain files + `lib/agent/schema.ts`):**
 1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
 2. `delete_student` requires explicit "yes" in conversation; must warn about Calendar/Drive removal first
 3. Ask for missing required fields (`mode`, `fee_per_hour`) before calling `create_student`

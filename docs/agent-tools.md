@@ -1,6 +1,6 @@
 # Agent Tool Reference
 
-All 19 tools available to the AI agent at `/admin/agent`. Implemented in `src/lib/agent/tools.ts`; Gemini function schemas in `src/lib/agent/schema.ts`.
+All 19 tools available to the AI agent at `/admin/agent`. Implemented in `src/lib/agent/tools.ts`; Gemini function schemas split across `src/lib/agent/domains/` (students · templates · timetable) and composed in `src/lib/agent/schema.ts`.
 
 ---
 
