@@ -7,6 +7,7 @@ import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/dri
 import { deleteStudentGoogle } from '@/lib/google/cleanup'
 import { syncAllStudents } from '@/lib/google/sync'
 import { TEMPLATE_META, templateMeta } from '@/lib/templates'
+import { runSlotGeneration, buildBookedCellSet, type ClassifiedSlot } from '@/lib/timetable-slots'
 
 export type Supabase = Awaited<ReturnType<typeof createClient>>
 
@@ -478,4 +479,71 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
 
   const total = Math.round(rawFees.reduce((a, b) => a + b, 0) * 100) / 100
   return { month: resolvedMonth, year: resolvedYear, students, total }
+}
+
+export async function getTimetableSettings(supabase: Supabase) {
+  const [rulesRow, bufferRow] = await Promise.all([
+    supabase.from('settings').select('value').eq('key', 'timetable_rules').maybeSingle(),
+    supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').maybeSingle(),
+  ])
+  return {
+    rules: rulesRow.data?.value ?? '',
+    bufferMins: bufferRow.data ? parseInt(bufferRow.data.value, 10) : 15,
+  }
+}
+
+export async function updateTimetableRules(supabase: Supabase, rules: string) {
+  const { error } = await supabase
+    .from('settings')
+    .upsert({ key: 'timetable_rules', value: rules }, { onConflict: 'key' })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+export async function updateBufferMins(supabase: Supabase, bufferMins: number) {
+  if (bufferMins < 0 || bufferMins > 60) return { error: 'bufferMins must be 0–60' }
+  const { error } = await supabase
+    .from('settings')
+    .upsert({ key: 'timetable_buffer_mins', value: String(bufferMins) }, { onConflict: 'key' })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+export async function generateSlotAvailability(
+  supabase: Supabase,
+  studentAvailability: string,
+): Promise<{ slots: ClassifiedSlot[]; summary: string } | { error: string }> {
+  const [rulesRow, bufferRow, studentsRow] = await Promise.all([
+    supabase.from('settings').select('value').eq('key', 'timetable_rules').maybeSingle(),
+    supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').maybeSingle(),
+    supabase.from('students').select('class_schedule').eq('status', 'Active'),
+  ])
+
+  const rules = rulesRow.data?.value ?? ''
+  if (!rules.trim()) return { error: 'No timetable rules configured. Use update_timetable_rules first.' }
+
+  const bufferMins = bufferRow.data ? parseInt(bufferRow.data.value, 10) : 15
+
+  const bookedSlots = (studentsRow.data ?? []).flatMap(s =>
+    ((s.class_schedule as ClassSlot[]) ?? []).map(slot => ({
+      day: slot.day,
+      start: slot.start,
+      end: slot.end,
+    }))
+  )
+
+  try {
+    const slots = await runSlotGeneration(rules, studentAvailability, bookedSlots, bufferMins)
+    const preferred   = slots.filter(s => s.state === 'preferred').length
+    const normal      = slots.filter(s => s.state === 'normal').length
+    const unavailable = slots.filter(s => s.state === 'unavailable').length
+    const summary = `Generated ${slots.length} slots: ${preferred} preferred, ${normal} normal, ${unavailable} unavailable.`
+    return { slots, summary }
+  } catch (err) {
+    return { error: errMsg(err, 'Slot generation failed') }
+  }
+}
+
+export function downloadTimetableImage() {
+  return { downloadReady: true }
 }
