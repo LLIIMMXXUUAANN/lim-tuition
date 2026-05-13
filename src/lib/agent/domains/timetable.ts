@@ -1,6 +1,7 @@
 import { Type } from '@google/genai'
+import type { FunctionDeclaration } from '@google/genai'
 
-export const TIMETABLE_DECLARATIONS = [
+export const TIMETABLE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: 'get_timetable_settings',
     description:

@@ -1,7 +1,8 @@
 import { Type } from '@google/genai'
+import type { FunctionDeclaration } from '@google/genai'
 import { TEMPLATE_META } from '@/lib/templates'
 
-export const TEMPLATE_DECLARATIONS = [
+export const TEMPLATE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: 'list_templates',
     description:

@@ -1,6 +1,7 @@
 import { Type } from '@google/genai'
+import type { FunctionDeclaration } from '@google/genai'
 
-export const STUDENT_DECLARATIONS = [
+export const STUDENT_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: 'search_students',
     description:
