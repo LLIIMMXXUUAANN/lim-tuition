@@ -14,13 +14,13 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`agent/page.tsx`** — thin server component wrapper; renders `<AgentChat />`
 - **`components/agent/AgentChat.tsx`** — client component; see UI section below
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
-- **`lib/agent/tools.ts`** — all 14 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`lib/agent/tools.ts`** — all 19 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
 - **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
-**Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`, `list_templates`, `get_template`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~15 to avoid description-space crowding that degrades tool-selection accuracy.
+**Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`, `list_templates`, `get_template`, `get_timetable_settings`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~20 to avoid description-space crowding that degrades tool-selection accuracy.
 
-**Tools (all 14):**
+**Tools (all 19):**
 
 | Tool | Required | Optional | Returns |
 |---|---|---|---|
@@ -38,6 +38,11 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 | `list_templates` | — | — | `{ templates: [{ id, title, description }] }` |
 | `get_template` | `id` | — | `{ template: { id, title, description, content } }` |
 | `generate_payment_message` | `student_id` | `month`, `year`, `template_type`, `carryover` | `{ message, month, year, monthName }` |
+| `get_timetable_settings` | — | — | `{ rules: string, bufferMins: number }` |
+| `update_timetable_rules` | `rules` | — | `{ ok: true }` or `{ error: string }` |
+| `update_buffer_mins` | `buffer_mins` | — | `{ ok: true }` or `{ error: string }` |
+| `generate_slot_availability` | — | `student_availability` | `{ slots: ClassifiedSlot[] }` or `{ error: string }` |
+| `download_timetable_image` | — | — | `{ students: ScheduleStudent[] }` or `{ error: string }` |
 
 **Function-calling loop (`api/agent/chat/route.ts`):**
 - Current MYT date is prepended to `SYSTEM_INSTRUCTION` at request time via `Intl.DateTimeFormat('en-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long', ... })` so Gemini can resolve "today"/"tomorrow" before calling `get_schedule`
@@ -50,7 +55,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `chunk.text` is not used on streaming chunks — text is extracted manually from `chunk.candidates?.[0]?.content?.parts` filtering only text parts, to avoid SDK warnings when function-call parts are present in the same chunk.
 - `gotReply` boolean tracks whether a text round completed; if false after the loop, emits a fallback `chunk` event.
 - `lastMutationTool` tracks the final mutation in the loop for `selfEval` (create captures `createdId` from the tool result; update/delete/setup use `MUTATION_TOOLS` set)
-- `MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])` — named constant at module level; used for both mutation tracking and selfEval dispatch
+- `MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google', 'update_timetable_rules', 'update_buffer_mins'])` — named constant at module level; used for both mutation tracking and selfEval dispatch
+- After tool results are processed, `download_timetable_image` emits `{ type: 'download_schedule', students }` SSE event and `generate_slot_availability` emits `{ type: 'slots_ready', slots }` — both trigger inline download buttons in the chat UI
 - `selfEval` result is emitted as a final `step` event before `done`
 
 **Self-evaluation (`lib/agent/eval.ts`):**
@@ -58,6 +64,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `create_student` / `update_student`: SELECT `id` WHERE `id = X` → `✓ verified in DB` or `⚠ could not verify`
 - `delete_student`: SELECT `id` WHERE `id = X` → `✓ verified deleted` or `_⚠ student still exists in DB_`
 - `setup_student_google`: SELECT `google_meet_link, google_drive_link` → reports which links are set
+- `update_timetable_rules`: reads back `timetable_rules` from `settings` and compares to `args.rules` → `✓ rules verified in DB` or `⚠ could not verify rules`
+- `update_buffer_mins`: reads back `timetable_buffer_mins` and compares parsed integer → `✓ buffer set to Xm` or `⚠ could not verify buffer`
 - Result is appended to `steps[]` (not `reply`) so it appears in the tool-steps section
 
 **Tool implementation notes (`lib/agent/tools.ts`):**
@@ -71,6 +79,14 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `listTemplates` is a pure synchronous function — no DB call. All metadata (id, title, description) lives in the in-memory `TEMPLATE_META` from `src/lib/templates.ts`; only `get_template` hits the DB to fetch `content`
 - `getTemplate` uses `.maybeSingle()` and returns `{ id, title, description, content }` via `templateMeta(id)` helper from `src/lib/templates.ts`
 - `generatePaymentMessage` defaults to next calendar month (MYT) when `month`/`year` are omitted; uses `groupSlotsByDay`, `formatFee`, `ordinal`, `oxfordList` from `src/lib/utils.ts`; `template_type 2` deducts `carryover × avg_fee_per_session`; returns `{ message, month, year, monthName }`
+- `getTimetableSettings`: fetches `timetable_rules` and `timetable_buffer_mins` from `settings` in parallel; returns `{ rules, bufferMins }` (bufferMins defaults to 15 if unset)
+- `updateTimetableRules` / `updateBufferMins`: upsert into `settings` table with `onConflict: 'key'`; `updateBufferMins` validates the value is 0–60 before writing
+- `generateSlotAvailability`: fetches rules, buffer, and all active students' `class_schedule` in a single `Promise.all`; calls `runSlotGeneration` from `src/lib/timetable-slots.ts`; returns `{ slots: ClassifiedSlot[] }`. Returns `{ error }` if no rules are configured. The route emits a `slots_ready` SSE event with the slots so the chat UI can show a download button.
+- `downloadTimetableImage`: fetches active students' `name` and `class_schedule` ordered by name; returns `{ students }` which the route forwards as a `download_schedule` SSE event; the frontend renders the PNG client-side using `drawScheduleToCtx` from `src/lib/timetable-canvas.ts` for pixel-identical output to the timetable tab
+
+**Shared timetable libs:**
+- **`src/lib/timetable-slots.ts`** — `BookedSlot`, `SlotState`, `ClassifiedSlot` types; `computeBufferSlots`, `buildBookedCellSet`, `buildSlotPrompt`, `runSlotGeneration` — used by both `api/timetable/generate-slots/route.ts` and the agent's `generateSlotAvailability` tool
+- **`src/lib/timetable-canvas.ts`** — shared drawing constants and functions (`NAVY`, `SCALE`, `PNG_*` constants, `cellKey`, `fmt12`, `downloadCanvas`, `computeScheduleWindow`, `scheduleCanvasHeight`, `drawSlotsToCtx`, `drawScheduleToCtx`) — used by `TimetableSection.tsx`, `AgentChat.tsx`, and the server PNG routes. `type AnyCtx = any` bridges browser Canvas2D and `@napi-rs/canvas` context types.
 
 **System instruction rules summary (`lib/agent/schema.ts`):**
 1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
@@ -89,6 +105,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 14. When the user's request involves multiple independent operations, call all relevant tools in a single round (e.g. search two students at once, update two students at once). Only serialise when one call's output is required as input for the next.
 15. Templates: call `get_template` directly when the template is clear (e.g. "first approach", "payment"); call `list_templates` first only when ambiguous. Display template as bold title on its own line, then content in a fenced code block (no language tag).
 16. `generate_payment_message`: use when the user asks to generate a payment message/reminder for a student. Omit month/year if not specified (defaults to next month). Ask about carryover only if the user mentions it — otherwise default to `template_type 1`. Display result as bold header (e.g. "**Payment reminder — June 2026**") then message in a fenced code block.
+17. Timetable settings: use `get_timetable_settings` to read current rules and buffer before updating. When the user asks to update rules, show them the proposed new rules and confirm before calling `update_timetable_rules`. For `update_buffer_mins`, validate the value is 0–60 before calling.
+18. After calling `generate_slot_availability` or `download_timetable_image`, tell the user a download button has appeared in the chat. Do NOT describe slot counts or classification details unless the user asks — keep the reply brief (one sentence).
 
 **`[student_id:NAME:UUID]` token protocol:**
 - Gemini appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update/setup
@@ -106,4 +124,5 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - Custom `a` renderer: `mailto:` links render as `<span>` (prevents remark-gfm from auto-linking email addresses as clickable mailto links)
 - Tool steps rendered above reply in a smaller muted section; UUID regex applied at render time (client-side cosmetic concern, not server-side)
 - Input auto-focuses on mount and after each agent response via `useEffect([loading])`; disabled (and not focused) while the agent is executing
+- **Inline download buttons:** `ChatMessage` carries optional `scheduleStudents` and `slotData` fields populated by `download_schedule` and `slots_ready` SSE events respectively. When present, one or both download buttons render below the reply text. `downloadSchedulePng` and `downloadSlotsPng` use `drawScheduleToCtx` / `drawSlotsToCtx` from `src/lib/timetable-canvas.ts` for pixel-identical output to the timetable tab PNG exports. `downloadCanvas` (also from the shared lib) handles the `<a>` click trigger.
 - **Voice input:** `speechSupported` is a `useState(false)` set to `true` in a `useEffect` after mount (checks `SpeechRecognition` / `webkitSpeechRecognition` on `window`; works in Chrome, Edge, Safari — not Firefox). Using `useEffect` rather than `useMemo` is required to avoid SSR/client hydration mismatch — the server renders `false` and the client corrects it after hydration. Mic button is hidden when unsupported. `toggleVoice()` starts/stops a `SpeechRecognition` instance stored in `recognitionRef`. `cleanupRecognition(focus?)` is a shared helper called by both `onend` and `onerror` to deduplicate state reset. An unmount-cleanup `useEffect` calls `recognitionRef.current?.stop()` to release the mic if the component unmounts while listening.

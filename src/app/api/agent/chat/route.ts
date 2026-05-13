@@ -68,7 +68,7 @@ async function executeTool(
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
-const MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google'])
+const MUTATION_TOOLS = new Set(['update_student', 'delete_student', 'setup_student_google', 'update_timetable_rules', 'update_buffer_mins'])
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
   'Cache-Control': 'no-cache',
@@ -193,17 +193,10 @@ export async function POST(req: NextRequest) {
             } else if (MUTATION_TOOLS.has(fc.name!)) {
               lastMutationTool = { name: fc.name!, args: fc.args as Record<string, unknown> }
             }
-            if (fc.name === 'download_timetable_image') {
-              const r = result as { students?: unknown[] } | { error?: string }
-              if ('students' in r && Array.isArray(r.students)) {
-                emit({ type: 'download_schedule', students: r.students })
-              }
-            }
-            if (fc.name === 'generate_slot_availability') {
-              const r = result as { slots?: unknown[] } | { error?: string }
-              if ('slots' in r && Array.isArray(r.slots)) {
-                emit({ type: 'slots_ready', slots: r.slots })
-              }
+            if (fc.name === 'download_timetable_image' && typeof result === 'object' && result !== null && 'students' in result) {
+              emit({ type: 'download_schedule', students: (result as { students: unknown[] }).students })
+            } else if (fc.name === 'generate_slot_availability' && typeof result === 'object' && result !== null && 'slots' in result) {
+              emit({ type: 'slots_ready', slots: (result as { slots: unknown[] }).slots })
             }
           }
 

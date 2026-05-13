@@ -512,7 +512,7 @@ export async function updateBufferMins(supabase: Supabase, bufferMins: number) {
 export async function generateSlotAvailability(
   supabase: Supabase,
   studentAvailability: string,
-): Promise<{ slots: ClassifiedSlot[]; summary: string } | { error: string }> {
+): Promise<{ slots: ClassifiedSlot[] } | { error: string }> {
   const [rulesRow, bufferRow, studentsRow] = await Promise.all([
     supabase.from('settings').select('value').eq('key', 'timetable_rules').maybeSingle(),
     supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').maybeSingle(),
@@ -523,22 +523,11 @@ export async function generateSlotAvailability(
   if (!rules.trim()) return { error: 'No timetable rules configured. Use update_timetable_rules first.' }
 
   const bufferMins = bufferRow.data ? parseInt(bufferRow.data.value, 10) : 15
-
-  const bookedSlots = (studentsRow.data ?? []).flatMap(s =>
-    ((s.class_schedule as ClassSlot[]) ?? []).map(slot => ({
-      day: slot.day,
-      start: slot.start,
-      end: slot.end,
-    }))
-  )
+  const bookedSlots = (studentsRow.data ?? []).flatMap(s => (s.class_schedule as ClassSlot[]) ?? [])
 
   try {
     const slots = await runSlotGeneration(rules, studentAvailability, bookedSlots, bufferMins)
-    const preferred   = slots.filter(s => s.state === 'preferred').length
-    const normal      = slots.filter(s => s.state === 'normal').length
-    const unavailable = slots.filter(s => s.state === 'unavailable').length
-    const summary = `Generated ${slots.length} slots: ${preferred} preferred, ${normal} normal, ${unavailable} unavailable.`
-    return { slots, summary }
+    return { slots }
   } catch (err) {
     return { error: errMsg(err, 'Slot generation failed') }
   }

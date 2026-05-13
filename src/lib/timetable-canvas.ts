@@ -150,9 +150,16 @@ export function drawSlotsToCtx(
   })
 }
 
-function fmt12(time: string): string {
+export function fmt12(time: string): string {
   const [h, m] = time.split(':').map(Number)
   return `${h % 12 || 12}:${String(m).padStart(2, '0')}`
+}
+
+export function downloadCanvas(canvas: HTMLCanvasElement, filename: string) {
+  const link = document.createElement('a')
+  link.download = filename
+  link.href = canvas.toDataURL('image/png')
+  link.click()
 }
 
 export function drawScheduleToCtx(ctx: AnyCtx, students: ScheduleStudent[]) {

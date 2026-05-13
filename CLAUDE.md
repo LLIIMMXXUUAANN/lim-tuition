@@ -3,11 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 @AGENTS.md
-@CLAUDE-auth.md
-@CLAUDE-components.md
-@CLAUDE-timetable.md
-@CLAUDE-google.md
-@CLAUDE-agent.md
+@claude/auth.md
+@claude/components.md
+@claude/timetable.md
+@claude/google.md
+@claude/agent.md
 
 ## Commands
 

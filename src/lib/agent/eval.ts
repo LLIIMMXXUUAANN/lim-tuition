@@ -38,6 +38,24 @@ export async function selfEval(
       ]
       return parts.join(', ')
     }
+    if (toolName === 'update_timetable_rules') {
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'timetable_rules')
+        .maybeSingle()
+      return data?.value === args.rules ? '✓ rules verified in DB' : '⚠ could not verify rules'
+    }
+    if (toolName === 'update_buffer_mins') {
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'timetable_buffer_mins')
+        .maybeSingle()
+      return data && parseInt(data.value, 10) === (args.buffer_mins as number)
+        ? `✓ buffer set to ${args.buffer_mins}m`
+        : '⚠ could not verify buffer'
+    }
   } catch {
     return '⚠ could not verify'
   }

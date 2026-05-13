@@ -5,9 +5,9 @@ import type { ClassSlot, WeekDay } from '@/lib/types'
 import { formatTime, DAYS, TIME_SLOTS, timeToMins } from '@/lib/utils'
 import {
   NAVY, SCALE, PNG_W, PNG_H, SCHEDULE_CELL_H,
-  DAY_SHORT,
+  DAY_SHORT, fmt12,
   computeScheduleWindow, scheduleCanvasHeight,
-  drawSlotsToCtx, drawScheduleToCtx,
+  drawSlotsToCtx, drawScheduleToCtx, downloadCanvas,
 } from '@/lib/timetable-canvas'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
@@ -71,17 +71,6 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
   downloadCanvas(canvas, 'slot_availability.png')
 }
 
-function downloadCanvas(canvas: HTMLCanvasElement, filename: string) {
-  const link = document.createElement('a')
-  link.download = filename
-  link.href = canvas.toDataURL('image/png')
-  link.click()
-}
-
-function fmt12(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  return `${h % 12 || 12}:${String(m).padStart(2, '0')}`
-}
 
 function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[]) {
   const sch_h = scheduleCanvasHeight(students)

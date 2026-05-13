@@ -1,6 +1,6 @@
 # Agent Tool Reference
 
-All 14 tools available to the AI agent at `/admin/agent`. Implemented in `src/lib/agent/tools.ts`; Gemini function schemas in `src/lib/agent/schema.ts`.
+All 19 tools available to the AI agent at `/admin/agent`. Implemented in `src/lib/agent/tools.ts`; Gemini function schemas in `src/lib/agent/schema.ts`.
 
 ---
 
@@ -22,6 +22,11 @@ All 14 tools available to the AI agent at `/admin/agent`. Implemented in `src/li
 | [`list_templates`](#list_templates) | Read | List all template IDs, titles, and descriptions |
 | [`get_template`](#get_template) | Read | Fetch the full content of a single template |
 | [`generate_payment_message`](#generate_payment_message) | Read | Generate a ready-to-send payment reminder message |
+| [`get_timetable_settings`](#get_timetable_settings) | Read | Read scheduling rules and buffer minutes |
+| [`update_timetable_rules`](#update_timetable_rules) | Write | Save new scheduling rules text |
+| [`update_buffer_mins`](#update_buffer_mins) | Write | Save a new buffer duration between classes |
+| [`generate_slot_availability`](#generate_slot_availability) | Read | AI-classify every free 30-min slot as preferred / normal / unavailable |
+| [`download_timetable_image`](#download_timetable_image) | Read | Fetch active students for a weekly schedule PNG download |
 
 ---
 
@@ -579,4 +584,164 @@ Shared helpers used: `formatFee`, `ordinal`, `oxfordList`, `groupSlotsByDay` (al
 { "error": "Student not found" }
 { "error": "Student is not active" }
 { "error": "No scheduled class days found for this student" }
+```
+
+---
+
+## `get_timetable_settings`
+
+Read the current scheduling rules and buffer duration from the database. Call this before `update_timetable_rules` or `update_buffer_mins` to show the user the current values.
+
+### Input
+
+None.
+
+### Process
+
+Fetches `timetable_rules` and `timetable_buffer_mins` from the `settings` table in parallel via `Promise.all`. Both use `.maybeSingle()`. If `timetable_buffer_mins` is not set, defaults to `15`.
+
+### Output
+
+```json
+{
+  "rules": "Prefer Mon/Tue/Thu/Fri. No slots before 9am or after 9pm.",
+  "bufferMins": 15
+}
+```
+
+---
+
+## `update_timetable_rules`
+
+Save new scheduling rules text to the database. These rules are passed verbatim to Gemini when generating slot availability.
+
+> **Safety:** the agent shows the user the proposed rules and confirms before calling this.
+
+### Input
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `rules` | string | Yes | Full scheduling rules text to save |
+
+### Process
+
+Supabase `upsert` into `settings` with `key = 'timetable_rules'` and `onConflict: 'key'`. After the loop, `selfEval` reads the row back and compares to confirm the write persisted.
+
+### Output
+
+**Success**
+```json
+{ "ok": true }
+```
+
+**Error**
+```json
+{ "error": "string" }
+```
+
+---
+
+## `update_buffer_mins`
+
+Save a new buffer duration to the database. Buffer zones are computed in code and block the slots immediately before and after each booked class.
+
+### Input
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `buffer_mins` | number | Yes | Minutes of buffer around booked classes (0–60) |
+
+### Process
+
+Validates `0 ≤ buffer_mins ≤ 60` — returns `{ error }` immediately if out of range. Supabase `upsert` into `settings` with `key = 'timetable_buffer_mins'`, storing the value as a string. After the loop, `selfEval` reads the row back and parses the integer to confirm.
+
+### Output
+
+**Success**
+```json
+{ "ok": true }
+```
+
+**Error**
+```json
+{ "error": "bufferMins must be 0–60" }
+```
+
+---
+
+## `generate_slot_availability`
+
+Run the AI slot-availability generator. Reads scheduling rules, buffer minutes, and all active students' class schedules from the database, then calls Gemini 2.5 Flash to classify every free 30-minute slot.
+
+After the tool completes, the route emits a `slots_ready` SSE event and a **Download Slot Availability PNG** button appears in the chat.
+
+### Input
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `student_availability` | string | No | Free-text description of when a prospective student can attend. Example: `"free Tuesday and Thursday after 4pm"` |
+
+### Process
+
+1. Fetches `timetable_rules`, `timetable_buffer_mins`, and all active students' `class_schedule` in a single `Promise.all`
+2. Returns `{ error }` immediately if no rules are configured
+3. Calls `runSlotGeneration` from `src/lib/timetable-slots.ts`:
+   - Computes buffer zones in code via `computeBufferSlots`
+   - Builds the classifiable slot list (non-booked, non-buffered) via `buildBookedCellSet`
+   - Sends prompt to Gemini with structured JSON output schema
+   - Post-processes: forces any buffer slot that sneaks through to `unavailable`
+4. Returns `{ slots }` — the route emits `{ type: 'slots_ready', slots }` as an SSE event
+
+### Output
+
+**Success**
+```json
+{
+  "slots": [
+    { "day": "Monday", "time": "09:00", "state": "preferred" },
+    { "day": "Monday", "time": "09:30", "state": "normal" },
+    { "day": "Monday", "time": "10:00", "state": "unavailable" }
+  ]
+}
+```
+
+**Error**
+```json
+{ "error": "No timetable rules configured. Use update_timetable_rules first." }
+{ "error": "Slot generation failed: ..." }
+```
+
+---
+
+## `download_timetable_image`
+
+Fetch all active students and their schedules so the frontend can render a weekly schedule PNG client-side.
+
+After the tool completes, the route emits a `download_schedule` SSE event and a **Download Schedule PNG** button appears in the chat. The PNG is rendered in the browser using the same `drawScheduleToCtx` function as the timetable tab, producing pixel-identical output.
+
+### Input
+
+None.
+
+### Process
+
+Supabase `select('name, class_schedule')` on `students` where `status = 'Active'`, ordered by name. Maps rows to `{ name, class_schedule }`. Returns `{ students }` — the route emits `{ type: 'download_schedule', students }` as an SSE event.
+
+### Output
+
+**Success**
+```json
+{
+  "students": [
+    {
+      "name": "Alice",
+      "class_schedule": [{ "day": "Monday", "start": "15:00", "end": "17:00" }]
+    }
+  ]
+}
+```
+
+**Error**
+```json
+{ "error": "string" }
 ```

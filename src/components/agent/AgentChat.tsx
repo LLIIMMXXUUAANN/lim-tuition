@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import {
   PNG_W, PNG_H, SCALE,
   cellKey, type SlotType,
-  drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight,
+  drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight, downloadCanvas,
 } from '@/lib/timetable-canvas'
 
 const STORAGE_KEY = 'agent_chat_messages'
@@ -53,13 +53,6 @@ function loadStoredMessages(): ChatMessage[] {
   }
 }
 
-function canvasDownload(canvas: HTMLCanvasElement, filename: string) {
-  const link = document.createElement('a')
-  link.href = canvas.toDataURL('image/png')
-  link.download = filename
-  link.click()
-}
-
 function downloadSchedulePng(students: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]) {
   const sch_h = scheduleCanvasHeight(students)
   const canvas = document.createElement('canvas')
@@ -69,7 +62,7 @@ function downloadSchedulePng(students: { name: string; class_schedule: { day: st
   if (!ctx) return
   ctx.scale(SCALE, SCALE)
   drawScheduleToCtx(ctx, students)
-  canvasDownload(canvas, 'weekly_schedule.png')
+  downloadCanvas(canvas, 'weekly_schedule.png')
 }
 
 function downloadSlotsPng(slotData: { day: string; time: string; state: string }[]) {
@@ -86,7 +79,7 @@ function downloadSlotsPng(slotData: { day: string; time: string; state: string }
   if (!ctx) return
   ctx.scale(SCALE, SCALE)
   drawSlotsToCtx(ctx, grid, new Set<string>())
-  canvasDownload(canvas, 'slot_availability.png')
+  downloadCanvas(canvas, 'slot_availability.png')
 }
 
 export default function AgentChat() {
@@ -193,7 +186,13 @@ export default function AgentChat() {
           if (!line.startsWith('data: ')) continue
           const json = line.slice(6).trim()
           if (!json) continue
-          const event = JSON.parse(json) as { type: string; content?: string; message?: string }
+          const event = JSON.parse(json) as {
+            type: string
+            content?: string
+            message?: string
+            students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
+            slots?: { day: string; time: string; state: string }[]
+          }
           if (event.type === 'step') {
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, steps: [...(m.steps ?? []), event.content!] } : m
@@ -211,14 +210,12 @@ export default function AgentChat() {
                 : m
             ))
           } else if (event.type === 'download_schedule') {
-            const evt = event as { type: string; students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[] }
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, scheduleStudents: evt.students ?? [] } : m
+              m.id === pendingId ? { ...m, scheduleStudents: event.students ?? [] } : m
             ))
           } else if (event.type === 'slots_ready') {
-            const evt = event as { type: string; slots?: { day: string; time: string; state: string }[] }
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, slotData: evt.slots ?? [] } : m
+              m.id === pendingId ? { ...m, slotData: event.slots ?? [] } : m
             ))
           }
         }
