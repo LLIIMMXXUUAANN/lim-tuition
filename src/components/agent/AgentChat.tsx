@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -38,8 +39,12 @@ export default function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(loadStoredMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [listening, setListening] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
     try {
@@ -54,6 +59,40 @@ export default function AgentChat() {
   useEffect(() => {
     if (!loading) inputRef.current?.focus()
   }, [loading])
+
+  useEffect(() => {
+    setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  }, [])
+
+  function toggleVoice() {
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition: any = new SR()
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setInput(prev => prev ? `${prev} ${transcript}` : transcript)
+    }
+    recognition.onend = () => {
+      setListening(false)
+      recognitionRef.current = null
+      inputRef.current?.focus()
+    }
+    recognition.onerror = () => {
+      setListening(false)
+      recognitionRef.current = null
+    }
+    recognitionRef.current = recognition
+    recognition.start()
+    setListening(true)
+  }
 
   async function send() {
     const text = input.trim()
@@ -243,6 +282,24 @@ export default function AgentChat() {
           disabled={loading}
           className="flex-1 border-slate-200 px-4 py-2.5 focus:ring-navy/20 focus:border-navy/40 bg-white"
         />
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={toggleVoice}
+            disabled={loading}
+            title={listening ? 'Stop recording' : 'Voice input'}
+            className={`flex-shrink-0 p-2.5 rounded-lg transition-colors disabled:opacity-40 ${
+              listening
+                ? 'text-red-500 bg-red-50 hover:bg-red-100'
+                : 'text-slate-400 hover:text-navy hover:bg-slate-100'
+            }`}
+          >
+            {listening
+              ? <StopIcon className="w-5 h-5" />
+              : <MicrophoneIcon className="w-5 h-5" />
+            }
+          </button>
+        )}
         <Button
           onClick={() => void send()}
           disabled={loading || !input.trim()}
