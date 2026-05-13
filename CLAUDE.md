@@ -113,7 +113,7 @@ src/components/
 - **`students/StudentForm`** — on Save, if the student already has `calendar_event_ids` and the schedule changed, automatically calls `update-class-event` before the DB upsert; patches Calendar events (preserving Meet link) and rewrites the Drive "Google Meet Link" doc. If the calendar update produces a warning (API error, missing event IDs, missing Meet link), the form stays open after save so the user can read the amber warning — they close via ← Cancel. "Remove Student" opens a confirmation dialog that hard-deletes the row and calls `delete-student` to trash the Drive folder and delete Calendar events; Google cleanup failure shows an in-dialog amber warning but doesn't block the DB deletion.
 - **`students/ClassScheduleEditor`** — dynamic list of day + start/end time slots stored as jsonb
 - **`students/SyncAllButton`** — banner at the bottom of the students list; one click syncs all active students' Google Calendar events and Drive Meet docs to match the DB schedule. For students with no `calendar_event_ids`, it searches Calendar by exact name first (backfill), saves the IDs, then patches. Results show per-student status (✓ synced / – skipped / ✗ error). If `invalid_grant` is detected, shows a reconnect link.
-- **`templates/TemplatesList`** — receives `initialData` and `students` props from the server; renders a 4-tab layout (Payment · Review · Recommendation · First Approach). The Payment tab contains `PaymentGenerator` followed by the payment templates; the other tabs contain their respective templates. `TEMPLATE_META` is a `Record<string, { title, description }>` — look up by id directly. Save state per card cycles through `idle → saving → saved/error`.
+- **`templates/TemplatesList`** — receives `initialData` and `students` props from the server; renders a 4-tab layout (Payment · Review · Recommendation · First Approach). The Payment tab contains `PaymentGenerator` followed by the payment templates; the other tabs contain their respective templates. `TEMPLATE_META` is imported from `src/lib/templates.ts` (shared with the agent tools) — a `Record<string, { title, description }>`, look up by id directly. Save state per card cycles through `idle → saving → saved/error`.
 - **`templates/PaymentGenerator`** — client component rendered inside `TemplatesList`'s Payment tab; calculates session dates and fee from the student's `class_schedule` via `/api/generate-payment`
 - **`timetable/TimetableSection`** — client component on the Timetable page; renders a 2-tab layout (Weekly Schedule · Slot Availability). The Weekly Schedule tab shows a live `WeeklyScheduleView` HTML grid (navy header, auto-cropped to active hours, class blocks in `NAVY`) plus a **Download Schedule** button. The Slot Availability tab has `keepMounted` so grid state and student availability text survive tab switches. The AI panel has two textareas (scheduling rules pre-loaded from DB, student availability blank), a Save Rules button, a buffer-mins number input with its own Save button, and a **Generate Slots** button. Booked slots are auto-marked red and non-editable. Free slots cycle: unavailable → preferred → normal → unavailable. Grid state is ephemeral; rules and buffer are persisted to the `settings` table.
 
@@ -189,13 +189,13 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`agent/page.tsx`** — thin server component wrapper; renders `<AgentChat />`
 - **`components/agent/AgentChat.tsx`** — client component; see UI section below
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
-- **`lib/agent/tools.ts`** — all 11 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`lib/agent/tools.ts`** — all 13 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
 - **`lib/agent/schema.ts`** — `TOOL_DECLARATIONS` (Gemini function schemas) + `SYSTEM_INSTRUCTION`
 - **`lib/agent/eval.ts`** — `selfEval()`: post-mutation DB verification
 
-**Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~15 to avoid description-space crowding that degrades tool-selection accuracy.
+**Tool design:** fine-grained reads, coarse-grained writes. Read tools (`search_students`, `get_student`, `list_students`, `get_schedule`, `get_fee_summary`, `list_templates`, `get_template`) are granular so Gemini picks exactly the data shape needed. Write tools (`setup_student_google`, `sync_all_students`) are compound — they bundle steps the user always wants together (Calendar + Drive in one call) to reduce round trips and planning burden on the LLM. Keep total tool count under ~15 to avoid description-space crowding that degrades tool-selection accuracy.
 
-**Tools (all 11):**
+**Tools (all 13):**
 
 | Tool | Required | Optional | Returns |
 |---|---|---|---|
@@ -210,6 +210,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 | `manage_portal_access` | `student_id`, `action`, `email` | — | `{ result: string }` |
 | `get_schedule` | `day` (Monday–Sunday) | — | `{ day, students: [{ id, name, slots: [{ start, end }] }] }` |
 | `get_fee_summary` | — | `month`, `year` | `{ month, year, students: [{ id, name, fee }], total }` |
+| `list_templates` | — | — | `{ templates: [{ id, title, description }] }` |
+| `get_template` | `id` | — | `{ template: { id, title, description, content } }` |
 
 **Function-calling loop (`api/agent/chat/route.ts`):**
 - Current MYT date is prepended to `SYSTEM_INSTRUCTION` at request time via `Intl.DateTimeFormat('en-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long', ... })` so Gemini can resolve "today"/"tomorrow" before calling `get_schedule`
@@ -242,6 +244,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `errMsg(err, fallback)` — `err instanceof Error ? err.message : fallback` — use this everywhere instead of inlining
 - `getSchedule` fetches all active students, maps to `{ id, name, slots }` filtering slots to the requested day, then filters out students with no matching slots — single pass (map then filter), no redundant `.some()` pre-check
 - `getFeeSummary` uses `getWeekdayDates` (from `src/lib/utils.ts`) for exact session counting; tracks raw fees in a parallel array to avoid per-student rounding accumulation before summing the total
+- `listTemplates` is a pure synchronous function — no DB call. All metadata (id, title, description) lives in the in-memory `TEMPLATE_META` from `src/lib/templates.ts`; only `get_template` hits the DB to fetch `content`
+- `getTemplate` uses `.maybeSingle()` and returns `{ id, title, description, content }` via `templateMeta(id)` helper from `src/lib/templates.ts`
 
 **System instruction rules summary (`lib/agent/schema.ts`):**
 1. Reuse UUID from conversation history — only call `search_students` if UUID not already known
@@ -258,6 +262,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 12. `get_schedule`: resolve "today"/"tomorrow" using injected date; format as Name | Time table (12-hour); say "No classes on [day]" if empty
 13. `get_fee_summary`: use for any revenue/fee/income query (all students or a specific student); omit month/year if not specified; format as Name | Fee (RM) table with bold Total row; for single-student query, find the student in the returned list and report only their fee
 14. When the user's request involves multiple independent operations, call all relevant tools in a single round (e.g. search two students at once, update two students at once). Only serialise when one call's output is required as input for the next.
+15. Templates: call `get_template` directly when the template is clear (e.g. "first approach", "payment"); call `list_templates` first only when ambiguous. Display template as bold title on its own line, then content in a fenced code block (no language tag).
 
 **`[student_id:NAME:UUID]` token protocol:**
 - Gemini appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update/setup

@@ -1,5 +1,6 @@
 import { Type } from '@google/genai'
 import type { Tool } from '@google/genai'
+import { TEMPLATE_META } from '@/lib/templates'
 
 export const TOOL_DECLARATIONS: Tool[] = [
   {
@@ -208,6 +209,31 @@ export const TOOL_DECLARATIONS: Tool[] = [
           },
         },
       },
+      {
+        name: 'list_templates',
+        description:
+          'List all message templates with their id, title, and description — no content. Use this only to discover which template ID to use, then call get_template with that ID to fetch the actual content.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {},
+        },
+      },
+      {
+        name: 'get_template',
+        description:
+          'Fetch a single message template by its id. Call list_templates first if you are unsure which id the user means.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            id: {
+              type: Type.STRING,
+              enum: Object.keys(TEMPLATE_META),
+              description: 'Template id',
+            },
+          },
+          required: ['id'],
+        },
+      },
     ],
   },
 ]
@@ -237,4 +263,5 @@ RULES — follow these exactly:
 11. If a tool result contains suggestGoogleSetup: true, ask the user: "Would you like me to also set up Google Calendar and Drive for [student name]?" and wait for their reply. Only call setup_student_google if they say yes.
 12. Use get_schedule when the user asks who they have class with on a specific day. The current date is injected at the top of this prompt — use it to resolve "today", "tomorrow", and relative day references to the correct Monday–Sunday day name before calling. Format results as a table: Name | Time (12-hour format, e.g. 3:00 PM – 5:00 PM). If students is empty, say "No classes on [day]."
 13. Use get_fee_summary when the user asks about monthly revenue, total fees, income, or earnings — whether for all students or a specific student. If no month or year is specified, omit them from the tool call (the tool defaults to the current month). The tool returns per-student fees; if the user asked about a specific student, find that student in the returned list and report only their fee. Format all-student results as a table: Name | Fee (RM) with a bold **Total** row. For a single-student query, just state their fee directly.
-14. When the user's request involves multiple independent operations, call all the relevant tools in a single response round rather than one at a time. For example: if asked to search for two students, call search_students for both in the same round; if asked to update two students whose IDs are already known, call update_student for both in the same round. Only serialise tool calls when one call's output is required as input for the next call.`
+14. When the user's request involves multiple independent operations, call all the relevant tools in a single response round rather than one at a time. For example: if asked to search for two students, call search_students for both in the same round; if asked to update two students whose IDs are already known, call update_student for both in the same round. Only serialise tool calls when one call's output is required as input for the next call.
+15. For template requests: if the user names a specific template (e.g. "payment", "first approach", "review"), call get_template directly with the matching id. If it is unclear which template they mean, call list_templates first. When displaying a template, format your reply as: one line with the title (e.g. "**First Approach**"), then a blank line, then the full content inside a fenced code block (triple backticks, no language tag) so it is easy to copy. Never put the title and "Content:" label on the same line.`

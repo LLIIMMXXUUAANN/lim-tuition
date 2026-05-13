@@ -6,6 +6,7 @@ import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/lib/google/c
 import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/drive'
 import { deleteStudentGoogle } from '@/lib/google/cleanup'
 import { syncAllStudents } from '@/lib/google/sync'
+import { TEMPLATE_META, templateMeta } from '@/lib/templates'
 
 export type Supabase = Awaited<ReturnType<typeof createClient>>
 
@@ -369,6 +370,24 @@ export async function getSchedule(supabase: Supabase, day: string) {
     .filter(s => s.slots.length > 0)
 
   return { day, students }
+}
+
+export function listTemplates() {
+  return {
+    templates: Object.entries(TEMPLATE_META).map(([id, meta]) => ({ id, ...meta })),
+  }
+}
+
+export async function getTemplate(supabase: Supabase, id: string) {
+  const { data, error } = await supabase
+    .from('templates')
+    .select('id, content')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) return { error: error.message }
+  if (!data) return { error: `Template "${id}" not found` }
+
+  return { template: { id: data.id, ...templateMeta(data.id), content: data.content as string } }
 }
 
 export async function getFeeSummary(supabase: Supabase, month?: number, year?: number) {
