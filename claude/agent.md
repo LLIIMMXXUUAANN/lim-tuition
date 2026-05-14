@@ -73,7 +73,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 
 **Tool implementation notes (`lib/agent/tools.ts`):**
 - `ALLOWED_UPDATE_KEYS` Set — allowlist of writable columns for `update_student`; prevents prompt injection from touching any column not in the set
-- `update_student` auto-syncs Calendar + Drive when `class_schedule` is in the updated fields: if `calendar_event_ids` + `google_meet_link` are set, calls `updateWeeklyClassEvents` and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; Google failures are non-fatal (returned as `googleWarnings`); if Google is not set up, returns `suggestGoogleSetup: true` instead
+- `update_student` auto-syncs Calendar + Drive when `class_schedule` is in the updated fields: if `calendar_event_ids` + `google_meet_link` are set, calls `updateWeeklyClassEvents` (nuke-and-repave) and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; if a new Meet link is generated (primary was deleted), also saves it to DB and re-updates the Drive doc; Google failures are non-fatal (returned as `googleWarnings`); if Google is not set up, returns `suggestGoogleSetup: true` instead
 - `create_student` returns `suggestGoogleSetup: true` when a `class_schedule` was provided — the system instruction rule 11 tells Gemini to ask the user if they want Google setup
 - `setup_student_google` fetches the student's `mode` from the DB and passes it to `createStudentDriveFolder` — so Other Syllabus students get a Meet-doc-only folder, Python Syllabus students get the full 4-subfolder structure
 - `delete_student` attempts Google cleanup (Drive trash + Calendar delete) before the DB delete; Google failure is non-fatal

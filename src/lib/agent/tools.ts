@@ -213,16 +213,24 @@ export async function updateStudent(
   ])
 
   if (calResult.status === 'fulfilled') {
-    const { error: dbErr } = await supabase
-      .from('students')
-      .update({ calendar_event_ids: calResult.value.eventIds })
-      .eq('id', id)
-    if (dbErr) warnings.push(`Calendar updated but event ID save failed: ${dbErr.message}`)
+    const { eventIds: newEventIds, meetLink: newMeetLink } = calResult.value
+    const dbUpdate: Record<string, unknown> = { calendar_event_ids: newEventIds }
+    if (newMeetLink) dbUpdate.google_meet_link = newMeetLink
+    const { error: dbErr } = await supabase.from('students').update(dbUpdate).eq('id', id)
+    if (dbErr) warnings.push(`Calendar updated but DB save failed: ${dbErr.message}`)
+    if (newMeetLink && student.google_drive_link) {
+      try {
+        await updateStudentMeetDoc(auth, student.google_drive_link, student.name, permitted.class_schedule as ClassSlot[], newMeetLink)
+      } catch (err) {
+        warnings.push(`Drive Meet doc update failed: ${errMsg(err)}`)
+      }
+    }
   } else {
     warnings.push(`Calendar update failed: ${errMsg(calResult.reason)}`)
   }
 
-  if (driveResult.status === 'rejected') {
+  const newMeetLinkGenerated = calResult.status === 'fulfilled' && !!calResult.value.meetLink
+  if (driveResult.status === 'rejected' && !newMeetLinkGenerated) {
     warnings.push(`Drive Meet doc update failed: ${errMsg(driveResult.reason)}`)
   }
 

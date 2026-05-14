@@ -36,17 +36,20 @@ export async function syncAllStudents(supabase: Supabase, auth: OAuth2Client): P
       if (!class_schedule?.length) return { name, status: 'skipped', reason: 'no class schedule' }
       if (!google_meet_link) return { name, status: 'skipped', reason: 'no Meet link' }
 
-      let eventIds: string[] = calendar_event_ids ?? []
-
-      if (!eventIds.length) {
-        try {
-          eventIds = await findRecurringEventIds(auth, name)
-          if (!eventIds.length) return { name, status: 'skipped', reason: 'no Calendar events found — use Create Calendar Event' }
-        } catch (err: unknown) {
-          const raw = errMsg(err, 'Calendar search failed')
-          return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect' : raw }
-        }
+      // Always search Calendar by name so we discover any events whose IDs are
+      // missing or wrong in the DB (e.g. rogue events from previous bad syncs).
+      // Merge with whatever is already in the DB and deduplicate.
+      const dbIds: string[] = calendar_event_ids ?? []
+      let searchIds: string[] = []
+      try {
+        searchIds = await findRecurringEventIds(auth, name)
+      } catch (err: unknown) {
+        const raw = errMsg(err, 'Calendar search failed')
+        if (authExpired(raw)) return { name, status: 'error', reason: 'Google auth expired — reconnect' }
+        // Non-fatal: fall back to DB IDs only
       }
+      const eventIds = [...new Set([...dbIds, ...searchIds])]
+      if (!eventIds.length) return { name, status: 'skipped', reason: 'no Calendar events found — use Create Calendar Event' }
 
       try {
         const [calResult, driveResult] = await Promise.allSettled([
@@ -61,16 +64,29 @@ export async function syncAllStudents(supabase: Supabase, auth: OAuth2Client): P
           return { name, status: 'error', reason: authExpired(raw) ? 'Google auth expired — reconnect' : raw }
         }
 
-        await supabase
-          .from('students')
-          .update({ calendar_event_ids: calResult.value.eventIds })
-          .eq('id', id)
+        const { eventIds: newEventIds, meetLink: newMeetLink } = calResult.value
+        const dbUpdate: Record<string, unknown> = { calendar_event_ids: newEventIds }
+        if (newMeetLink) dbUpdate.google_meet_link = newMeetLink
+        await supabase.from('students').update(dbUpdate).eq('id', id)
+
+        // Primary was regenerated — re-update Drive doc with the new Meet link
+        let driveUpdateError: string | undefined
+        if (newMeetLink && google_drive_link) {
+          try {
+            await updateStudentMeetDoc(auth, google_drive_link, name, class_schedule as ClassSlot[], newMeetLink)
+          } catch (err) {
+            driveUpdateError = errMsg(err, 'failed')
+          }
+        }
 
         const notes = [
           calendar_event_ids?.length ? undefined : 'IDs found via search',
-          driveResult.status === 'rejected'
-            ? `Drive doc: ${errMsg(driveResult.reason, 'failed')}`
-            : undefined,
+          newMeetLink ? 'new Meet link generated (primary was missing)' : undefined,
+          driveUpdateError
+            ? `Drive doc (new link): ${driveUpdateError}`
+            : driveResult.status === 'rejected' && !newMeetLink
+              ? `Drive doc: ${errMsg(driveResult.reason, 'failed')}`
+              : undefined,
         ].filter(Boolean).join(' · ')
 
         return { name, status: 'synced', reason: notes || undefined }

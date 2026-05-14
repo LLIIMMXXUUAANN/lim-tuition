@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import type { OAuth2Client } from 'google-auth-library'
 import type { ClassSlot } from '@/lib/types'
-import { DAY_INDEX } from '@/lib/utils'
+import { DAY_INDEX, timeToMins } from '@/lib/utils'
 
 const BYDAY: Record<string, string> = {
   Sunday: 'SU', Monday: 'MO', Tuesday: 'TU', Wednesday: 'WE',
@@ -24,41 +24,37 @@ function nowInTimezone(tz: string): Date {
   return new Date(`${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}:${g('second')}`)
 }
 
-function nextOccurrenceDateTimeStr(day: string, time: string): string {
-  const [hours, minutes] = time.split(':').map(Number)
-  const nowMYT = nowInTimezone(TIMEZONE)
-  const result = new Date(nowMYT)
-  result.setHours(hours, minutes, 0, 0)
-  const daysUntil = (DAY_INDEX[day] - nowMYT.getDay() + 7) % 7
-  if (daysUntil === 0 && result <= nowMYT) {
-    result.setDate(result.getDate() + 7)
-  } else {
-    result.setDate(result.getDate() + daysUntil)
-  }
+function formatDateObj(d: Date): string {
   return (
-    result.getFullYear() + '-' +
-    String(result.getMonth() + 1).padStart(2, '0') + '-' +
-    String(result.getDate()).padStart(2, '0') + 'T' +
-    String(result.getHours()).padStart(2, '0') + ':' +
-    String(result.getMinutes()).padStart(2, '0') + ':00'
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + 'T' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0') + ':00'
   )
 }
 
-function nextEndDateTimeStr(day: string, startTime: string, endTime: string): string {
-  const startStr = nextOccurrenceDateTimeStr(day, startTime)
-  const endStr = nextOccurrenceDateTimeStr(day, endTime)
-  if (endStr <= startStr) {
-    // Class crosses midnight — add one day to end
-    const [datePart, timePart] = endStr.split('T')
-    const d = new Date(datePart)
-    d.setDate(d.getDate() + 1)
-    return (
-      d.getFullYear() + '-' +
-      String(d.getMonth() + 1).padStart(2, '0') + '-' +
-      String(d.getDate()).padStart(2, '0') + 'T' + timePart
-    )
-  }
-  return endStr
+// Returns start/end datetime strings for a class slot, anchored to the next
+// occurrence of slot.day strictly after today. Starting from tomorrow removes
+// all "has today's class time already passed?" logic.
+// End is derived from start + duration so end > start is guaranteed.
+function slotDateTimes(slot: ClassSlot): { start: string; end: string } {
+  const nowMYT = nowInTimezone(TIMEZONE)
+  const base = new Date(nowMYT)
+  base.setDate(base.getDate() + 1)
+  base.setHours(0, 0, 0, 0)
+  const daysUntil = (DAY_INDEX[slot.day] - base.getDay() + 7) % 7
+  base.setDate(base.getDate() + daysUntil)
+
+  const [sh, sm] = slot.start.split(':').map(Number)
+  const durationMins = (timeToMins(slot.end) - timeToMins(slot.start) + 24 * 60) % (24 * 60)
+
+  const startDate = new Date(base)
+  startDate.setHours(sh, sm, 0, 0)
+  const endDate = new Date(startDate)
+  endDate.setMinutes(endDate.getMinutes() + durationMins)
+
+  return { start: formatDateObj(startDate), end: formatDateObj(endDate) }
 }
 
 export async function createWeeklyClassEvents(
@@ -74,18 +70,18 @@ export async function createWeeklyClassEvents(
   const calendar = google.calendar({ version: 'v3', auth })
   const eventIds: string[] = []
 
-  // Create the first slot's event with a conference to generate one Meet link
   const firstSlot = schedule[0]
   const firstByDay = BYDAY[firstSlot.day]
   if (!firstByDay) throw new Error(`Unknown day: ${firstSlot.day}`)
+  const firstDT = slotDateTimes(firstSlot)
 
   const firstRes = await calendar.events.insert({
     calendarId,
     conferenceDataVersion: 1,
     requestBody: {
       summary: studentName,
-      start: { dateTime: nextOccurrenceDateTimeStr(firstSlot.day, firstSlot.start), timeZone: TIMEZONE },
-      end: { dateTime: nextEndDateTimeStr(firstSlot.day, firstSlot.start, firstSlot.end), timeZone: TIMEZONE },
+      start: { dateTime: firstDT.start, timeZone: TIMEZONE },
+      end: { dateTime: firstDT.end, timeZone: TIMEZONE },
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${firstByDay}`],
       conferenceData: {
         createRequest: {
@@ -105,14 +101,15 @@ export async function createWeeklyClassEvents(
     schedule.slice(1).map(async (slot) => {
       const byDay = BYDAY[slot.day]
       if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
+      const dt = slotDateTimes(slot)
       const res = await calendar.events.insert({
         calendarId,
         conferenceDataVersion: 0,
         requestBody: {
           summary: studentName,
           description: `Google Meet link: ${meetLink}`,
-          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
-          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
+          start: { dateTime: dt.start, timeZone: TIMEZONE },
+          end: { dateTime: dt.end, timeZone: TIMEZONE },
           recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
         },
       })
@@ -133,17 +130,28 @@ export async function findRecurringEventIds(
   if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID env var is not set')
 
   const calendar = google.calendar({ version: 'v3', auth })
+
+  const timeMin = new Date().toISOString()
+  const timeMax = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+
   const res = await calendar.events.list({
     calendarId,
     q: studentName,
-    singleEvents: false,
-    maxResults: 20,
+    singleEvents: true,
+    timeMin,
+    timeMax,
+    maxResults: 200,
+    orderBy: 'startTime',
   })
-  const matching = (res.data.items ?? []).filter(
-    e => e.summary === studentName && e.recurrence?.length && e.id,
-  )
-  matching.sort((a, b) => new Date(a.created!).getTime() - new Date(b.created!).getTime())
-  return matching.map(e => e.id!)
+
+  const seriesIds = new Set<string>()
+  for (const e of res.data.items ?? []) {
+    if (e.summary === studentName && e.recurringEventId) {
+      seriesIds.add(e.recurringEventId)
+    }
+  }
+
+  return [...seriesIds]
 }
 
 export async function updateWeeklyClassEvents(
@@ -152,7 +160,7 @@ export async function updateWeeklyClassEvents(
   schedule: ClassSlot[],
   existingEventIds: string[],
   meetLink: string,
-): Promise<{ eventIds: string[] }> {
+): Promise<{ eventIds: string[]; meetLink?: string }> {
   if (schedule.length === 0) throw new Error('Student has no class schedule.')
 
   const calendarId = process.env.GOOGLE_CALENDAR_ID
@@ -160,51 +168,99 @@ export async function updateWeeklyClassEvents(
 
   const calendar = google.calendar({ version: 'v3', auth })
 
-  // Positional match: existingEventIds[i] corresponds to schedule[i].
-  // Index 0 always owns the Meet conference regardless of reordering — patching
-  // only updates time/recurrence, conferenceData is untouched so Meet link is preserved.
-  const updateOps = schedule.map((slot, i) => {
-    const byDay = BYDAY[slot.day]
-    if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
-
-    if (existingEventIds[i]) {
-      return calendar.events.patch({
-        calendarId,
-        eventId: existingEventIds[i],
-        requestBody: {
-          summary: studentName,
-          start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
-          end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
-          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
-        },
-      }).then(res => res.data.id ?? existingEventIds[i])
-    }
-
-    // New slot added — create without conference, reference existing Meet link
-    return calendar.events.insert({
-      calendarId,
-      conferenceDataVersion: 0,
-      requestBody: {
-        summary: studentName,
-        description: `Google Meet link: ${meetLink}`,
-        start: { dateTime: nextOccurrenceDateTimeStr(slot.day, slot.start), timeZone: TIMEZONE },
-        end: { dateTime: nextEndDateTimeStr(slot.day, slot.start, slot.end), timeZone: TIMEZONE },
-        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
-      },
-    }).then(res => {
-      if (!res.data.id) throw new Error('New calendar event created but no event ID was returned.')
-      return res.data.id
-    })
-  })
-
-  // Deletions are non-fatal — an orphaned recurring event is a minor annoyance, not a data correctness issue.
-  const deleteOps = existingEventIds.slice(schedule.length).map(eventId =>
-    calendar.events.delete({ calendarId, eventId }).catch((err: unknown) => {
-      console.error(`Failed to delete calendar event ${eventId}:`, err)
-    })
+  // Fetch all existing events to find the primary one (the event that owns the
+  // Google Meet conference, identified by hangoutLink). We patch the primary
+  // rather than deleting it so the Meet link is preserved. Everything else is
+  // deleted and recreated fresh — no BYDAY-reading or duplicate-tracking needed.
+  const eventDetails = await Promise.all(
+    existingEventIds.map(id =>
+      calendar.events.get({ calendarId, eventId: id }).catch(() => null)
+    )
   )
 
-  const [newEventIds] = await Promise.all([Promise.all(updateOps), Promise.all(deleteOps)])
-  return { eventIds: newEventIds }
-}
+  // Primary = the event that owns the Meet conference (hangoutLink present).
+  // If none found (e.g. primary was manually deleted), treat as no-primary so the
+  // else branch below creates a fresh event with conferenceData and a new Meet link.
+  const primary = eventDetails.find(d => d?.data?.hangoutLink && d.data.id)
 
+  const primaryId = primary?.data?.id ?? null
+  const allExistingIds = eventDetails.map(d => d?.data?.id).filter(Boolean) as string[]
+
+  const slot0 = schedule[0]
+  const byDay0 = BYDAY[slot0.day]
+  if (!byDay0) throw new Error(`Unknown day: ${slot0.day}`)
+  const dt0 = slotDateTimes(slot0)
+
+  let primaryResultId: string
+  let newMeetLink: string | undefined
+  if (primaryId) {
+    const res = await calendar.events.patch({
+      calendarId,
+      eventId: primaryId,
+      requestBody: {
+        summary: studentName,
+        start: { dateTime: dt0.start, timeZone: TIMEZONE },
+        end: { dateTime: dt0.end, timeZone: TIMEZONE },
+        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay0}`],
+      },
+    })
+    primaryResultId = res.data.id ?? primaryId
+  } else {
+    const res = await calendar.events.insert({
+      calendarId,
+      conferenceDataVersion: 1,
+      requestBody: {
+        summary: studentName,
+        start: { dateTime: dt0.start, timeZone: TIMEZONE },
+        end: { dateTime: dt0.end, timeZone: TIMEZONE },
+        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay0}`],
+        conferenceData: {
+          createRequest: {
+            requestId: `${studentName}-sync-${Date.now()}`,
+            conferenceSolutionKey: { type: 'hangoutsMeet' },
+          },
+        },
+      },
+    })
+    if (!res.data.id) throw new Error('Calendar event created but no event ID was returned.')
+    primaryResultId = res.data.id
+    newMeetLink = res.data.hangoutLink ?? undefined
+  }
+
+  const [, remainingIds] = await Promise.all([
+    Promise.all(
+      allExistingIds
+        .filter(id => id !== primaryId)
+        .map(eventId =>
+          calendar.events.delete({ calendarId, eventId }).catch((err: unknown) => {
+            // 410 Gone = already deleted — that's the desired outcome, not an error
+            if ((err as { status?: number }).status !== 410) {
+              console.error(`Failed to delete calendar event ${eventId}:`, err)
+            }
+          })
+        )
+    ),
+    Promise.all(
+      schedule.slice(1).map(async (slot) => {
+        const byDay = BYDAY[slot.day]
+        if (!byDay) throw new Error(`Unknown day: ${slot.day}`)
+        const dt = slotDateTimes(slot)
+        const res = await calendar.events.insert({
+          calendarId,
+          conferenceDataVersion: 0,
+          requestBody: {
+            summary: studentName,
+            description: `Google Meet link: ${newMeetLink ?? meetLink}`,
+            start: { dateTime: dt.start, timeZone: TIMEZONE },
+            end: { dateTime: dt.end, timeZone: TIMEZONE },
+            recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+          },
+        })
+        if (!res.data.id) throw new Error('Calendar event created but no event ID was returned.')
+        return res.data.id
+      })
+    ),
+  ])
+
+  return { eventIds: [primaryResultId, ...remainingIds], meetLink: newMeetLink }
+}

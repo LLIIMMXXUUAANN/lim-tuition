@@ -216,7 +216,7 @@ Fields not in this allowlist are silently stripped (prevents prompt injection).
 1. Strips disallowed keys from `fields`
 2. Normalises `access_emails` entries to lowercase+trimmed if present
 3. Runs Supabase `update`
-4. If `class_schedule` was updated **and** the student has `calendar_event_ids` + `google_meet_link`: patches Calendar events and rewrites the Drive Meet doc in parallel via `Promise.allSettled` (Google failures are non-fatal)
+4. If `class_schedule` was updated **and** the student has `calendar_event_ids` + `google_meet_link`: calls `updateWeeklyClassEvents` (nuke-and-repave) and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; if a new Meet link is generated (primary was deleted), also saves it to DB and re-updates the Drive doc; Google failures are non-fatal and returned as `googleWarnings`
 5. If `class_schedule` was updated but Google isn't set up: returns `suggestGoogleSetup: true`
 
 ### Output
@@ -337,10 +337,11 @@ None.
 ### Process
 
 1. Fetches refresh token from `settings` table via `getOAuth2Client()`
-2. For each active student with `calendar_event_ids`: patches Calendar events + rewrites Drive Meet doc
-3. For students **without** `calendar_event_ids`: searches Calendar by exact student name (`findRecurringEventIds`), saves the found IDs, then patches
-4. All students processed in parallel via `Promise.all`
-5. If `invalid_grant` is detected at any point, stops early and returns a reconnect message
+2. For **every** active student: searches Calendar by exact student name (`findRecurringEventIds`) and merges discovered IDs with any stored `calendar_event_ids` — catches rogue events not tracked in the DB
+3. Applies nuke-and-repave via `updateWeeklyClassEvents`: finds the event that owns the Meet conference, patches it to slot 0, deletes all others, creates fresh events for remaining slots
+4. If the primary event was deleted, a new Meet link is generated — saved to DB and Drive doc automatically
+5. All students processed in parallel via `Promise.all`
+6. If `invalid_grant` is detected, stops early and returns a reconnect message
 
 ### Output
 
