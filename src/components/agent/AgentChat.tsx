@@ -89,9 +89,10 @@ export default function AgentChat() {
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
-  const [useLangGraph, setUseLangGraph] = useState(() =>
-    typeof window !== 'undefined' && localStorage.getItem(LG_STORAGE_KEY) === 'true'
-  )
+  const [useLangGraph, setUseLangGraph] = useState(false)
+  useEffect(() => {
+    setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) === 'true')
+  }, [])
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
   }, [])
