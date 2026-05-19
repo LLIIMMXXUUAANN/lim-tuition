@@ -72,6 +72,16 @@ export function groupSlotsByDay(schedule: ClassSlot[]): Map<string, ClassSlot[]>
   return map
 }
 
+export function getMYTDateString(): string {
+  return new Intl.DateTimeFormat('en-MY', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date())
+}
+
 export function getWeekdayDates(year: number, month: number, weekday: string): number[] {
   const dayIndex = DAY_INDEX[weekday]
   if (dayIndex === undefined) return []

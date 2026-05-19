@@ -8,7 +8,8 @@ Public landing page + private admin dashboard for managing tuition students, cla
 - **Supabase** — Postgres database + magic link auth
 - **Tailwind CSS v4** + shadcn/ui + @heroicons/react
 - **Gemini 2.5 Flash** (`@google/generative-ai`) — AI slot classification with structured output
-- **Gemini 2.5 Flash** (`@google/genai` v1.x) — AI agent function calling for student management
+- **Gemini 2.5 Flash** (`@google/genai` v1.x) — classic AI agent (single-model function-calling loop)
+- **LangChain + LangGraph** (`@langchain/google`, `@langchain/langgraph`) — multi-agent supervisor/subagent backend (opt-in via toggle)
 - **Zod** — runtime validation of AI responses
 
 ## Getting Started
@@ -44,16 +45,16 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the route searches Calendar by name to find all events (including any rogue ones not tracked in the DB), merges them with the stored event IDs, then applies nuke-and-repave: the event that owns the Google Meet conference is patched to the new schedule, all others are deleted, and fresh events are created for any remaining slots. The Meet link is always preserved; if the primary event was accidentally deleted, a new one with a fresh Meet link is auto-generated and the new link is saved to the DB and Drive doc. An amber warning is shown if Drive update fails, but the save still proceeds
 - **Google Drive folder creation** — button label adapts to the student's mode: **"Create Google Drive Folder (My Python Syllabus)"** creates the full folder structure (Teaching Slides shortcut, coding notebooks, homework folders, Google Meet Link doc); **"Create Google Drive Folder (Other Syllabus)"** creates the root folder with only the Google Meet Link doc. Both require the Meet link to be set first and set anyone-with-link viewer access
 - **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. Always searches Calendar by student name and merges any discovered events with the stored IDs (catches rogue events from previous bad syncs). Applies nuke-and-repave per student: keep the Meet-conference event, delete everything else, recreate cleanly. If the primary event was deleted, a new Meet link is generated and saved automatically. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
-- **AI Agent** — natural language interface at `/admin/agent` powered by Gemini 2.5 Flash function calling. See [`docs/agent-tools.md`](docs/agent-tools.md) for the full input/process/output reference for all 19 tools. Type commands like "Create student LX, Other Syllabus, Monday 3–5pm, RM 60/hr", "Update John's fee to RM 80", "Download the weekly schedule image", or "Generate slot availability — student free Tuesday/Thursday after 4pm". Gemini drives a multi-round tool loop (up to 10 rounds) that executes against Supabase and Google APIs, then self-evaluates that mutations persisted. Conversation history is sent on every request and persisted to localStorage across page refreshes.
+- **AI Agent** — natural language interface at `/admin/agent` with two backends toggled via the **LangGraph** switch in the header. See [`docs/agent-tools.md`](docs/agent-tools.md) for the full input/process/output reference for all 19 tools. Both backends share the same tool implementations and SSE event format.
+  - **Classic mode** (default): Gemini 2.5 Flash drives a single-model function-calling loop (up to 10 rounds) via `@google/genai`. Tool calls run in parallel within each round; a timing step shows `⏱ parallel ×N — tool1 Xms, tool2 Yms (total Zms)`. After mutations a `selfEval` DB query appends a `✓` / `⚠` step.
+  - **LangGraph mode** (toggle on): supervisor + 3 specialist subagents via `@langchain/langgraph`. Supervisor routes to `student_agent`, `template_agent`, or `timetable_agent`. Each subagent uses a two-phase tool-selection loop (slim catalog → full schema for selected tool) that reliably forces Gemini to call the correct tool. Post-hook self-eval runs inside each subagent after mutations. Both backends are stateless — full message history is sent on every request.
   - **19 tools** (fine-grained reads, coarse-grained writes): `search_students`, `get_student`, `list_students` (optional status filter), `create_student`, `update_student`, `delete_student`, `setup_student_google`, `sync_all_students`, `manage_portal_access`, `get_schedule` (students by day of week), `get_fee_summary` (monthly revenue per student + total), `list_templates` (discover template ids/titles), `get_template` (fetch a single template's content by id), `generate_payment_message` (generate a ready-to-send payment reminder for a student; defaults to next month), `get_timetable_settings` (read scheduling rules + buffer mins), `update_timetable_rules` (save new rules text), `update_buffer_mins` (0–60 min buffer around booked classes), `generate_slot_availability` (AI-classify every free slot using Gemini), `download_timetable_image` (fetch students for schedule PNG)
-  - **SSE streaming:** the route returns `text/event-stream` — tool steps appear immediately as each tool fires, and the final reply streams token-by-token via `generateContentStream`. The frontend patches a placeholder message in place as events arrive.
-  - **Parallel tool execution:** within each Gemini round, all returned function calls run concurrently via `Promise.all`. When multiple tools fire in the same round, a timing step is shown: `⏱ parallel ×N — tool1 Xms, tool2 Yms (total Zms)`. System instruction Rule 14 nudges Gemini to batch independent operations (e.g. searching or updating two students) into a single round.
+  - **SSE streaming:** both routes return `text/event-stream`. Tool steps appear immediately as each tool fires; the final reply streams token-by-token. The frontend patches a placeholder message in place as events arrive.
   - **Auto Google sync:** updating a student's `class_schedule` via the agent automatically patches Calendar events and rewrites the Drive Meet doc (parallel, non-fatal)
   - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
-  - **Timetable via agent:** `get_timetable_settings` / `update_timetable_rules` / `update_buffer_mins` manage scheduling configuration; `generate_slot_availability` runs the same Gemini slot-classifier as the timetable tab and triggers a **Download Slot Availability PNG** button in the chat; `download_timetable_image` triggers a **Download Schedule PNG** button — both render client-side using the shared `timetable-canvas.ts` lib for pixel-identical output to the timetable tab exports
+  - **Timetable via agent:** `generate_slot_availability` runs the same Gemini slot-classifier as the timetable tab and triggers a **Download Slot Availability PNG** button in the chat; `download_timetable_image` triggers a **Download Schedule PNG** button — both render client-side using the shared `timetable-canvas.ts` lib
   - **Safety:** `delete_student` requires explicit "yes" in conversation + warns about Calendar/Drive removal; `update_student` uses `ALLOWED_UPDATE_KEYS` allowlist to prevent prompt injection; `sync_all_students` requires explicit confirmation; `update_timetable_rules` shows proposed rules and confirms before writing
-  - **Self-evaluation:** after every mutation (`create_student`, `update_student`, `delete_student`, `setup_student_google`, `update_timetable_rules`, `update_buffer_mins`), a post-loop DB query verifies the change persisted and appends a `✓` or `⚠` status to the tool steps display
-  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; one `"View NAME →"` link per affected student rendered from `[student_id:NAME:UUID]` tokens Gemini appends to replies (supports multiple students in one reply); inline PNG download buttons appear after timetable tool calls; voice input via Web Speech API (Chrome/Edge/Safari) — mic button hidden when unsupported
+  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; one `"View NAME →"` link per affected student rendered from `[student_id:NAME:UUID]` tokens; inline PNG download buttons after timetable tool calls; voice input via Web Speech API (Chrome/Edge/Safari)
 - **Timetable** — two-tab layout:
   - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy `#0A1A2F`, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
@@ -98,7 +99,8 @@ src/
     admin/(app)/templates/        → message templates + payment generator
     admin/(app)/timetable/        → weekly availability grid
     admin/(app)/agent/            → AI agent chat UI
-    api/agent/                    → Gemini function-calling loop (max 10 rounds, SSE streaming, parallel tool execution)
+    api/agent/chat/               → classic Gemini function-calling loop (max 10 rounds, SSE streaming, parallel tool execution)
+    api/agent/lg/chat/            → LangGraph supervisor+subagent backend (SSE streaming, same event format)
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
@@ -118,10 +120,11 @@ src/
     google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
     hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
     agent/      → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval)
+    agent/lg/   → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
     templates.ts → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
     gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
     types.ts    → shared TypeScript types (Student, ClassSlot, etc.)
-    utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, formatFee, ordinal, oxfordList, groupSlotsByDay
+    utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, getMYTDateString, formatFee, ordinal, oxfordList, groupSlotsByDay
   proxy.ts      → Next.js middleware (auth + route protection)
 ```
 

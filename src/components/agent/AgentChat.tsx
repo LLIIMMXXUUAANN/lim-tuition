@@ -14,6 +14,7 @@ import {
 } from '@/lib/timetable-canvas'
 
 const STORAGE_KEY = 'agent_chat_messages'
+const LG_STORAGE_KEY = 'agent_use_lg'
 
 interface ChatMessage {
   id: string
@@ -88,6 +89,9 @@ export default function AgentChat() {
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
+  const [useLangGraph, setUseLangGraph] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem(LG_STORAGE_KEY) === 'true'
+  )
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
   }, [])
@@ -101,6 +105,12 @@ export default function AgentChat() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
     } catch {}
   }, [messages])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LG_STORAGE_KEY, String(useLangGraph))
+    } catch {}
+  }, [useLangGraph])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -161,7 +171,8 @@ export default function AgentChat() {
         content: m.content,
       }))
 
-      const res = await fetch('/api/agent/chat', {
+      const endpoint = useLangGraph ? '/api/agent/lg/chat' : '/api/agent/chat'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages }),
@@ -245,7 +256,24 @@ export default function AgentChat() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <h1 className="text-xl font-bold text-navy">AI Agent</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-navy">AI Agent</h1>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={useLangGraph}
+            onClick={() => setUseLangGraph(v => !v)}
+            title={useLangGraph ? 'Switch to classic mode' : 'Switch to LangGraph mode'}
+            className="flex items-center gap-1.5 group"
+          >
+            <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useLangGraph ? 'bg-navy' : 'bg-slate-200'}`}>
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${useLangGraph ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </span>
+            <span className={`text-xs font-medium transition-colors ${useLangGraph ? 'text-navy' : 'text-slate-400'}`}>
+              LangGraph
+            </span>
+          </button>
+        </div>
         {messages.length > 0 && (
           <button
             onClick={clearChat}

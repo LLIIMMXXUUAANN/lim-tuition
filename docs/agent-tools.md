@@ -1,6 +1,13 @@
 # Agent Tool Reference
 
-All 19 tools available to the AI agent at `/admin/agent`. Implemented in `src/lib/agent/tools.ts`; Gemini function schemas split across `src/lib/agent/domains/` (students · templates · timetable) and composed in `src/lib/agent/schema.ts`.
+All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is shared by both agent backends:
+
+| Backend | Schema format | Entry point |
+|---|---|---|
+| **Classic** (default) | `FunctionDeclaration[]` in `src/lib/agent/domains/` composed by `src/lib/agent/schema.ts` | `src/app/api/agent/chat/route.ts` |
+| **LangGraph** (toggle on) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts` | `src/app/api/agent/lg/chat/route.ts` |
+
+Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
 ---
 
