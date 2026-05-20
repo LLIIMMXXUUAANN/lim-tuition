@@ -10,6 +10,7 @@ Public landing page + private admin dashboard for managing tuition students, cla
 - **Gemini 2.5 Flash** (`@google/generative-ai`) — AI slot classification with structured output
 - **Gemini 2.5 Flash** (`@google/genai` v1.x) — classic AI agent (single-model function-calling loop)
 - **LangChain + LangGraph** (`@langchain/google`, `@langchain/langgraph`) — multi-agent supervisor/subagent backend (opt-in via toggle)
+- **LangSmith** — optional LangGraph run tracing; enable with `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY`
 - **Zod** — runtime validation of AI responses
 
 ## Getting Started
@@ -19,6 +20,7 @@ Copy the environment variables:
 ```bash
 cp .env.example .env.local
 # Fill in your Supabase URL, anon key, Google OAuth credentials, and GEMINI_API_KEY
+# Optional: set LANGCHAIN_TRACING=true + LANGSMITH_API_KEY to enable LangGraph tracing in LangSmith
 ```
 
 Run the dev server:

@@ -137,6 +137,8 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 
 Alternative agent backend toggled via the **LangGraph** switch in the chat header. Uses `@langchain/langgraph` with a supervisor+subagent architecture instead of the classic single-agent Gemini loop. Both backends share the same 19 tool implementations in `src/lib/agent/tools.ts`; the LangGraph layer wraps them in Zod schemas via `tool-factories.ts`.
 
+**LangSmith tracing:** LangGraph runs are traced automatically when `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY` are set in the environment. Traces (tool calls, LLM inputs/outputs, latency) appear in the LangSmith web UI under `LANGSMITH_PROJECT` (`tuition-agent` by default). Classic-mode runs are not traced. Required env vars: `LANGCHAIN_TRACING`, `LANGSMITH_ENDPOINT`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — all documented in `.env.example`.
+
 **File structure:**
 - **`lib/agent/lg/model.ts`** — `getGeminiChatModel()`: returns a fresh `ChatGoogle` instance per call (`gemini-2.5-flash`, `temperature: 0`, `thinkingBudget: 0`); parallel subagents must not share a model instance; `thinkingBudget: 0` disables Gemini 2.5 Flash's thinking pass, which otherwise exhausts its token budget on large tool schemas (11 tools) and returns an empty response
 - **`lib/agent/lg/handoff.ts`** — `HandoffTask` type (`{ agentName, task }`); `createDispatchTool()`: creates the `dispatch` tool — the LLM uses the schema to declare which agents to call and what task to give each (one `{ agentName, task }` entry per agent); the implementation is a dummy (never invoked — `supervisorNode` intercepts the call and emits `Send` commands directly before any ToolNode runs); `normalizeAgentName()`: slugifies agent names
