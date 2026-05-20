@@ -20,6 +20,7 @@ interface ChatMessage {
   id: string
   role: 'user' | 'agent'
   content: string
+  isError?: boolean
   steps?: string[]
   scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
@@ -179,25 +180,43 @@ export default function AgentChat() {
     setListening(true)
   }
 
-  async function send() {
-    const text = input.trim()
-    if (!text || loading) return
-    setInput('')
+  const toApiMsg = (m: ChatMessage) => ({
+    role: m.role === 'agent' ? ('model' as const) : ('user' as const),
+    content: m.content,
+  })
 
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() }
-    const pendingId = crypto.randomUUID()
-    const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
+  async function send(retryMsgId?: string) {
+    if (loading) return
 
-    setMessages([...messages, userMsg, pendingMsg])
+    let pendingId: string
+    let apiMessages: { role: 'user' | 'model'; content: string }[]
+
+    if (retryMsgId) {
+      const errorIdx = messages.findIndex(m => m.id === retryMsgId)
+      if (errorIdx === -1) return
+      pendingId = retryMsgId
+      setMessages(prev => prev.map(m =>
+        m.id === pendingId
+          ? { ...m, content: '', steps: [], isError: false, scheduleStudents: undefined, slotData: undefined }
+          : m
+      ))
+      apiMessages = messages.slice(0, errorIdx).map(toApiMsg)
+    } else {
+      const text = input.trim()
+      if (!text) return
+      setInput('')
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() }
+      pendingId = crypto.randomUUID()
+      const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
+      setMessages([...messages, userMsg, pendingMsg])
+      apiMessages = [...messages, userMsg].map(toApiMsg)
+    }
+
     setLoading(true)
 
     let received = false
 
     try {
-      const apiMessages = [...messages, userMsg].map(m => ({
-        role: m.role === 'agent' ? ('model' as const) : ('user' as const),
-        content: m.content,
-      }))
 
       const endpoint = useLangGraph ? '/api/agent/lg/chat' : '/api/agent/chat'
       const res = await fetch(endpoint, {
@@ -245,7 +264,7 @@ export default function AgentChat() {
             received = true
             setMessages(prev => prev.map(m =>
               m.id === pendingId
-                ? { ...m, content: `Something went wrong: ${event.message}` }
+                ? { ...m, content: `Something went wrong: ${event.message}`, isError: true }
                 : m
             ))
           } else if (event.type === 'download_schedule') {
@@ -262,13 +281,13 @@ export default function AgentChat() {
     } catch (err) {
       setMessages(prev => prev.map(m =>
         m.id === pendingId
-          ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}` }
+          ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`, isError: true }
           : m
       ))
     } finally {
       if (!received) {
         setMessages(prev => prev.map(m =>
-          m.id === pendingId ? { ...m, content: 'No response received — please try again.' } : m
+          m.id === pendingId ? { ...m, content: 'No response received — please try again.', isError: true } : m
         ))
       }
       setLoading(false)
@@ -277,6 +296,14 @@ export default function AgentChat() {
 
   function clearChat() {
     setMessages([])
+  }
+
+  function retry(msgId: string) {
+    const errorIdx = messages.findIndex(m => m.id === msgId)
+    if (errorIdx <= 0) return
+    const userMsg = messages.slice(0, errorIdx).reverse().find(m => m.role === 'user')
+    if (!userMsg) return
+    void send(msgId)
   }
 
   return (
@@ -401,10 +428,24 @@ export default function AgentChat() {
                     )}
                   </div>
                 )}
-                {msg.timestamp && (
-                  <span className="text-xs text-slate-400 mt-1 px-1">
-                    {formatMessageTime(msg.timestamp, renderNow)}
-                  </span>
+                {(msg.timestamp || msg.isError) && (
+                  <div className="flex items-center justify-between w-full mt-1 px-1">
+                    {msg.timestamp && (
+                      <span className="text-xs text-slate-400">
+                        {formatMessageTime(msg.timestamp, renderNow)}
+                      </span>
+                    )}
+                    {msg.isError && (
+                      <button
+                        type="button"
+                        onClick={() => retry(msg.id)}
+                        disabled={loading}
+                        className="text-xs text-slate-400 hover:text-navy transition-colors disabled:opacity-40"
+                      >
+                        ↻ Try again
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

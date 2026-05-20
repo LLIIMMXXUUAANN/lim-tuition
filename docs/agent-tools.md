@@ -9,6 +9,8 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 
 Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
+**Error handling and retry** — when a request fails (network error, API error, or empty stream), the agent bubble shows the error text and a `↻ Try again` button appears bottom-right (same row as the timestamp). Clicking it replays the last user message in-place without duplicating it in history. The `isError` flag on the stored message persists in localStorage so the button survives a page refresh.
+
 **LangSmith tracing** — LangGraph runs are traced automatically when `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY` are set. Traces appear in the LangSmith web UI under the `LANGSMITH_PROJECT` name (default: `tuition-agent`). Classic-mode runs are not traced. See `.env.example` for the full set of LangSmith env vars.
 
 ---
