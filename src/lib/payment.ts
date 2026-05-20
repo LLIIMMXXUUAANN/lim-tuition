@@ -17,7 +17,7 @@ export interface BuildPaymentParams {
 }
 
 export type BuildPaymentResult =
-  | { message: string; monthName: string; sessionCount: number; error?: never }
+  | { message: string; monthName: string; error?: never }
   | { error: string; message?: never }
 
 export function buildPaymentMessage(params: BuildPaymentParams): BuildPaymentResult {
@@ -53,5 +53,5 @@ export function buildPaymentMessage(params: BuildPaymentParams): BuildPaymentRes
         return `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(sessionFeeTotal - coFee)}. Thank you. 😄`
       })()
 
-  return { message, monthName, sessionCount }
+  return { message, monthName }
 }

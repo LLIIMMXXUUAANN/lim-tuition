@@ -23,6 +23,23 @@ interface ChatMessage {
   steps?: string[]
   scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
+  timestamp?: string
+}
+
+const MYT_TZ = 'Asia/Kuala_Lumpur'
+const MYT_DATE_KEY_OPTS: Intl.DateTimeFormatOptions = { timeZone: MYT_TZ, year: 'numeric', month: 'numeric', day: 'numeric' }
+const MYT_TIME_OPTS: Intl.DateTimeFormatOptions = { timeZone: MYT_TZ, hour: 'numeric', minute: '2-digit', hour12: true }
+const MYT_DAY_MONTH_OPTS: Intl.DateTimeFormatOptions = { timeZone: MYT_TZ, month: 'short', day: 'numeric' }
+
+function formatMessageTime(iso: string, now: Date): string {
+  const date = new Date(iso)
+  const timeStr = date.toLocaleTimeString('en-MY', MYT_TIME_OPTS)
+  const toDateKey = (d: Date) => d.toLocaleDateString('en-MY', MYT_DATE_KEY_OPTS)
+  if (toDateKey(date) === toDateKey(now)) return timeStr
+  const dayMonth = date.toLocaleDateString('en-MY', MYT_DAY_MONTH_OPTS)
+  return date.getFullYear() === now.getFullYear()
+    ? `${dayMonth}, ${timeStr}`
+    : `${dayMonth} ${date.getFullYear()}, ${timeStr}`
 }
 
 function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
@@ -84,6 +101,7 @@ function downloadSlotsPng(slotData: { day: string; time: string; state: string }
 }
 
 export default function AgentChat() {
+  const renderNow = new Date()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -166,9 +184,9 @@ export default function AgentChat() {
     if (!text || loading) return
     setInput('')
 
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text }
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() }
     const pendingId = crypto.randomUUID()
-    const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [] }
+    const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
 
     setMessages([...messages, userMsg, pendingMsg])
     setLoading(true)
@@ -317,71 +335,78 @@ export default function AgentChat() {
             : { text: msg.content, students: [] }
           return (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'user' ? (
-                <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm">
-                  {msg.content}
-                </div>
-              ) : (
-                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[80%] text-sm shadow-sm">
-                  {msg.steps && msg.steps.length > 0 && (
-                    <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100 break-all">
-                      {msg.steps.map((step, j) => (
-                        <div key={j}>{step.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '…')}</div>
-                      ))}
-                    </div>
-                  )}
-                  {!msg.content ? (
-                    <span className="animate-pulse text-slate-400 text-sm">⋯</span>
-                  ) : (
-                    <>
-                      <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_code]:break-words">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            a: ({ href, children }) => {
-                              if (href?.startsWith('mailto:')) return <span>{children}</span>
-                              return <a href={href} className="text-navy underline">{children}</a>
-                            },
-                          }}
-                        >{msgText}</ReactMarkdown>
+              <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                {msg.role === 'user' ? (
+                  <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm shadow-sm">
+                    {msg.steps && msg.steps.length > 0 && (
+                      <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100 break-all">
+                        {msg.steps.map((step, j) => (
+                          <div key={j}>{step.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '…')}</div>
+                        ))}
                       </div>
-                      {(msg.scheduleStudents || msg.slotData) && (
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          {msg.scheduleStudents && (
-                            <button
-                              onClick={() => downloadSchedulePng(msg.scheduleStudents!)}
-                              className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
-                            >
-                              ↓ Download Schedule PNG
-                            </button>
-                          )}
-                          {msg.slotData && (
-                            <button
-                              onClick={() => downloadSlotsPng(msg.slotData!)}
-                              className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
-                            >
-                              ↓ Download Slot Availability PNG
-                            </button>
-                          )}
+                    )}
+                    {!msg.content ? (
+                      <span className="animate-pulse text-slate-400 text-sm">⋯</span>
+                    ) : (
+                      <>
+                        <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_code]:break-words">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              a: ({ href, children }) => {
+                                if (href?.startsWith('mailto:')) return <span>{children}</span>
+                                return <a href={href} className="text-navy underline">{children}</a>
+                              },
+                            }}
+                          >{msgText}</ReactMarkdown>
                         </div>
-                      )}
-                      {msgStudents.length > 0 && (
-                        <div className="flex justify-end gap-3 mt-2">
-                          {msgStudents.map(s => (
-                            <Link
-                              key={s.id}
-                              href={`/admin/students/${s.id}`}
-                              className="text-xs font-medium text-navy hover:underline"
-                            >
-                              View {s.name} →
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                        {(msg.scheduleStudents || msg.slotData) && (
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {msg.scheduleStudents && (
+                              <button
+                                onClick={() => downloadSchedulePng(msg.scheduleStudents!)}
+                                className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
+                              >
+                                ↓ Download Schedule PNG
+                              </button>
+                            )}
+                            {msg.slotData && (
+                              <button
+                                onClick={() => downloadSlotsPng(msg.slotData!)}
+                                className="text-xs font-medium text-navy border border-navy/30 rounded-lg px-3 py-1.5 hover:bg-navy hover:text-white transition-colors"
+                              >
+                                ↓ Download Slot Availability PNG
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {msgStudents.length > 0 && (
+                          <div className="flex justify-end gap-3 mt-2">
+                            {msgStudents.map(s => (
+                              <Link
+                                key={s.id}
+                                href={`/admin/students/${s.id}`}
+                                className="text-xs font-medium text-navy hover:underline"
+                              >
+                                View {s.name} →
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {msg.timestamp && (
+                  <span className="text-xs text-slate-400 mt-1 px-1">
+                    {formatMessageTime(msg.timestamp, renderNow)}
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
