@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
-import { timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, formatFee, ordinal, oxfordList, groupSlotsByDay } from '@/lib/utils'
+import { timeToMins, DAY_INDEX, getWeekdayDates, groupSlotsByDay } from '@/lib/utils'
+import { buildPaymentMessage } from '@/lib/payment'
 import { getOAuth2Client } from '@/lib/google/auth'
 import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/lib/google/calendar'
 import { createStudentDriveFolder, updateStudentMeetDoc } from '@/lib/google/drive'
@@ -425,36 +426,20 @@ export async function generatePaymentMessage(
   if (error || !student) return { error: 'Student not found' }
   if (student.status !== 'Active') return { error: 'Student is not active' }
 
-  const schedule = (student.class_schedule as ClassSlot[]) ?? []
-  const slotsByDay = groupSlotsByDay(schedule)
-
-  const allDates: number[] = []
-  let sessionFeeTotal = 0
-  for (const [day, slots] of slotsByDay) {
-    const dates = getWeekdayDates(resolvedYear, resolvedMonth, day)
-    allDates.push(...dates)
-    const hoursPerSession = slots.reduce((sum, s) => sum + (timeToMins(s.end) - timeToMins(s.start)) / 60, 0)
-    sessionFeeTotal += dates.length * hoursPerSession * student.fee_per_hour
-  }
-  allDates.sort((a, b) => a - b)
-
-  if (allDates.length === 0) return { error: 'No scheduled class days found for this student' }
-
-  const dateList = oxfordList(allDates.map(ordinal))
-  const monthName = MONTH_NAMES[resolvedMonth - 1]
-  const cp = student.contact_person?.trim()
-  const recipient = (!cp || cp === '-') ? student.name : cp
-  const sessionCount = allDates.length
-
-  const message = templateType === 1
-    ? `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}), bringing the total to RM${formatFee(sessionFeeTotal)}. Thank you 😄`
-    : (() => {
-        const coFee = carryover * (sessionFeeTotal / sessionCount)
-        const coLabel = `${carryover} session${carryover === 1 ? '' : 's'}`
-        return `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(sessionFeeTotal - coFee)}. Thank you. 😄`
-      })()
-
-  return { message, month: resolvedMonth, year: resolvedYear, monthName }
+  const result = buildPaymentMessage({
+    student: {
+      name: student.name,
+      contact_person: student.contact_person,
+      class_schedule: student.class_schedule as ClassSlot[],
+      fee_per_hour: student.fee_per_hour,
+    },
+    month: resolvedMonth,
+    year: resolvedYear,
+    templateType,
+    carryover,
+  })
+  if ('error' in result) return { error: result.error }
+  return { message: result.message, month: resolvedMonth, year: resolvedYear, monthName: result.monthName }
 }
 
 export async function getFeeSummary(supabase: Supabase, month?: number, year?: number) {

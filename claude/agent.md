@@ -1,10 +1,9 @@
 ## Payment generator (`src/app/api/generate-payment/route.ts`)
 
-POST route handler. No external AI — pure JS date arithmetic:
-- Groups `class_schedule` slots by day via `groupSlotsByDay` (from `src/lib/utils.ts`), finds all occurrences of each weekday in the given month
-- Fee = `fee_per_hour × duration_hours × session_count` per day, summed across all days
-- Template 2 (carryover): deducts `carryover × avg_fee_per_session` from the total (tutor owes student those sessions)
-- `formatFee`, `ordinal`, `oxfordList` are shared utilities from `src/lib/utils.ts` — do not redefine them locally
+POST route handler. No external AI — delegates all calculation to `buildPaymentMessage()` from `src/lib/payment.ts`:
+- Validates request body (month 1–12, year 2020–2100, carryover required for template 2), fetches student from DB, then calls `buildPaymentMessage()` with the student data + params
+- Returns `{ message }` on success, `{ error }` on validation/not-found failures
+- `src/lib/payment.ts` is the single source of truth for fee calculation and message templates — do not inline payment logic in this route or in `tools.ts`
 
 ## AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/`, `src/lib/agent/`)
 
@@ -81,7 +80,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `getFeeSummary` uses `getWeekdayDates` (from `src/lib/utils.ts`) for exact session counting; tracks raw fees in a parallel array to avoid per-student rounding accumulation before summing the total
 - `listTemplates` is a pure synchronous function — no DB call. All metadata (id, title, description) lives in the in-memory `TEMPLATE_META` from `src/lib/templates.ts`; only `get_template` hits the DB to fetch `content`
 - `getTemplate` uses `.maybeSingle()` and returns `{ id, title, description, content }` via `templateMeta(id)` helper from `src/lib/templates.ts`
-- `generatePaymentMessage` defaults to next calendar month (MYT) when `month`/`year` are omitted; uses `groupSlotsByDay`, `formatFee`, `ordinal`, `oxfordList` from `src/lib/utils.ts`; `template_type 2` deducts `carryover × avg_fee_per_session`; returns `{ message, month, year, monthName }`
+- `generatePaymentMessage` defaults to next calendar month (MYT) when `month`/`year` are omitted; fetches student from DB, then delegates all calculation to `buildPaymentMessage()` from `src/lib/payment.ts`; returns `{ message, month, year, monthName }`
 - `getTimetableSettings`: fetches `timetable_rules` and `timetable_buffer_mins` from `settings` in parallel; returns `{ rules, bufferMins }` (bufferMins defaults to 15 if unset)
 - `updateTimetableRules` / `updateBufferMins`: upsert into `settings` table with `onConflict: 'key'`; `updateBufferMins` validates the value is 0–60 before writing
 - `generateSlotAvailability`: fetches rules, buffer, and all active students' `class_schedule` in a single `Promise.all`; calls `runSlotGeneration` from `src/lib/timetable-slots.ts`; returns `{ slots: ClassifiedSlot[] }`. Returns `{ error }` if no rules are configured. The route emits a `slots_ready` SSE event with the slots so the chat UI can show a download button.

@@ -569,13 +569,15 @@ Generate a ready-to-send payment reminder message for a student. Calculates sess
 
 1. Resolves month/year — defaults to next calendar month in MYT if not supplied
 2. Fetches student: `name`, `contact_person`, `class_schedule`, `fee_per_hour`, `status`
-3. Groups slots by day via `groupSlotsByDay`; for each day calls `getWeekdayDates` to find every occurrence in the target month
-4. Collects all session dates, sorts them, computes `sessionFeeTotal`
-5. Resolves `recipient` — uses `contact_person` if set and not `"-"`, otherwise falls back to `name`
-6. **Template 1:** `"Hi {recipient}, … {N} sessions in {month} ({dates}), bringing the total to RM{fee}. Thank you 😄"`
-7. **Template 2:** deducts `carryover × avg_fee_per_session` from total: `"Hi {recipient}, … With {N} session(s) carried over …, bringing the total to RM{adjusted_fee}. Thank you. 😄"`
+3. Validates student is Active
+4. Delegates all calculation and message building to `buildPaymentMessage()` from `src/lib/payment.ts` (shared with the UI's `/api/generate-payment` route)
 
-Shared helpers used: `formatFee`, `ordinal`, `oxfordList`, `groupSlotsByDay` (all from `src/lib/utils.ts`).
+`buildPaymentMessage()` internally:
+- Groups slots by day; calls `getWeekdayDates` for each day to find every occurrence in the target month
+- Collects all session dates, sorts them, computes `sessionFeeTotal`
+- Resolves `recipient` — uses `contact_person` if set and not `"-"`, otherwise falls back to `name`
+- **Template 1:** `"Hi {recipient}, … {N} sessions in {month} ({dates}), bringing the total to RM{fee}. Thank you 😄"`
+- **Template 2:** deducts `carryover × avg_fee_per_session` from total: `"Hi {recipient}, … With {N} session(s) carried over …, bringing the total to RM{adjusted_fee}. Thank you. 😄"`
 
 ### Output
 

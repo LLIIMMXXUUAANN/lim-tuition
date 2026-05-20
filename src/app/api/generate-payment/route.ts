@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { timeToMins, MONTH_NAMES, getWeekdayDates, formatFee, ordinal, oxfordList, groupSlotsByDay } from '@/lib/utils'
+import { buildPaymentMessage } from '@/lib/payment'
 import type { ClassSlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -50,41 +50,22 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Student is not active' }, { status: 400 })
   }
 
-  const schedule = (student.class_schedule as ClassSlot[]) ?? []
-  const slotsByDay = groupSlotsByDay(schedule)
+  const result = buildPaymentMessage({
+    student: {
+      name: student.name,
+      contact_person: student.contact_person,
+      class_schedule: student.class_schedule as ClassSlot[],
+      fee_per_hour: student.fee_per_hour,
+    },
+    month,
+    year,
+    templateType,
+    carryover,
+  })
 
-  const allDates: number[] = []
-  let sessionFeeTotal = 0
-
-  for (const [day, slots] of slotsByDay) {
-    const dates = getWeekdayDates(year, month, day)
-    allDates.push(...dates)
-    const hoursPerSession = slots.reduce((sum, s) => sum + (timeToMins(s.end) - timeToMins(s.start)) / 60, 0)
-    sessionFeeTotal += dates.length * hoursPerSession * student.fee_per_hour
+  if ('error' in result) {
+    return Response.json({ error: result.error }, { status: 400 })
   }
 
-  allDates.sort((a, b) => a - b)
-
-  if (allDates.length === 0) {
-    return Response.json({ error: 'No scheduled class days found for this student' }, { status: 400 })
-  }
-
-  const dateList = oxfordList(allDates.map(ordinal))
-  const monthName = MONTH_NAMES[month - 1]
-  const cp = student.contact_person?.trim()
-  const recipient = (!cp || cp === '-') ? student.name : cp
-  const sessionCount = allDates.length
-
-  let message: string
-  if (templateType === 1) {
-    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}), bringing the total to RM${formatFee(sessionFeeTotal)}. Thank you 😄`
-  } else {
-    const co = carryover ?? 0
-    const coFee = co * (sessionFeeTotal / sessionCount)
-    const total = sessionFeeTotal - coFee
-    const coLabel = `${co} session${co === 1 ? '' : 's'}`
-    message = `Hi ${recipient}, just a gentle reminder regarding the tuition fee. There are ${sessionCount} sessions in ${monthName} (${dateList}). With ${coLabel} carried over from the previous classes, bringing the total to RM${formatFee(total)}. Thank you. 😄`
-  }
-
-  return Response.json({ message })
+  return Response.json({ message: result.message })
 }
