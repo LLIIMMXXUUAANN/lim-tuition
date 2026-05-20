@@ -1,5 +1,3 @@
-import { Command, END } from '@langchain/langgraph'
-import { ToolMessage } from '@langchain/core/messages'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod'
 
@@ -19,22 +17,9 @@ export function createDispatchTool(agents: { name: string; description?: string 
     .join('\n')
 
   return tool(
-    async ({ handoffs }, config) => {
-      const toolCallId = (config as { toolCall?: { id?: string } }).toolCall?.id ?? ''
-      const toolMessage = new ToolMessage({
-        content: `Dispatching ${handoffs.length} task(s) to: ${handoffs.map(h => h.agentName).join(', ')}`,
-        name: 'dispatch',
-        tool_call_id: toolCallId,
-      })
-      // goto:END (not Command.PARENT) lets the supervisor subgraph exit normally so its AIMessage propagates to outer state.
-      return new Command({
-        goto: END,
-        update: {
-          messages: [toolMessage],
-          pendingHandoffs: handoffs as HandoffTask[],
-        },
-      })
-    },
+    // supervisorNode intercepts the dispatch tool call directly — this function never runs.
+    // Only the schema below is used (for binding to the supervisor LLM so it knows the tool).
+    async ({ handoffs }) => `Dispatching ${handoffs.length} task(s)`,
     {
       name: 'dispatch',
       description:

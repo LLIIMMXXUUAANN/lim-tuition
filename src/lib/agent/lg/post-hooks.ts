@@ -1,4 +1,4 @@
-import { AIMessage, AIMessageChunk, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
+import { AIMessage, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import { selfEval } from '@/lib/agent/eval'
 import type { Supabase } from '@/lib/agent/tools'
 import type { SubagentPostHook, SubagentStateType, SubagentUpdateType } from './progressive'
@@ -35,8 +35,7 @@ function findLastMutationCall(messages: BaseMessage[], mutationSet: Set<string>)
   }
   for (let i = searchFrom; i >= 0; i--) {
     const m = messages[i]
-    if (!(m instanceof AIMessage) && !(m instanceof AIMessageChunk)) continue
-    if (!m.tool_calls?.length) continue
+    if (!AIMessage.isInstance(m) || !m.tool_calls?.length) continue
     const call = m.tool_calls.find(tc => tc.name && mutationSet.has(tc.name))
     if (!call) continue
     return {

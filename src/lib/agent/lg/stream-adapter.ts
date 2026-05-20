@@ -32,7 +32,7 @@ function shouldSkipToolName(name: string | undefined): boolean {
 
 function emitToolStepsFromMessages(messages: BaseMessage[], emit: Emit) {
   for (const m of messages) {
-    if ((m instanceof AIMessage || m instanceof AIMessageChunk) && m.tool_calls?.length) {
+    if (AIMessage.isInstance(m) && m.tool_calls?.length) {
       for (const tc of m.tool_calls) {
         if (shouldSkipToolName(tc.name)) continue
         emit({ type: 'step', content: `🔧 ${tc.name}(${JSON.stringify(tc.args ?? {})})` })
@@ -98,7 +98,7 @@ export async function pipeLangGraphStream(
           emitToolStepsFromMessages(update.messages, emit)
           if (isFromSupervisor(namespace) && !isFromAnySubagent(namespace)) {
             for (const m of update.messages) {
-              if ((m instanceof AIMessage || m instanceof AIMessageChunk) && (!m.tool_calls || m.tool_calls.length === 0)) {
+              if (AIMessage.isInstance(m) && (!m.tool_calls || m.tool_calls.length === 0)) {
                 const text = extractText(m)
                 if (text) lastSupervisorFinalText = text
               }
