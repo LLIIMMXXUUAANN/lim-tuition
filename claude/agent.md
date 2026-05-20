@@ -139,7 +139,7 @@ Alternative agent backend toggled via the **LangGraph** switch in the chat heade
 
 **File structure:**
 - **`lib/agent/lg/model.ts`** — `getGeminiChatModel()`: module-level singleton `ChatGoogle` (`gemini-2.5-flash`, `temperature: 0`); shared by all agents and the supervisor
-- **`lib/agent/lg/handoff.ts`** — `HandoffTask` type (`{ agentName, task }`); `createTaskHandoffTool()`: creates a `transfer_to_<agent>` LangGraph tool that emits `Command({ goto: 'dispatch_node', graph: PARENT, update: { messages: [toolMessage], pendingHandoffs: [{ agentName, task }] } })` — interrupts the supervisor's react loop and accumulates the task in state; `normalizeAgentName()`: slugifies agent names
+- **`lib/agent/lg/handoff.ts`** — `HandoffTask` type (`{ agentName, task }`); `createDispatchTool()`: creates the `dispatch` tool — the LLM uses the schema to declare which agents to call and what task to give each (one `{ agentName, task }` entry per agent); the implementation is a dummy (never invoked — `supervisorNode` intercepts the call and emits `Send` commands directly before any ToolNode runs); `normalizeAgentName()`: slugifies agent names
 - **`lib/agent/lg/progressive.ts`** — `buildProgressiveSubagent()`: builds the two-phase subagent graph (see below)
 - **`lib/agent/lg/custom-supervisor.ts`** — `buildCustomSupervisor()`: builds the supervisor+subagent multi-graph (see below)
 - **`lib/agent/lg/supervisor.ts`** — `makeSupervisor(supabase, dateString)`: wires up the three subagents under the supervisor and compiles; `buildSupervisorPrompt(dateString)`: supervisor system prompt with routing rules
@@ -147,8 +147,8 @@ Alternative agent backend toggled via the **LangGraph** switch in the chat heade
 - **`lib/agent/lg/template-agent.ts`** — `makeTemplateAgent(supabase)`: templates/payment-messages subagent
 - **`lib/agent/lg/timetable-agent.ts`** — `makeTimetableAgent(supabase)`: timetable settings/slots subagent with `makeTimetablePostHook`
 - **`lib/agent/lg/tool-factories.ts`** — `makeStudentTools()`, `makeTemplateTools()`, `makeTimetableTools()`: wrap the 19 shared tool implementations in Zod schemas for LangGraph `tool()` wrappers. `generate_slot_availability` and `download_timetable_image` also call `config.writer` to emit custom SSE events.
-- **`lib/agent/lg/post-hooks.ts`** — `makeStudentPostHook()`, `makeTimetablePostHook()`: post-tool-execution hooks that call `selfEval` after mutations and emit the verdict as a `SystemMessage` (name: `'self_eval'`) in state — visible to the stream adapter but invisible to the LLM (`@langchain/google` silently strips `SystemMessage` from Gemini context)
-- **`lib/agent/lg/stream-adapter.ts`** — `pipeLangGraphStream()`: translates LangGraph's multi-mode event stream into the same SSE event types as the classic agent (`chunk`, `step`, `done`, `error`, `download_schedule`, `slots_ready`)
+- **`lib/agent/lg/post-hooks.ts`** — `makeStudentPostHook()`, `makeTimetablePostHook()`: post-tool-execution hooks that call `selfEval` after mutations and emit the verdict as a `SystemMessage` (name: `'self_eval'`) in state — visible to the stream adapter but invisible to the LLM (`@langchain/google` silently strips `SystemMessage` from Gemini context); `findLastMutationCall` uses `AIMessage.isInstance()` to match both `AIMessage` and `AIMessageChunk` (the actual runtime type returned by `model.invoke()`)
+- **`lib/agent/lg/stream-adapter.ts`** — `pipeLangGraphStream()`: translates LangGraph's multi-mode event stream into the same SSE event types as the classic agent (`chunk`, `step`, `done`, `error`, `download_schedule`, `slots_ready`); uses `AIMessage.isInstance()` throughout (handles both `AIMessage` and `AIMessageChunk`)
 - **`api/agent/lg/chat/route.ts`** — stateless POST handler; calls `makeSupervisor`, streams via `pipeLangGraphStream`
 
 **Progressive subagent pattern (`progressive.ts`):**
@@ -171,27 +171,24 @@ Why this design: Gemini 2.5 Flash's schema-space becomes crowded when all 11 stu
 
 **Custom supervisor (`custom-supervisor.ts`):**
 
-Replaces `@langchain/langgraph-supervisor` to fix a relay bug: the official package echoes the handoff ToolMessage content ("Successfully transferred back to supervisor") instead of the subagent's actual reply.
+Replaces `@langchain/langgraph-supervisor` to fix two issues: (1) the official package echoes the handoff ToolMessage content ("Successfully transferred back to supervisor") instead of the subagent's actual reply; (2) `createReactAgent` always makes two LLM calls per supervisor turn (LLM → tool → LLM again to "check if done") — the second call is wasted for a routing supervisor that makes exactly one decision per turn.
 
-Fix: `createHandoffBackMessages(agentName, supervisorName, replyText)` synthesises a `transfer_back_to_supervisor` AIMessage + ToolMessage where `ToolMessage.content = replyText` (the subagent's last AIMessage text). The supervisor prompt instructs the LLM to output this verbatim — even if Gemini echoes the last ToolMessage, it outputs the correct reply.
+**Single-turn `supervisorNode`:** Custom async node function that calls the LLM once per turn, inspects the result, and returns immediately — no React loop. If the response contains a `dispatch` tool call, it creates a synthetic ToolMessage (confirming the dispatch) and returns `Command({ update: { messages }, goto: [Send(agent1, task1), Send(agent2, task2)] })` for direct parallel fan-out. If not, it returns `{ messages: [response] }` which follows the static `addEdge(supervisorName, END)` for a direct reply.
 
-`makeCallAgent(agent, outputMode, supervisorName)`: wraps each subagent invocation, extracts the final reply text, and appends the handoff-back messages. Returns `{ messages }` only (not `{ ...output, messages }`) so subagent-internal state fields don't bleed into outer graph state.
+**Fan-in reply format:** `createHandoffBackMessages(agentName, supervisorName, replyText)` synthesises a `transfer_back_to_supervisor` AIMessage (with a matching `tool_calls` entry) + ToolMessage where `ToolMessage.content = replyText`. The pair satisfies Gemini's requirement that every ToolMessage is preceded by a matching functionCall in the AIMessage. The reply goes in the ToolMessage deliberately — Gemini tends to echo/paraphrase the last ToolMessage in its response, so this ensures it echoes the correct subagent answer rather than a generic stub.
 
-**Parallel fan-out via `dispatch` tool + `dispatch_node` (Option A):** The supervisor has a single `dispatch` tool (from `handoff.ts`) that accepts an array of `{ agentName, task }` entries. All tasks in one `dispatch` call are collected atomically into ONE `Command.PARENT` update (`pendingHandoffs: handoffs[]`, one ToolMessage). This sidesteps the LangGraph limitation where multiple `Command.PARENT` from the same ToolNode execution only apply the first Command's update.
+`makeCallAgent(agent, supervisorName)`: wraps each subagent invocation, scans backward for the last AI reply using `AIMessage.isInstance()` (handles both `AIMessage` and `AIMessageChunk` returned by `model.invoke()`), and appends the handoff-back messages. Returns `{ messages }` only (not `{ ...output, messages }`) so subagent-internal state fields don't bleed into outer graph state.
 
-`dispatch_node` reads the accumulated `pendingHandoffs` and emits `Command({ goto: [Send(agent1, task1), Send(agent2, task2)] })`, fanning out to truly parallel isolated subgraph executions. After all parallel agents complete, they fan-in to the supervisor for final reply composition.
-
-The outer state schema extends `createReactAgentAnnotation()` with `pendingHandoffs: Annotation<HandoffTask[]>` (reducer: concatenate on add, replace-with-empty on explicit clear, preserve on undefined). Subagent nodes receive isolated state `{ messages: [HumanMessage(task)] }` via Send — `extractSubagentMessages` falls back to returning these as-is (no `transfer_to_*` ToolMessage to scan backward for).
+**State schema:** plain `createReactAgentAnnotation()` — no `pendingHandoffs` extension; `supervisorNode` emits `Send` commands directly from the dispatch call result with no intermediate accumulation step.
 
 The `buildCustomSupervisor` graph structure:
 ```
-START → supervisor ──(dispatch tool → Command.PARENT goto dispatch_node)──► dispatch_node
-                   └──(direct reply)──────────────────────────────────────► implicit END
-dispatch_node → [Send(agent1, task1), Send(agent2, task2), ...]
-                        ↓ parallel
-              [subagent_node × N] ──(each)──► supervisor (fan-in after all complete)
+START → supervisor ──(dispatch → Command({ goto: [Send(a1), Send(a2)] }))──► subagents (parallel)
+                   └──(direct reply → { messages: [response] })────────────► END
+
+subagent_node × N ──(each, via addEdge)──► supervisor (fan-in after all complete)
 ```
-Each subagent node is wrapped in `makeCallAgent` and marked `{ subgraphs: [agent] }` so LangGraph propagates the subagent's event stream with namespace prefixes.
+`addNode(supervisorName, supervisorNode, { ends: agentNamesList })` declares the possible `Send` targets so LangGraph validates routing. `addEdge(supervisorName, END)` is the default path for direct replies; the `Command` return value overrides it for dispatch. Each subagent node is wrapped in `makeCallAgent` and marked `{ subgraphs: [agent] }` so LangGraph propagates the subagent's event stream with namespace prefixes.
 
 **Stream adapter (`stream-adapter.ts`):**
 
@@ -201,7 +198,7 @@ LangGraph streams events as `[namespace, mode, data]` tuples (or `[mode, data]` 
 - **`updates`**: completed node outputs. `emitToolStepsFromMessages` walks each node's output messages and emits `step` events for real tool calls (filtering out `select_tool`, `dispatch`, and `transfer_*` routing messages). Also emits `step` for `self_eval` SystemMessages from post-hooks.
 - **`custom`**: emitted by `generate_slot_availability` and `download_timetable_image` tool wrappers via `config.writer`; forwarded as `slots_ready` / `download_schedule` SSE events.
 
-`isFromAnySubagent`: returns true for any non-empty namespace that doesn't start with `'supervisor:'` — automatically covers all current and future subagents without hardcoding names.
+`isFromSupervisor`: returns `true` for empty namespace `[]` (where supervisor events land since it is a plain node in the outer StateGraph, not a compiled subgraph) and for namespaces starting with `'supervisor:'` (kept for forward-compat). `isFromAnySubagent`: returns `true` for any non-empty namespace that doesn't start with `'supervisor:'` — automatically covers all current and future subagents without hardcoding names.
 
 **Stateless design:** no checkpointer is passed to `.compile()` and no `thread_id` is passed in the stream config. The frontend sends the full `messages[]` history on every request, same as the classic agent. The graph's internal state (`pendingTool`, accumulated messages) lives only for the duration of one HTTP request.
 
@@ -212,4 +209,4 @@ LangGraph streams events as `[namespace, mode, data]` tuples (or `[mode, data]` 
 - Payment messages always require a student UUID: dispatch to `student_agent` first if only a name is known, then dispatch to `template_agent` with the UUID in the task
 - Relay subagent replies verbatim — never output "Successfully transferred back to supervisor"
 - All parallel tasks (same-domain or cross-domain) go into ONE `dispatch` call with multiple entries — the `dispatch` tool is the single routing mechanism
-- For multiple independent tasks, write one `{ agentName, task }` entry per task — they all run in parallel via `dispatch_node`'s `Send` fan-out
+- For multiple independent tasks, write one `{ agentName, task }` entry per task — they all run in parallel via the supervisor node's direct `Send` fan-out
