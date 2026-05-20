@@ -27,7 +27,7 @@ export function extractText(msg: { content: unknown }): string {
 
 function shouldSkipToolName(name: string | undefined): boolean {
   if (!name) return true
-  return name === 'select_tool' || name === 'dispatch' || name.startsWith('transfer_')
+  return name === 'dispatch' || name.startsWith('transfer_')
 }
 
 function emitToolStepsFromMessages(messages: BaseMessage[], emit: Emit) {

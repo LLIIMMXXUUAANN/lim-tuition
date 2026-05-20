@@ -1,4 +1,4 @@
-import { buildProgressiveSubagent } from './progressive'
+import { buildSubagent } from './progressive'
 import { makeTemplateTools } from './tool-factories'
 import { getGeminiChatModel } from './model'
 import type { Supabase } from '@/lib/agent/tools'
@@ -12,12 +12,12 @@ RULES:
 4. generate_payment_message requires a student UUID. If you only have a student name, ask the supervisor / user for the UUID first — do NOT search the students table from here (that is the student agent's job).`
 
 export function makeTemplateAgent(supabase: Supabase) {
-  return buildProgressiveSubagent({
+  return buildSubagent({
     name: 'template_agent',
     description:
       'Handles message templates (payment, review, recommendation, first-approach) and generation of personalised payment-reminder messages from a student schedule. Route here for any request about templates or payment messages.',
     prompt: TEMPLATE_PROMPT,
     tools: makeTemplateTools(supabase),
-    model: getGeminiChatModel(),
+    llm: getGeminiChatModel(),
   })
 }

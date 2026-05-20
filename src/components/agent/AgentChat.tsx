@@ -27,7 +27,6 @@ interface ChatMessage {
 
 function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
   const students: { name: string; id: string }[] = []
-  // New format: [student_id:NAME:UUID]
   const newFormat = /\[student_id:([^:\]]+):([0-9a-f-]+)\]/gi
   let match
   while ((match = newFormat.exec(content)) !== null) {
@@ -39,7 +38,8 @@ function parseAgentReply(content: string): { text: string; students: { name: str
     if (legacy) students.push({ name: 'student', id: legacy[1] })
   }
   const text = content.replace(/\[student_id:[^\]]+\]/gi, '').trim()
-  return { text, students }
+  const unique = students.filter((s, i) => students.findIndex(x => x.id === s.id) === i)
+  return { text, students: unique }
 }
 
 function loadStoredMessages(): ChatMessage[] {
@@ -90,9 +90,15 @@ export default function AgentChat() {
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
   const [useLangGraph, setUseLangGraph] = useState(false)
+  // hydrated gates the save effects: on mount, save effects fire before the load
+  // effect's setMessages/setUseLangGraph state updates have committed, so they would
+  // overwrite localStorage with the initial empty state. Skipping saves until hydrated
+  // prevents this race.
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     setMessages(loadStoredMessages())
     setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) === 'true')
+    setHydrated(true)
   }, [])
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
@@ -103,16 +109,18 @@ export default function AgentChat() {
   const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
+    if (!hydrated) return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
     } catch {}
-  }, [messages])
+  }, [hydrated, messages])
 
   useEffect(() => {
+    if (!hydrated) return
     try {
       localStorage.setItem(LG_STORAGE_KEY, String(useLangGraph))
     } catch {}
-  }, [useLangGraph])
+  }, [hydrated, useLangGraph])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

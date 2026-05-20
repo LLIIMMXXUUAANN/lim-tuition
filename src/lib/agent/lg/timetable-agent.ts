@@ -1,4 +1,4 @@
-import { buildProgressiveSubagent } from './progressive'
+import { buildSubagent } from './progressive'
 import { makeTimetableTools } from './tool-factories'
 import { makeTimetablePostHook } from './post-hooks'
 import { getGeminiChatModel } from './model'
@@ -12,13 +12,13 @@ RULES:
 3. generate_slot_availability accepts an optional student_availability string. Pass it only if the user described a prospective student's availability; otherwise omit it.`
 
 export function makeTimetableAgent(supabase: Supabase) {
-  return buildProgressiveSubagent({
+  return buildSubagent({
     name: 'timetable_agent',
     description:
       'Handles timetable settings (scheduling rules, buffer minutes), AI slot-availability generation, and downloading the weekly schedule as a PNG. Route here for anything about timetable rules, slot availability, or the schedule image.',
     prompt: TIMETABLE_PROMPT,
     tools: makeTimetableTools(supabase),
-    model: getGeminiChatModel(),
-    postModelHook: makeTimetablePostHook(supabase),
+    llm: getGeminiChatModel(),
+    postToolHook: makeTimetablePostHook(supabase),
   })
 }

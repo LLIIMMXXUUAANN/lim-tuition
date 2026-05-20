@@ -194,8 +194,8 @@ export function makeTemplateTools(supabase: Supabase) {
           .describe('Month 1-12 (optional, defaults to next month in MYT)'),
         year: z.number().optional()
           .describe("Year e.g. 2026 (optional, defaults to next month's year in MYT)"),
-        template_type: z.union([z.literal(1), z.literal(2)]).optional()
-          .describe('1 = standard reminder, 2 = with carryover sessions deducted from total (optional, defaults to 1)'),
+        template_type: z.number().int().optional()
+          .describe('Template type: 1 = standard reminder (default), 2 = with carryover sessions deducted from total'),
         carryover: z.number().optional()
           .describe('Number of sessions from the previous month to carry over and deduct (only used when template_type is 2)'),
       }),

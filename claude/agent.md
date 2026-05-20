@@ -113,12 +113,12 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 
 **`[student_id:NAME:UUID]` token protocol:**
 - Gemini appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update/setup
-- `parseAgentReply(content)` in `AgentChat.tsx` extracts all tokens via regex, strips them from the display text, and returns `{ text, students: [{ name, id }] }`
+- `parseAgentReply(content)` in `AgentChat.tsx` extracts all tokens via regex, strips them from the display text, deduplicates by `id`, and returns `{ text, students: [{ name, id }] }` (agent sometimes emits the same token twice; dedup prevents React duplicate key warnings)
 - Legacy `[student_id:UUID]` tokens (no name, stored in localStorage before the format change) are matched by a fallback branch that produces `{ name: 'student', id }` so old messages still render a link
 - One `"View NAME →"` `<Link>` is rendered per entry in `students[]`, displayed side-by-side bottom-right of the agent bubble
 
 **AgentChat UI (`components/agent/AgentChat.tsx`):**
-- `messages` state lazy-initialised from `localStorage` (key: `agent_chat_messages`); persisted on every change via `useEffect`
+- `messages` state lazy-initialised from `localStorage` (key: `agent_chat_messages`); persisted on every change via `useEffect`. A `hydrated` flag (set `true` after the load effect fires) gates both save effects — prevents the save effect from running with `messages = []` before the load effect's `setMessages(stored)` state update commits (React effect ordering race condition that erased history on navigation back to the page; also guards against React StrictMode double-invoke in dev)
 - Stored messages include `id` (UUID), `role` (`'user'` | `'agent'`), `content`, and `steps[]`
 - `loadStoredMessages` migrates old stored messages without `id` by generating UUIDs on load
 - **SSE streaming:** on send, a placeholder agent message (`content: ''`, `steps: []`) is added immediately. `send()` reads the SSE response body via `ReadableStream` reader + `TextDecoder` with a line-buffer. `step` events append to the placeholder's `steps[]`; `chunk` events append to `content` (text builds up progressively); `error` events set `content` to the error string. A `received` flag is set on first `chunk` or `error` event; the `finally` block only sets a fallback message if `!received` (avoids a no-op map on every successful request).
@@ -138,9 +138,9 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 Alternative agent backend toggled via the **LangGraph** switch in the chat header. Uses `@langchain/langgraph` with a supervisor+subagent architecture instead of the classic single-agent Gemini loop. Both backends share the same 19 tool implementations in `src/lib/agent/tools.ts`; the LangGraph layer wraps them in Zod schemas via `tool-factories.ts`.
 
 **File structure:**
-- **`lib/agent/lg/model.ts`** — `getGeminiChatModel()`: module-level singleton `ChatGoogle` (`gemini-2.5-flash`, `temperature: 0`); shared by all agents and the supervisor
+- **`lib/agent/lg/model.ts`** — `getGeminiChatModel()`: returns a fresh `ChatGoogle` instance per call (`gemini-2.5-flash`, `temperature: 0`, `thinkingBudget: 0`); parallel subagents must not share a model instance; `thinkingBudget: 0` disables Gemini 2.5 Flash's thinking pass, which otherwise exhausts its token budget on large tool schemas (11 tools) and returns an empty response
 - **`lib/agent/lg/handoff.ts`** — `HandoffTask` type (`{ agentName, task }`); `createDispatchTool()`: creates the `dispatch` tool — the LLM uses the schema to declare which agents to call and what task to give each (one `{ agentName, task }` entry per agent); the implementation is a dummy (never invoked — `supervisorNode` intercepts the call and emits `Send` commands directly before any ToolNode runs); `normalizeAgentName()`: slugifies agent names
-- **`lib/agent/lg/progressive.ts`** — `buildProgressiveSubagent()`: builds the two-phase subagent graph (see below)
+- **`lib/agent/lg/progressive.ts`** — `buildSubagent()`: builds the standard ReAct subagent graph (see below)
 - **`lib/agent/lg/custom-supervisor.ts`** — `buildCustomSupervisor()`: builds the supervisor+subagent multi-graph (see below)
 - **`lib/agent/lg/supervisor.ts`** — `makeSupervisor(supabase, dateString)`: wires up the three subagents under the supervisor and compiles; `buildSupervisorPrompt(dateString)`: supervisor system prompt with routing rules
 - **`lib/agent/lg/student-agent.ts`** — `makeStudentAgent(supabase)`: student records subagent with `makeStudentPostHook`
@@ -151,23 +151,20 @@ Alternative agent backend toggled via the **LangGraph** switch in the chat heade
 - **`lib/agent/lg/stream-adapter.ts`** — `pipeLangGraphStream()`: translates LangGraph's multi-mode event stream into the same SSE event types as the classic agent (`chunk`, `step`, `done`, `error`, `download_schedule`, `slots_ready`); uses `AIMessage.isInstance()` throughout (handles both `AIMessage` and `AIMessageChunk`)
 - **`api/agent/lg/chat/route.ts`** — stateless POST handler; calls `makeSupervisor`, streams via `pipeLangGraphStream`
 
-**Progressive subagent pattern (`progressive.ts`):**
+**Subagent pattern (`progressive.ts`):**
 
-Each subagent is a mini StateGraph with three nodes:
+Each subagent is a standard ReAct graph:
 
 ```
-START → slim_selector ──(pendingTool?)──► full_invoker → tools → [post_hook] → slim_selector
-                      └──(no tool)──► END
+START → agent ──(tool_calls?)──► tools → [post_hook] → agent
+              └──(no calls)───────────────────────────► END
 ```
 
-- **`slim_selector`**: the LLM sees only a slim prompt listing available tools and a single `select_tool` tool. It either calls `select_tool({ tool_name })` to declare intent, or replies directly (no tool needed) → `END`.
-- **`full_invoker`**: the LLM sees only the one selected tool (full schema, `tool_choice: 'any'`). Pre-computed at build time as `fullModelByTool: Map<name, BoundModel>` — no `bindTools` call at runtime. Guaranteed to emit a tool call.
-- **`tools`**: standard LangGraph `ToolNode` — executes the tool call, appends the result as a `ToolMessage`.
-- **`post_hook`** (optional): runs `selfEval` after mutations; emits a `SystemMessage` with the verdict; loops back to `slim_selector`.
+- **`agent`**: the LLM sees all domain tools in every turn. It can return multiple tool calls in one response — LangGraph's `ToolNode` executes them in parallel, enabling same-domain batching (e.g. "get Ang AND Zng Yi" → one agent, two parallel tool calls per round).
+- **`tools`**: standard LangGraph `ToolNode` — executes all tool calls from the latest AIMessage in parallel, appends results as `ToolMessage`s.
+- **`post_hook`** (optional): runs `selfEval` after mutations; emits a `SystemMessage` (name: `'self_eval'`) with the verdict; loops back to `agent`.
 
-Why this design: Gemini 2.5 Flash's schema-space becomes crowded when all 11 student tools are visible at once, degrading tool-selection accuracy. Showing only a flat catalog in the slim pass, then the full schema for the selected tool in the full pass, achieves reliable tool invocation.
-
-`extractSubagentMessages(messages)`: scans backward for the most recent `transfer_to_*` ToolMessage and returns `[HumanMessage(task), ...messages.slice(after_that)]`. This scopes the subagent's context to its current task plus its own prior work in this invocation, stripping all supervisor routing overhead. When a subagent is invoked via `Send` with isolated state `{ messages: [HumanMessage(task)] }`, no `transfer_to_*` ToolMessage exists — the fallback `return messages` passes the HumanMessage through as-is.
+`buildSubagent({ name, description?, llm, tools, prompt?, postToolHook? })`: builds and compiles the graph. All domain tools are bound to the LLM at build time. Config is threaded through `agentNode` so LangGraph streaming callbacks propagate correctly through subagent LLM calls.
 
 **Custom supervisor (`custom-supervisor.ts`):**
 
@@ -195,12 +192,12 @@ subagent_node × N ──(each, via addEdge)──► supervisor (fan-in after a
 LangGraph streams events as `[namespace, mode, data]` tuples (or `[mode, data]` at top level). Three modes are consumed:
 
 - **`messages`**: streaming text chunks. Only emits `chunk` events from the supervisor namespace (`isFromSupervisor`) and only when not inside a subagent namespace (`isFromAnySubagent`). Skips chunks containing tool calls. Fallback: if no text was streamed, emits `lastSupervisorFinalText` (captured from the `updates` path) as a single chunk.
-- **`updates`**: completed node outputs. `emitToolStepsFromMessages` walks each node's output messages and emits `step` events for real tool calls (filtering out `select_tool`, `dispatch`, and `transfer_*` routing messages). Also emits `step` for `self_eval` SystemMessages from post-hooks.
+- **`updates`**: completed node outputs. `emitToolStepsFromMessages` walks each node's output messages and emits `step` events for real tool calls (filtering out `dispatch` and `transfer_*` routing messages). Also emits `step` for `self_eval` SystemMessages from post-hooks.
 - **`custom`**: emitted by `generate_slot_availability` and `download_timetable_image` tool wrappers via `config.writer`; forwarded as `slots_ready` / `download_schedule` SSE events.
 
 `isFromSupervisor`: returns `true` for empty namespace `[]` (where supervisor events land since it is a plain node in the outer StateGraph, not a compiled subgraph) and for namespaces starting with `'supervisor:'` (kept for forward-compat). `isFromAnySubagent`: returns `true` for any non-empty namespace that doesn't start with `'supervisor:'` — automatically covers all current and future subagents without hardcoding names.
 
-**Stateless design:** no checkpointer is passed to `.compile()` and no `thread_id` is passed in the stream config. The frontend sends the full `messages[]` history on every request, same as the classic agent. The graph's internal state (`pendingTool`, accumulated messages) lives only for the duration of one HTTP request.
+**Stateless design:** no checkpointer is passed to `.compile()` and no `thread_id` is passed in the stream config. The frontend sends the full `messages[]` history on every request, same as the classic agent. The graph's internal state (accumulated messages) lives only for the duration of one HTTP request.
 
 **Self-evaluation in LangGraph:** `post-hooks.ts` mirrors the classic `selfEval` pattern. `findLastMutationCall` scans backward from the end of state messages, but only as far back as the most recent `self_eval` SystemMessage — this prevents re-running verification on prior mutations when a subagent makes additional read-only calls in the same invocation.
 
@@ -209,4 +206,5 @@ LangGraph streams events as `[namespace, mode, data]` tuples (or `[mode, data]` 
 - Payment messages always require a student UUID: dispatch to `student_agent` first if only a name is known, then dispatch to `template_agent` with the UUID in the task
 - Relay subagent replies verbatim — never output "Successfully transferred back to supervisor"
 - All parallel tasks (same-domain or cross-domain) go into ONE `dispatch` call with multiple entries — the `dispatch` tool is the single routing mechanism
-- For multiple independent tasks, write one `{ agentName, task }` entry per task — they all run in parallel via the supervisor node's direct `Send` fan-out
+- Same agent, multiple entities → ONE combined entry (subagent batches tool calls internally). Different agents → one entry each (parallel via `Send` fan-out).
+- **Never expand or guess student names** — copy the exact name or partial name the user typed; `search_students` does partial matching so "Ang" is a valid task input
