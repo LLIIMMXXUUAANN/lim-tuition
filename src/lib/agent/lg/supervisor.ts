@@ -32,21 +32,26 @@ Keep these direct replies to 1–2 short sentences.
 - Any question whose answer would change if the database changes ("how many students do I have?", "who's on Tuesday?" — these are data, route them)
 
 ROUTING:
-- If the request is single-domain → call one handoff tool.
-- If it spans multiple INDEPENDENT domains in the same request (e.g. "create student John AND show me the first-approach template") → call MULTIPLE handoff tools in the same response. They run in parallel.
-- If one subagent's output is needed as input for another, call the first, wait for its reply, then call the next.
-- **Payment messages always require a student UUID.** If the user names a student (not a UUID), first route to student_agent to search for the student and get their UUID, then in a second turn route to template_agent with the UUID in the task. Never route to template_agent until you have the UUID in hand.
+You have ONE routing tool: \`dispatch\`. Call it with an array of \`{ agentName, task }\` entries.
+- **Single task** → one entry: \`dispatch({ handoffs: [{ agentName: "student_agent", task: "..." }] })\`
+- **Multiple independent tasks** (parallel) → multiple entries in ONE \`dispatch\` call — they all run at the same time
+- **Sequential tasks** (one's output feeds the next) → call \`dispatch\` once for the first; the subagent replies in the next supervisor turn; then call \`dispatch\` again with the second task using that reply
+
+Examples:
+- "show me details for Ang and Zng Yi" → \`dispatch({ handoffs: [{ agentName: "student_agent", task: "Get full details for Ang Jing Rong." }, { agentName: "student_agent", task: "Get full details for Zng Yi." }] })\`
+- "list students AND show first-approach template" → \`dispatch({ handoffs: [{ agentName: "student_agent", task: "List all active students." }, { agentName: "template_agent", task: "Get the first-approach template." }] })\`
+- **Payment messages always require a student UUID.** If the user names a student (not a UUID), first dispatch to student_agent to get the UUID, then in a second dispatch call route to template_agent with the UUID in the task.
 
 WRITING TASKS FOR SUBAGENTS:
-When calling a handoff tool, always write a precise, self-contained task in the \`task\` field:
+Always write a precise, self-contained task in the \`task\` field:
 - Resolve time references using today's injected date: "today" → specific date, "this month" → "May 2026"
 - State the exact action: "Get...", "Create...", "Update...", "Generate..."
-- For parallel handoffs, write a separate task for each subagent — each task must stand alone
-- Example: transfer_to_student_agent({ task: "Get the class schedule for Tuesday 2026-05-19." })
+- Each task must stand alone — subagents cannot see each other's tasks
+- Example: \`{ agentName: "student_agent", task: "Get the class schedule for Tuesday 2026-05-19." }\`
 
 RELAYING SUBAGENT REPLIES:
-When a subagent calls transfer_back_to_supervisor, look for the AI message that appeared JUST BEFORE that transfer_back call — that is the subagent's reply. Output it VERBATIM as your final answer.
-- NEVER output "Successfully transferred back to supervisor" — that is an internal routing signal, not a user-facing reply.
+When a subagent calls transfer_back_to_supervisor, its reply is in the content of that ToolMessage — output it VERBATIM as your final answer.
+- NEVER output "Successfully transferred back to supervisor" or "Transferring back to supervisor" — those are internal routing signals, not user-facing replies.
 - Do NOT rephrase, summarise, or add any commentary.
 - Do NOT remove [student_id:NAME:UUID] tokens or download-button hints — the UI depends on them.
 - If multiple subagents replied (parallel handoff), concatenate their replies in the order they were requested, separated by one blank line. No headings between them.`
@@ -61,7 +66,6 @@ export function makeSupervisor(supabase: Supabase, dateString: string) {
     ],
     llm: getGeminiChatModel(),
     prompt: buildSupervisorPrompt(dateString),
-    outputMode: 'last_message',
     includeAgentName: 'inline',
     supervisorName: 'supervisor',
   }).compile()

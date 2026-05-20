@@ -84,13 +84,14 @@ function downloadSlotsPng(slotData: { day: string; time: string; state: string }
 }
 
 export default function AgentChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>(loadStoredMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
   const [useLangGraph, setUseLangGraph] = useState(false)
   useEffect(() => {
+    setMessages(loadStoredMessages())
     setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) === 'true')
   }, [])
   useEffect(() => {

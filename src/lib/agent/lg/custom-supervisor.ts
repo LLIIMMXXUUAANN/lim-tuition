@@ -1,7 +1,8 @@
-import { START, StateGraph } from '@langchain/langgraph'
+import { Annotation, Command, END, Send, START, StateGraph } from '@langchain/langgraph'
 import { createReactAgent, createReactAgentAnnotation, withAgentName } from '@langchain/langgraph/prebuilt'
-import { AIMessage, ToolMessage } from '@langchain/core/messages'
-import { createTaskHandoffTool, normalizeAgentName } from './handoff'
+import { AIMessage, AIMessageChunk, HumanMessage, ToolMessage } from '@langchain/core/messages'
+import { createDispatchTool, normalizeAgentName, type HandoffTask } from './handoff'
+import { extractText } from './stream-adapter'
 import type { ChatGoogle } from '@langchain/google'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,8 +20,6 @@ function createHandoffBackMessages(agentName: string, supervisorName: string, re
       name: agentName,
     }),
     new ToolMessage({
-      // Content is the subagent's reply so the supervisor LLM outputs it verbatim
-      // even if it simply echoes the last tool result.
       content: replyText || `Subagent ${agentName} completed its task.`,
       name: toolName,
       tool_call_id: toolCallId,
@@ -32,19 +31,21 @@ function isChatModelWithBindTools(llm: AnyLLM): boolean {
   return typeof llm?.bindTools === 'function'
 }
 
-const makeCallAgent = (
-  agent: AnyAgent,
-  outputMode: 'last_message' | 'full_history',
-  supervisorName: string,
-) => {
+const makeCallAgent = (agent: AnyAgent, supervisorName: string) => {
   return async (state: AnyAgent, config: AnyAgent) => {
     const output = await agent.invoke(state, config)
-    let { messages } = output
-    if (outputMode === 'last_message') messages = messages.slice(-1)
-    const lastMsg = messages[messages.length - 1]
-    const replyText = typeof lastMsg?.content === 'string' ? lastMsg.content : ''
-    messages = [...messages, ...createHandoffBackMessages(agent.name, supervisorName, replyText)]
-    return { ...output, messages }
+    const { messages } = output
+    // Scan backward: post-hooks append a self_eval SystemMessage after mutations,
+    // so messages.at(-1) may not be the subagent's text reply.
+    let replyText = ''
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if ((m instanceof AIMessage || m instanceof AIMessageChunk) && !m.tool_calls?.length) {
+        replyText = extractText(m)
+        break
+      }
+    }
+    return { messages: createHandoffBackMessages(agent.name, supervisorName, replyText) }
   }
 }
 
@@ -55,7 +56,6 @@ export interface BuildCustomSupervisorParams {
   prompt?: string
   supervisorName?: string
   includeAgentName?: 'inline' | boolean
-  outputMode?: 'last_message' | 'full_history'
 }
 
 export function buildCustomSupervisor({
@@ -65,7 +65,6 @@ export function buildCustomSupervisor({
   prompt,
   supervisorName = 'supervisor',
   includeAgentName,
-  outputMode = 'last_message',
 }: BuildCustomSupervisorParams) {
   const agentNames = new Set<string>()
   for (const agent of agents) {
@@ -76,18 +75,20 @@ export function buildCustomSupervisor({
     agentNames.add(agent.name)
   }
 
-  const handoffTools = agents.map(agent =>
-    createTaskHandoffTool({
-      agentName: agent.name,
-      agentDescription: typeof agent.description === 'string' ? agent.description : undefined,
-    })
+  const dispatchTool = createDispatchTool(
+    agents.map(a => ({
+      name: a.name as string,
+      description: typeof a.description === 'string' ? a.description : undefined,
+    }))
   )
 
-  const allTools = [...(tools ?? []), ...handoffTools]
+  const allTools = [...(tools ?? []), dispatchTool]
 
   let supervisorLLM: AnyLLM = llm
   if (isChatModelWithBindTools(llm)) {
     supervisorLLM = (llm as AnyLLM).bindTools(allTools)
+    // @langchain/google stores bound tools in .config.tools rather than .kwargs.tools;
+    // copy them so the LangGraph message formatter can inspect bound tool schemas.
     supervisorLLM.kwargs ??= {}
     if (!('tools' in supervisorLLM.kwargs)) {
       if ('config' in supervisorLLM && typeof supervisorLLM.config === 'object' &&
@@ -98,24 +99,52 @@ export function buildCustomSupervisor({
   }
   if (includeAgentName) supervisorLLM = withAgentName(supervisorLLM, includeAgentName as 'inline')
 
-  const schema = createReactAgentAnnotation()
+  const baseSchema = createReactAgentAnnotation()
+  const outerSchema = Annotation.Root({
+    ...baseSchema.spec,
+    pendingHandoffs: Annotation<HandoffTask[]>({
+      reducer: (prev, next) => {
+        if (next === undefined) return prev ?? []
+        if (!next.length) return []
+        return [...(prev ?? []), ...next]
+      },
+      default: () => [],
+    }),
+  })
+
   const supervisorAgent = createReactAgent({
     name: supervisorName,
     llm: supervisorLLM,
     tools: allTools,
     prompt,
-    stateSchema: schema,
+    stateSchema: outerSchema,
   })
 
-  const svName = supervisorAgent.name ?? supervisorName
-  let builder = new StateGraph(schema)
-    .addNode(svName, supervisorAgent, { ends: [...agentNames] })
-    .addEdge(START, svName)
+  async function dispatchNode(state: typeof outerSchema.State) {
+    const handoffs = state.pendingHandoffs ?? []
+    if (!handoffs.length) throw new Error('dispatchNode called with empty pendingHandoffs — routing bug')
+    return new Command({
+      update: { pendingHandoffs: [] },
+      goto: handoffs.map(h => new Send(h.agentName, { messages: [new HumanMessage(h.task)] })),
+    })
+  }
+
+  // dispatch tool ends the supervisor's react loop via goto:END (not Command.PARENT) so the
+  // supervisor's AIMessage propagates to outer state; this edge then routes to dispatch_node.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const routeAfterSupervisor = (state: typeof outerSchema.State): any =>
+    (state.pendingHandoffs?.length ?? 0) > 0 ? 'dispatch_node' : END
+
+  let builder = new StateGraph(outerSchema)
+    .addNode(supervisorName, supervisorAgent)
+    .addNode('dispatch_node', dispatchNode, { ends: [...agentNames] })
+    .addEdge(START, supervisorName)
+    .addConditionalEdges(supervisorName, routeAfterSupervisor)
 
   for (const agent of agents) {
     builder = builder
-      .addNode(agent.name!, makeCallAgent(agent, outputMode, supervisorName), { subgraphs: [agent] })
-      .addEdge(agent.name!, svName) as typeof builder
+      .addNode(agent.name!, makeCallAgent(agent, supervisorName), { subgraphs: [agent] })
+      .addEdge(agent.name!, supervisorName) as typeof builder
   }
 
   return builder

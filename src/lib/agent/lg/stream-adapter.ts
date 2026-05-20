@@ -15,7 +15,7 @@ function isAIChunk(m: unknown): m is BaseMessageChunk {
   return typeof m === 'object' && m !== null && '_getType' in m
 }
 
-function extractText(msg: { content: unknown }): string {
+export function extractText(msg: { content: unknown }): string {
   if (typeof msg.content === 'string') return msg.content
   if (Array.isArray(msg.content)) {
     return msg.content
@@ -27,12 +27,12 @@ function extractText(msg: { content: unknown }): string {
 
 function shouldSkipToolName(name: string | undefined): boolean {
   if (!name) return true
-  return name === 'select_tool' || name.startsWith('transfer_')
+  return name === 'select_tool' || name === 'dispatch' || name.startsWith('transfer_')
 }
 
 function emitToolStepsFromMessages(messages: BaseMessage[], emit: Emit) {
   for (const m of messages) {
-    if (m instanceof AIMessage && m.tool_calls?.length) {
+    if ((m instanceof AIMessage || m instanceof AIMessageChunk) && m.tool_calls?.length) {
       for (const tc of m.tool_calls) {
         if (shouldSkipToolName(tc.name)) continue
         emit({ type: 'step', content: `🔧 ${tc.name}(${JSON.stringify(tc.args ?? {})})` })
@@ -98,7 +98,7 @@ export async function pipeLangGraphStream(
           emitToolStepsFromMessages(update.messages, emit)
           if (isFromSupervisor(namespace) && !isFromAnySubagent(namespace)) {
             for (const m of update.messages) {
-              if (m instanceof AIMessage && (!m.tool_calls || m.tool_calls.length === 0)) {
+              if ((m instanceof AIMessage || m instanceof AIMessageChunk) && (!m.tool_calls || m.tool_calls.length === 0)) {
                 const text = extractText(m)
                 if (text) lastSupervisorFinalText = text
               }
