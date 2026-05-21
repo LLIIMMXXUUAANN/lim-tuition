@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { HumanMessage, AIMessage, type BaseMessage, type StoredMessage, mapStoredMessagesToChatMessages, mapChatMessagesToStoredMessages } from '@langchain/core/messages'
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage, type BaseMessage, type StoredMessage, mapStoredMessagesToChatMessages, mapChatMessagesToStoredMessages } from '@langchain/core/messages'
 import { requireTutor } from '@/lib/supabase/server'
 import { makeSupervisor } from '@/lib/agent/lg/supervisor'
 import { pipeLangGraphStream } from '@/lib/agent/lg/stream-adapter'
 import { getMYTDateString } from '@/lib/utils'
 import { stopSignals, requestAbortControllers, isAbortError } from '@/lib/agent/stop-signals'
+import { SELF_EVAL_MESSAGE_NAME } from '@/lib/agent/lg/post-hooks'
 
 export const dynamic = 'force-dynamic'
+
+function isRoutingRelevant(msg: BaseMessage): boolean {
+  if (msg instanceof HumanMessage) return true
+  if (msg instanceof SystemMessage) return msg.name === SELF_EVAL_MESSAGE_NAME
+  if (msg instanceof ToolMessage) {
+    const name = msg.name ?? ''
+    return name === 'dispatch' || name.startsWith('transfer_back_to_')
+  }
+  if (AIMessage.isInstance(msg)) {
+    const calls = msg.tool_calls
+    if (!calls || calls.length === 0) return true
+    return calls.some(tc => tc.name === 'dispatch' || tc.name?.startsWith('transfer_back_to_'))
+  }
+  return false
+}
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -68,7 +84,7 @@ export async function POST(req: NextRequest) {
         )
         completedNormally = await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId,
           async (accumulatedMessages) => {
-            const fullHistory = [...messages, ...accumulatedMessages]
+            const fullHistory = [...messages, ...accumulatedMessages].filter(isRoutingRelevant)
             emit({ type: 'lg_history', messages: mapChatMessagesToStoredMessages(fullHistory) })
           },
         )
