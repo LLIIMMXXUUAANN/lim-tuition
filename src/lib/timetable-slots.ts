@@ -1,6 +1,6 @@
 // src/lib/timetable-slots.ts
 import { timeToMins, TIME_SLOTS, DAYS } from '@/lib/utils'
-import { getGeminiModel, GenerateSlotsResponseSchema } from '@/lib/gemini'
+import { runGeminiSlotGeneration } from '@/lib/gemini'
 
 export interface BookedSlot { day: string; start: string; end: string }
 export type SlotState = 'preferred' | 'normal' | 'unavailable'
@@ -96,10 +96,7 @@ export async function runSlotGeneration(
     bookedCellSet,
   )
 
-  const model = getGeminiModel()
-  const result = await model.generateContent(prompt)
-  const raw = JSON.parse(result.response.text())
-  const parsed = GenerateSlotsResponseSchema.parse(raw)
+  const parsed = await runGeminiSlotGeneration(prompt)
 
   return parsed.slots.map(s =>
     bufferSlots.has(`${s.day}|${s.time}`) ? { ...s, state: 'unavailable' as const } : s

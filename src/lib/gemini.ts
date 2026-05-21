@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI, Type } from '@google/genai'
 import { z } from 'zod'
 
 export const SlotSchema = z.object({
@@ -13,32 +13,35 @@ export const GenerateSlotsResponseSchema = z.object({
 
 export type GenerateSlotsResponse = z.infer<typeof GenerateSlotsResponseSchema>
 
-export const GEMINI_RESPONSE_SCHEMA = {
-  type: 'object',
+const GEMINI_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
   properties: {
     slots: {
-      type: 'array',
+      type: Type.ARRAY,
       items: {
-        type: 'object',
+        type: Type.OBJECT,
         properties: {
-          day: { type: 'string' },
-          time: { type: 'string' },
-          state: { type: 'string', enum: ['preferred', 'normal', 'unavailable'] },
+          day: { type: Type.STRING },
+          time: { type: Type.STRING },
+          state: { type: Type.STRING, enum: ['preferred', 'normal', 'unavailable'] },
         },
         required: ['day', 'time', 'state'],
       },
     },
   },
   required: ['slots'],
-} as const
+}
 
-export function getGeminiModel() {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  return genAI.getGenerativeModel({
+export async function runGeminiSlotGeneration(prompt: string): Promise<GenerateSlotsResponse> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+  const result = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    generationConfig: {
+    contents: prompt,
+    config: {
       responseMimeType: 'application/json',
-      responseSchema: GEMINI_RESPONSE_SCHEMA as never,
+      responseSchema: GEMINI_RESPONSE_SCHEMA,
     },
   })
+  const raw = JSON.parse(result.text ?? '')
+  return GenerateSlotsResponseSchema.parse(raw)
 }

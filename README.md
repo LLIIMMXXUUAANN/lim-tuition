@@ -7,8 +7,7 @@ Public landing page + private admin dashboard for managing tuition students, cla
 - **Next.js 16** (App Router) + TypeScript
 - **Supabase** — Postgres database + magic link auth
 - **Tailwind CSS v4** + shadcn/ui + @heroicons/react
-- **Gemini 2.5 Flash** (`@google/generative-ai`) — AI slot classification with structured output
-- **Gemini 2.5 Flash** (`@google/genai` v1.x) — classic AI agent (single-model function-calling loop)
+- **Gemini 2.5 Flash** (`@google/genai` v1.x) — AI slot classification with structured output + classic AI agent (single-model function-calling loop)
 - **LangChain + LangGraph** (`@langchain/google`, `@langchain/langgraph`) — multi-agent supervisor/subagent backend (opt-in via toggle)
 - **LangSmith** — optional LangGraph run tracing; enable with `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY`
 - **Zod** — runtime validation of AI responses
@@ -127,7 +126,7 @@ src/
     agent/lg/   → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
     templates.ts → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
     payment.ts  → buildPaymentMessage() — pure payment calculation function shared by /api/generate-payment and the agent's generatePaymentMessage tool (single source of truth for fee arithmetic and message templates)
-    gemini.ts   → Gemini client factory, Zod slot schema, responseSchema for structured output
+    gemini.ts   → runGeminiSlotGeneration() — calls @google/genai with JSON responseSchema + Zod validation; also exports SlotSchema, GenerateSlotsResponseSchema
     types.ts    → shared TypeScript types (Student, ClassSlot, etc.)
     utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, getMYTDateString, formatFee, ordinal, oxfordList, groupSlotsByDay
   proxy.ts      → Next.js middleware (auth + route protection)
