@@ -59,19 +59,20 @@ function isFromAnySubagent(namespace: string[] | undefined): boolean {
   return !namespace[0]?.startsWith('supervisor:')
 }
 
+// Returns true if the stream completed normally (done emitted), false if aborted/stopped early.
 export async function pipeLangGraphStream(
   stream: AsyncIterable<unknown>,
   emit: Emit,
   signal?: AbortSignal,
   requestId?: string,
-): Promise<void> {
+): Promise<boolean> {
   let streamedAnyText = false
   let lastSupervisorFinalText = ''
 
   try {
     for await (const raw of stream) {
       // A1: client disconnected (text-round abort) — exit silently
-      if (signal?.aborted) return
+      if (signal?.aborted) return false
       if (!Array.isArray(raw)) continue
       let namespace: string[] | undefined
       let mode: string
@@ -126,7 +127,7 @@ export async function pipeLangGraphStream(
       if (requestId && stopSignals.get(requestId)) {
         stopSignals.delete(requestId)
         emit({ type: 'stopped' })
-        return
+        return false
       }
     }
 
@@ -136,9 +137,12 @@ export async function pipeLangGraphStream(
         emit({ type: 'chunk', content: lastSupervisorFinalText || '(no response from supervisor — check server logs)' })
       }
       emit({ type: 'done' })
+      return true
     }
+    return false
   } catch (err) {
-    if (isAbortError(err)) return
+    if (isAbortError(err)) return false
     emit({ type: 'error', message: err instanceof Error ? err.message : 'Stream error' })
+    return false
   }
 }

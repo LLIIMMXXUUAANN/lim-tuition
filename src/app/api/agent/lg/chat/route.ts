@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       function emit(data: object) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
+      let completedNormally = false
       try {
         const lgStream = await supervisor.stream(
           { messages },
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
             signal: abortController.signal,
           },
         )
-        await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId)
+        completedNormally = await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId)
       } catch (err) {
         if (!isAbortError(err)) {
           emit({ type: 'error', message: err instanceof Error ? err.message : 'Supervisor error' })
@@ -68,8 +69,8 @@ export async function POST(req: NextRequest) {
           requestAbortControllers.delete(requestId)
           stopSignals.delete(requestId)
         }
-        // Only emit 'stopped' if it was a soft-stop, not a client disconnect
-        if (wasStopped && !req.signal.aborted) {
+        // Only emit stopped for a soft-stop that arrived before the stream finished normally.
+        if (wasStopped && !req.signal.aborted && !completedNormally) {
           emit({ type: 'stopped' })
         }
         controller.close()

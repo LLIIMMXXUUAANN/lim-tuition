@@ -5,7 +5,7 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 | Backend | Schema format | Entry point |
 |---|---|---|
 | **Classic** (default) | `FunctionDeclaration[]` in `src/lib/agent/domains/` composed by `src/lib/agent/schema.ts` | `src/app/api/agent/chat/route.ts` |
-| **LangGraph** (toggle on) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts`; single-turn supervisor dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
+| **LangGraph** (toggle on) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts`; single-turn supervisor calls the LLM via `.stream()` (enables token-by-token streaming) and dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
 
 Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
@@ -14,7 +14,7 @@ Tool implementations live in `src/lib/agent/tools.ts` and are called by both bac
 **Stop button** — the send button transforms into a ■ Stop button while the agent is running. Two paths based on whether text chunks have arrived:
 - **Tool round** (no chunks yet): POSTs `{ requestId }` to `/api/agent/stop`. The server sets a flag and aborts the per-request `AbortController`. The current tool round finishes atomically (tools are never killed mid-execution), `selfEval` runs so write-op confirmation is visible, then the SSE stream closes with `{ type: 'stopped' }`. The bubble shows a "Cancelled" footer label.
 - **Text round** (chunks arriving): aborts the SSE connection immediately. Partial streamed text is safe — all write ops are already done at this point.
-Clicking Stop sets `isCancelled: true` on the pending bubble immediately (optimistic update) for instant visual feedback regardless of server timing.
+Clicking Stop sets `isCancelled: true` on the pending bubble immediately (optimistic update) for instant visual feedback regardless of server timing. In LangGraph mode, `{ type: 'stopped' }` is only emitted if the stream had not already completed normally — a `completedNormally` flag returned by the stream adapter prevents a spurious "Cancelled" label when stop is clicked at the exact moment a response finishes.
 
 **Error handling and retry** — when a request fails (network error, API error, or empty stream), the agent bubble shows the error text and a `↻ Try again` button appears bottom-right (same row as the timestamp). Clicking it replays the last user message in-place without duplicating it in history. The `isError` flag on the stored message persists in localStorage so the button survives a page refresh.
 

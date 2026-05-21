@@ -1,6 +1,6 @@
 import { Command, END, Send, START, StateGraph } from '@langchain/langgraph'
 import { createReactAgentAnnotation, withAgentName } from '@langchain/langgraph/prebuilt'
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import { createDispatchTool, normalizeAgentName, type HandoffTask } from './handoff'
 import { extractText } from './stream-adapter'
 import type { ChatGoogle } from '@langchain/google'
@@ -109,7 +109,16 @@ export function buildCustomSupervisor({
     const inputMessages = prompt
       ? [new SystemMessage(prompt), ...state.messages]
       : state.messages
-    const response = await supervisorLLM.invoke(inputMessages, config)
+
+    // Use stream() so LangGraph's StreamMessagesHandler emits tokens via 'messages' mode.
+    // invoke() blocks until the full response arrives — no streaming chunks reach the adapter.
+    const chunkStream = await supervisorLLM.stream(inputMessages, config)
+    let accumulated: AIMessageChunk | null = null
+    for await (const chunk of chunkStream) {
+      accumulated = accumulated ? accumulated.concat(chunk) as AIMessageChunk : chunk as AIMessageChunk
+    }
+    if (!accumulated) throw new Error('supervisorLLM.stream() returned an empty response')
+    const response: AIMessage = accumulated as unknown as AIMessage
 
     const dispatchCall = AIMessage.isInstance(response)
       ? response.tool_calls?.find((tc: { name: string }) => tc.name === 'dispatch')
