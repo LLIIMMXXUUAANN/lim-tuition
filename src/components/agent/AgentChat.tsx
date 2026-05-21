@@ -21,6 +21,7 @@ interface ChatMessage {
   role: 'user' | 'agent'
   content: string
   isError?: boolean
+  isCancelled?: boolean
   steps?: string[]
   scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
@@ -126,6 +127,10 @@ export default function AgentChat() {
   const inputRef = useRef<HTMLInputElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef<string>('')
+  const receivedChunkRef = useRef<boolean>(false)
+  const pendingIdRef = useRef<string>('')
 
   useEffect(() => {
     if (!hydrated) return
@@ -197,7 +202,7 @@ export default function AgentChat() {
       pendingId = retryMsgId
       setMessages(prev => prev.map(m =>
         m.id === pendingId
-          ? { ...m, content: '', steps: [], isError: false, scheduleStudents: undefined, slotData: undefined }
+          ? { ...m, content: '', steps: [], isError: false, isCancelled: false, scheduleStudents: undefined, slotData: undefined }
           : m
       ))
       apiMessages = messages.slice(0, errorIdx).map(toApiMsg)
@@ -212,17 +217,28 @@ export default function AgentChat() {
       apiMessages = [...messages, userMsg].map(toApiMsg)
     }
 
+    pendingIdRef.current = pendingId
     setLoading(true)
 
     let received = false
+    const markCancelled = () => setMessages(prev => prev.map(m =>
+      m.id === pendingId ? { ...m, isCancelled: true } : m
+    ))
 
     try {
+
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      const requestId = crypto.randomUUID()
+      requestIdRef.current = requestId
+      receivedChunkRef.current = false
 
       const endpoint = useLangGraph ? '/api/agent/lg/chat' : '/api/agent/chat'
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, requestId }),
+        signal: controller.signal,
       })
 
       if (!res.ok || !res.body) {
@@ -257,9 +273,13 @@ export default function AgentChat() {
             ))
           } else if (event.type === 'chunk') {
             received = true
+            receivedChunkRef.current = true
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, content: (m.content ?? '') + event.content! } : m
             ))
+          } else if (event.type === 'stopped') {
+            received = true
+            markCancelled()
           } else if (event.type === 'error') {
             received = true
             setMessages(prev => prev.map(m =>
@@ -279,23 +299,49 @@ export default function AgentChat() {
         }
       }
     } catch (err) {
-      setMessages(prev => prev.map(m =>
-        m.id === pendingId
-          ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`, isError: true }
-          : m
-      ))
-    } finally {
-      if (!received) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        received = true
+        markCancelled()
+      } else {
         setMessages(prev => prev.map(m =>
-          m.id === pendingId ? { ...m, content: 'No response received — please try again.', isError: true } : m
+          m.id === pendingId
+            ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`, isError: true }
+            : m
         ))
       }
+    } finally {
+      if (!received) {
+        setMessages(prev => {
+          const pending = prev.find(m => m.id === pendingId)
+          if (pending?.isCancelled) return prev
+          return prev.map(m =>
+            m.id === pendingId ? { ...m, content: 'No response received — please try again.', isError: true } : m
+          )
+        })
+      }
       setLoading(false)
+      abortControllerRef.current = null
     }
   }
 
   function clearChat() {
     setMessages([])
+  }
+
+  function stop() {
+    // Optimistic update — instant visual feedback regardless of server timing
+    setMessages(prev => prev.map(m =>
+      m.id === pendingIdRef.current ? { ...m, isCancelled: true } : m
+    ))
+    if (receivedChunkRef.current) {
+      abortControllerRef.current?.abort()
+    } else {
+      fetch('/api/agent/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: requestIdRef.current }),
+      }).catch(() => {})
+    }
   }
 
   function retry(msgId: string) {
@@ -372,7 +418,7 @@ export default function AgentChat() {
                     {msg.steps && msg.steps.length > 0 && (
                       <div className="text-xs text-slate-400 space-y-0.5 mb-2 pb-2 border-b border-slate-100 break-all">
                         {msg.steps.map((step, j) => (
-                          <div key={j}>{step.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '…')}</div>
+                          <div key={j}>{step}</div>
                         ))}
                       </div>
                     )}
@@ -428,8 +474,8 @@ export default function AgentChat() {
                     )}
                   </div>
                 )}
-                {(msg.timestamp || msg.isError) && (
-                  <div className="flex items-center justify-between w-full mt-1 px-1">
+                {(msg.timestamp || msg.isError || msg.isCancelled) && (
+                  <div className="flex items-center justify-between w-full mt-1 px-1 min-w-[10rem]">
                     {msg.timestamp && (
                       <span className="text-xs text-slate-400">
                         {formatMessageTime(msg.timestamp, renderNow)}
@@ -444,6 +490,9 @@ export default function AgentChat() {
                       >
                         ↻ Try again
                       </button>
+                    )}
+                    {msg.isCancelled && (
+                      <span className="text-xs text-slate-400 italic">Cancelled</span>
                     )}
                   </div>
                 )}
@@ -490,13 +539,22 @@ export default function AgentChat() {
             }
           </button>
         )}
-        <Button
-          onClick={() => void send()}
-          disabled={loading || !input.trim()}
-          className="bg-navy text-white px-4 py-2.5 hover:bg-navy/90"
-        >
-          Send
-        </Button>
+        {loading ? (
+          <Button
+            onClick={stop}
+            className="bg-slate-100 text-slate-600 px-4 py-2.5 hover:bg-slate-200 border border-slate-200"
+          >
+            ■ Stop
+          </Button>
+        ) : (
+          <Button
+            onClick={() => void send()}
+            disabled={!input.trim()}
+            className="bg-navy text-white px-4 py-2.5 hover:bg-navy/90"
+          >
+            Send
+          </Button>
+        )}
       </div>
     </div>
   )

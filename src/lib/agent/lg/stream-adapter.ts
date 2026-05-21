@@ -1,5 +1,6 @@
 import { AIMessage, AIMessageChunk, SystemMessage, type BaseMessage, type BaseMessageChunk } from '@langchain/core/messages'
 import { SELF_EVAL_MESSAGE_NAME } from './post-hooks'
+import { stopSignals, isAbortError } from '@/lib/agent/stop-signals'
 
 type SSEEvent =
   | { type: 'chunk'; content: string }
@@ -8,6 +9,7 @@ type SSEEvent =
   | { type: 'download_schedule'; students: unknown }
   | { type: 'slots_ready'; slots: unknown }
   | { type: 'done' }
+  | { type: 'stopped' }
 
 export type Emit = (event: SSEEvent) => void
 
@@ -60,12 +62,16 @@ function isFromAnySubagent(namespace: string[] | undefined): boolean {
 export async function pipeLangGraphStream(
   stream: AsyncIterable<unknown>,
   emit: Emit,
+  signal?: AbortSignal,
+  requestId?: string,
 ): Promise<void> {
   let streamedAnyText = false
   let lastSupervisorFinalText = ''
 
   try {
     for await (const raw of stream) {
+      // A1: client disconnected (text-round abort) — exit silently
+      if (signal?.aborted) return
       if (!Array.isArray(raw)) continue
       let namespace: string[] | undefined
       let mode: string
@@ -114,16 +120,25 @@ export async function pipeLangGraphStream(
           emit({ type: 'slots_ready', slots: obj.slots_ready })
         }
       }
+
+      // Belt-and-suspenders: if LangGraph ignores the abort signal and keeps running,
+      // catch the soft-stop flag here between events so the user sees 'Cancelled' promptly.
+      if (requestId && stopSignals.get(requestId)) {
+        stopSignals.delete(requestId)
+        emit({ type: 'stopped' })
+        return
+      }
     }
 
-    // Fallback: if streaming never emitted any chunk but we captured a final supervisor reply,
-    // emit it as a single chunk so the user always sees the answer.
-    if (!streamedAnyText) {
-      emit({ type: 'chunk', content: lastSupervisorFinalText || '(no response from supervisor — check server logs)' })
+    // Only emit done/fallback if we completed normally (not aborted)
+    if (!signal?.aborted) {
+      if (!streamedAnyText) {
+        emit({ type: 'chunk', content: lastSupervisorFinalText || '(no response from supervisor — check server logs)' })
+      }
+      emit({ type: 'done' })
     }
-
-    emit({ type: 'done' })
   } catch (err) {
+    if (isAbortError(err)) return
     emit({ type: 'error', message: err instanceof Error ? err.message : 'Stream error' })
   }
 }

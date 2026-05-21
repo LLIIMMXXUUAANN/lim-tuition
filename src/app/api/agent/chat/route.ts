@@ -15,6 +15,7 @@ import {
 } from '@/lib/agent/tools'
 import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/lib/agent/schema'
 import { selfEval } from '@/lib/agent/eval'
+import { stopSignals } from '@/lib/agent/stop-signals'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,11 +82,14 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({})) as {
     messages?: { role: 'user' | 'model'; content: string }[]
+    requestId?: string
   }
 
   if (!body.messages?.length) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
+
+  const { requestId } = body
 
   const mytDate = new Intl.DateTimeFormat('en-MY', {
     timeZone: 'Asia/Kuala_Lumpur',
@@ -114,6 +118,7 @@ export async function POST(req: NextRequest) {
 
       try {
         for (let round = 0; round < 10; round++) {
+          if (req.signal.aborted || (requestId && stopSignals.get(requestId))) break
           const streamResult = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents,
@@ -203,15 +208,20 @@ export async function POST(req: NextRequest) {
           contents.push({ role: 'user', parts: fnResponseParts })
         }
       } catch (err) {
+        if (requestId) stopSignals.delete(requestId)
         emit({ type: 'error', message: errMsg(err, 'Gemini API error') })
         controller.close()
         return
       }
 
-      if (!gotReply) {
+      const wasStopped = requestId ? (stopSignals.get(requestId) ?? false) : false
+      if (requestId) stopSignals.delete(requestId)
+
+      if (!gotReply && !wasStopped && !req.signal.aborted) {
         emit({ type: 'chunk', content: "I wasn't able to complete that in the allowed steps — please try a simpler request." })
       }
 
+      // Always run selfEval on mutations — even when stopped, the user needs confirmation
       if (lastMutationTool) {
         const verification = await selfEval(
           lastMutationTool.name,
@@ -222,7 +232,7 @@ export async function POST(req: NextRequest) {
         if (verification) emit({ type: 'step', content: verification })
       }
 
-      emit({ type: 'done' })
+      emit({ type: wasStopped ? 'stopped' : 'done' })
       controller.close()
     },
   })

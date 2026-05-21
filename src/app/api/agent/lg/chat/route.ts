@@ -4,6 +4,7 @@ import { requireTutor } from '@/lib/supabase/server'
 import { makeSupervisor } from '@/lib/agent/lg/supervisor'
 import { pipeLangGraphStream } from '@/lib/agent/lg/stream-adapter'
 import { getMYTDateString } from '@/lib/utils'
+import { stopSignals, requestAbortControllers, isAbortError } from '@/lib/agent/stop-signals'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,16 +20,24 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({})) as {
     messages?: { role: 'user' | 'model'; content: string }[]
+    requestId?: string
   }
   if (!body.messages?.length) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
+
+  const { requestId } = body
 
   const mytDate = getMYTDateString()
 
   const messages: BaseMessage[] = body.messages.map(m =>
     m.role === 'model' ? new AIMessage(m.content) : new HumanMessage(m.content),
   )
+
+  // Per-request controller: fires on client disconnect (req.signal) OR soft-stop (stop endpoint)
+  const abortController = new AbortController()
+  req.signal.addEventListener('abort', () => abortController.abort(), { once: true })
+  if (requestId) requestAbortControllers.set(requestId, abortController)
 
   const supervisor = makeSupervisor(supabase, mytDate)
   const encoder = new TextEncoder()
@@ -45,12 +54,24 @@ export async function POST(req: NextRequest) {
             streamMode: ['messages', 'updates', 'custom'],
             subgraphs: true,
             recursionLimit: 50,
+            signal: abortController.signal,
           },
         )
-        await pipeLangGraphStream(lgStream, emit)
+        await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId)
       } catch (err) {
-        emit({ type: 'error', message: err instanceof Error ? err.message : 'Supervisor error' })
+        if (!isAbortError(err)) {
+          emit({ type: 'error', message: err instanceof Error ? err.message : 'Supervisor error' })
+        }
       } finally {
+        const wasStopped = requestId ? (stopSignals.get(requestId) ?? false) : false
+        if (requestId) {
+          requestAbortControllers.delete(requestId)
+          stopSignals.delete(requestId)
+        }
+        // Only emit 'stopped' if it was a soft-stop, not a client disconnect
+        if (wasStopped && !req.signal.aborted) {
+          emit({ type: 'stopped' })
+        }
         controller.close()
       }
     },

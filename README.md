@@ -51,7 +51,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
   - **Classic mode** (default): Gemini 2.5 Flash drives a single-model function-calling loop (up to 10 rounds) via `@google/genai`. Tool calls run in parallel within each round; a timing step shows `⏱ parallel ×N — tool1 Xms, tool2 Yms (total Zms)`. After mutations a `selfEval` DB query appends a `✓` / `⚠` step.
   - **LangGraph mode** (toggle on): supervisor + 3 specialist subagents via `@langchain/langgraph`. Single-turn supervisor node (one LLM call per turn, no React loop) dispatches to `student_agent`, `template_agent`, or `timetable_agent` via LangGraph `Send` for true parallel execution. Each subagent is a standard ReAct agent with all domain tools visible — Gemini can return multiple tool calls per round and `ToolNode` executes them in parallel (same-domain batching). Post-hook self-eval runs inside each subagent after mutations. Both backends are stateless — full message history is sent on every request.
   - **19 tools** (fine-grained reads, coarse-grained writes): `search_students`, `get_student`, `list_students` (optional status filter), `create_student`, `update_student`, `delete_student`, `setup_student_google`, `sync_all_students`, `manage_portal_access`, `get_schedule` (students by day of week), `get_fee_summary` (monthly revenue per student + total), `list_templates` (discover template ids/titles), `get_template` (fetch a single template's content by id), `generate_payment_message` (generate a ready-to-send payment reminder for a student; defaults to next month), `get_timetable_settings` (read scheduling rules + buffer mins), `update_timetable_rules` (save new rules text), `update_buffer_mins` (0–60 min buffer around booked classes), `generate_slot_availability` (AI-classify every free slot using Gemini), `download_timetable_image` (fetch students for schedule PNG)
-  - **SSE streaming:** both routes return `text/event-stream`. Tool steps appear immediately as each tool fires; the final reply streams token-by-token. The frontend patches a placeholder message in place as events arrive.
+  - **SSE streaming:** both routes return `text/event-stream`. Tool steps appear immediately as each tool fires; the final reply streams token-by-token. The frontend patches a placeholder message in place as events arrive. SSE event types: `step`, `chunk`, `done`, `stopped`, `error`, `download_schedule`, `slots_ready`.
+  - **Stop button:** the send button becomes a ■ Stop button while the agent is running. Behaviour is split on whether text chunks have started arriving: **tool round** (no chunks yet) — POSTs to `/api/agent/stop` which sets a server-side flag and aborts the per-request `AbortController`; the server finishes the current tool round atomically, emits selfEval confirmation for any write op, then closes with `{ type: 'stopped' }`; **text round** (chunks arriving) — aborts the SSE connection immediately (partial text is safe; all write ops are already done by this point). Clicking Stop also immediately marks the pending bubble as "Cancelled" in the UI (optimistic update) regardless of server timing.
   - **Auto Google sync:** updating a student's `class_schedule` via the agent automatically patches Calendar events and rewrites the Drive Meet doc (parallel, non-fatal)
   - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
   - **Timetable via agent:** `generate_slot_availability` runs the same Gemini slot-classifier as the timetable tab and triggers a **Download Slot Availability PNG** button in the chat; `download_timetable_image` triggers a **Download Schedule PNG** button — both render client-side using the shared `timetable-canvas.ts` lib
@@ -103,6 +104,7 @@ src/
     admin/(app)/agent/            → AI agent chat UI
     api/agent/chat/               → classic Gemini function-calling loop (max 10 rounds, SSE streaming, parallel tool execution)
     api/agent/lg/chat/            → LangGraph supervisor+subagent backend (SSE streaming, same event format)
+    api/agent/stop/               → soft-stop endpoint: sets stop flag + aborts per-request AbortController
     student/login/                → student portal login
     student/(portal)/             → student dashboard
     api/generate-payment/         → fee calculation API route
@@ -114,14 +116,14 @@ src/
     students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/  → TemplatesList, PaymentGenerator
     timetable/  → TimetableSection
-    agent/      → AgentChat (chat UI, localStorage persistence, react-markdown rendering)
+    agent/      → AgentChat (chat UI, localStorage persistence, react-markdown rendering, stop button)
     landing/    → 13 public landing page sections
     ui/         → shadcn/ui primitives
   lib/
     supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
     google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
     hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
-    agent/      → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval)
+    agent/      → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
     agent/lg/   → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
     templates.ts → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
     payment.ts  → buildPaymentMessage() — pure payment calculation function shared by /api/generate-payment and the agent's generatePaymentMessage tool (single source of truth for fee arithmetic and message templates)
