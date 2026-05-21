@@ -65,9 +65,11 @@ export async function pipeLangGraphStream(
   emit: Emit,
   signal?: AbortSignal,
   requestId?: string,
+  onComplete?: (messages: BaseMessage[]) => Promise<void>,
 ): Promise<boolean> {
   let streamedAnyText = false
   let lastSupervisorFinalText = ''
+  const accumulatedMap = new Map<string, BaseMessage>()
 
   try {
     for await (const raw of stream) {
@@ -103,6 +105,9 @@ export async function pipeLangGraphStream(
         for (const update of Object.values(updateMap)) {
           if (!update?.messages?.length) continue
           emitToolStepsFromMessages(update.messages, emit)
+          for (const m of update.messages) {
+            if (m.id) accumulatedMap.set(m.id, m)
+          }
           if (isFromSupervisor(namespace) && !isFromAnySubagent(namespace)) {
             for (const m of update.messages) {
               if (AIMessage.isInstance(m) && (!m.tool_calls || m.tool_calls.length === 0)) {
@@ -136,6 +141,7 @@ export async function pipeLangGraphStream(
       if (!streamedAnyText) {
         emit({ type: 'chunk', content: lastSupervisorFinalText || '(no response from supervisor — check server logs)' })
       }
+      if (onComplete) await onComplete([...accumulatedMap.values()])
       emit({ type: 'done' })
       return true
     }

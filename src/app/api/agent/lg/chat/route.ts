@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { HumanMessage, AIMessage, type BaseMessage } from '@langchain/core/messages'
+import { HumanMessage, AIMessage, type BaseMessage, type StoredMessage, mapStoredMessagesToChatMessages, mapChatMessagesToStoredMessages } from '@langchain/core/messages'
 import { requireTutor } from '@/lib/supabase/server'
 import { makeSupervisor } from '@/lib/agent/lg/supervisor'
 import { pipeLangGraphStream } from '@/lib/agent/lg/stream-adapter'
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as {
     messages?: { role: 'user' | 'model'; content: string }[]
     requestId?: string
+    lgHistory?: StoredMessage[]
   }
   if (!body.messages?.length) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
@@ -30,9 +31,16 @@ export async function POST(req: NextRequest) {
 
   const mytDate = getMYTDateString()
 
-  const messages: BaseMessage[] = body.messages.map(m =>
-    m.role === 'model' ? new AIMessage(m.content) : new HumanMessage(m.content),
-  )
+  let messages: BaseMessage[]
+  if (body.lgHistory?.length) {
+    const latestUserMsg = body.messages[body.messages.length - 1].content
+    const restored = mapStoredMessagesToChatMessages(body.lgHistory)
+    messages = [...restored, new HumanMessage(latestUserMsg)]
+  } else {
+    messages = body.messages.map(m =>
+      m.role === 'model' ? new AIMessage(m.content) : new HumanMessage(m.content),
+    )
+  }
 
   // Per-request controller: fires on client disconnect (req.signal) OR soft-stop (stop endpoint)
   const abortController = new AbortController()
@@ -58,7 +66,12 @@ export async function POST(req: NextRequest) {
             signal: abortController.signal,
           },
         )
-        completedNormally = await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId)
+        completedNormally = await pipeLangGraphStream(lgStream, emit, abortController.signal, requestId,
+          async (accumulatedMessages) => {
+            const fullHistory = [...messages, ...accumulatedMessages]
+            emit({ type: 'lg_history', messages: mapChatMessagesToStoredMessages(fullHistory) })
+          },
+        )
       } catch (err) {
         if (!isAbortError(err)) {
           emit({ type: 'error', message: err instanceof Error ? err.message : 'Supervisor error' })

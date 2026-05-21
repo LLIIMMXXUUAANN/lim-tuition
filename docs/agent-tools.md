@@ -9,6 +9,8 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 
 Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
+**History round-trip** — both backends are stateless. The frontend persists full tool-call history in localStorage after each clean turn (`geminiHistory: Content[]` for classic, `lgHistory: StoredMessage[]` for LangGraph) and sends it back on the next request so the LLM sees all prior tool calls and results. The server returns the updated history in a `{ type: 'history' }` / `{ type: 'lg_history' }` SSE event before `done`; the frontend commits it only on `done` so a cancelled or errored turn never corrupts the stored history.
+
 **Loading indicator** — while the agent is running and no text has arrived yet, the pending bubble shows three small dots bouncing in sequence (custom `dot-jump` CSS animation, staggered 0/200/400 ms). Once cancelled or errored without any content, the dots become a static `⋯`.
 
 **Stop button** — the send button transforms into a ■ Stop button while the agent is running. Two paths based on whether text chunks have arrived:

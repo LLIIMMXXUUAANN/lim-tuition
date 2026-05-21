@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as {
     messages?: { role: 'user' | 'model'; content: string }[]
     requestId?: string
+    geminiHistory?: Content[]
   }
 
   if (!body.messages?.length) {
@@ -100,10 +101,13 @@ export async function POST(req: NextRequest) {
   }).format(new Date())
   const systemInstruction = `Today is ${mytDate} (Malaysia Time).\n\n${SYSTEM_INSTRUCTION}`
 
-  const contents: Content[] = body.messages.map(m => ({
-    role: m.role,
-    parts: [{ text: m.content }],
-  }))
+  let contents: Content[]
+  if (body.geminiHistory?.length) {
+    const latestUserMsg = body.messages![body.messages!.length - 1].content
+    contents = [...body.geminiHistory, { role: 'user' as const, parts: [{ text: latestUserMsg }] }]
+  } else {
+    contents = body.messages!.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
+  }
 
   const encoder = new TextEncoder()
 
@@ -232,6 +236,7 @@ export async function POST(req: NextRequest) {
         if (verification) emit({ type: 'step', content: verification })
       }
 
+      if (!wasStopped) emit({ type: 'history', contents })
       emit({ type: wasStopped ? 'stopped' : 'done' })
       controller.close()
     },

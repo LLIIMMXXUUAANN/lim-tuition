@@ -15,6 +15,12 @@ import {
 
 const STORAGE_KEY = 'agent_chat_messages'
 const LG_STORAGE_KEY = 'agent_use_lg'
+const GEMINI_HISTORY_KEY = 'agent_gemini_contents'
+const LG_HISTORY_KEY = 'agent_lg_contents'
+
+type GeminiContent = { role: string; parts: { text?: string; functionCall?: unknown; functionResponse?: unknown }[] }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StoredLGMessage = { type: string; data: Record<string, any> }
 
 interface ChatMessage {
   id: string
@@ -115,9 +121,13 @@ export default function AgentChat() {
   // overwrite localStorage with the initial empty state. Skipping saves until hydrated
   // prevents this race.
   const [hydrated, setHydrated] = useState(false)
+  const [geminiContents, setGeminiContents] = useState<GeminiContent[] | null>(null)
+  const [lgContents, setLgContents] = useState<StoredLGMessage[] | null>(null)
   useEffect(() => {
     setMessages(loadStoredMessages())
     setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) === 'true')
+    try { const g = localStorage.getItem(GEMINI_HISTORY_KEY); if (g) setGeminiContents(JSON.parse(g)) } catch {}
+    try { const l = localStorage.getItem(LG_HISTORY_KEY); if (l) setLgContents(JSON.parse(l)) } catch {}
     setHydrated(true)
   }, [])
   useEffect(() => {
@@ -131,6 +141,8 @@ export default function AgentChat() {
   const requestIdRef = useRef<string>('')
   const receivedChunkRef = useRef<boolean>(false)
   const pendingIdRef = useRef<string>('')
+  const pendingGeminiRef = useRef<GeminiContent[] | null>(null)
+  const pendingLgRef = useRef<StoredLGMessage[] | null>(null)
 
   useEffect(() => {
     if (!hydrated) return
@@ -145,6 +157,16 @@ export default function AgentChat() {
       localStorage.setItem(LG_STORAGE_KEY, String(useLangGraph))
     } catch {}
   }, [hydrated, useLangGraph])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      if (geminiContents) localStorage.setItem(GEMINI_HISTORY_KEY, JSON.stringify(geminiContents))
+      else localStorage.removeItem(GEMINI_HISTORY_KEY)
+      if (lgContents) localStorage.setItem(LG_HISTORY_KEY, JSON.stringify(lgContents))
+      else localStorage.removeItem(LG_HISTORY_KEY)
+    } catch {}
+  }, [hydrated, geminiContents, lgContents])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -237,7 +259,14 @@ export default function AgentChat() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, requestId }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          requestId,
+          ...(useLangGraph
+            ? (lgContents ? { lgHistory: lgContents } : {})
+            : (geminiContents ? { geminiHistory: geminiContents } : {})
+          ),
+        }),
         signal: controller.signal,
       })
 
@@ -266,6 +295,8 @@ export default function AgentChat() {
             message?: string
             students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
             slots?: { day: string; time: string; state: string }[]
+            contents?: GeminiContent[]
+            messages?: StoredLGMessage[]
           }
           if (event.type === 'step') {
             setMessages(prev => prev.map(m =>
@@ -277,6 +308,14 @@ export default function AgentChat() {
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, content: (m.content ?? '') + event.content! } : m
             ))
+          } else if (event.type === 'history') {
+            pendingGeminiRef.current = event.contents ?? null
+          } else if (event.type === 'lg_history') {
+            pendingLgRef.current = event.messages ?? null
+          } else if (event.type === 'done') {
+            received = true
+            if (pendingGeminiRef.current) { setGeminiContents(pendingGeminiRef.current); pendingGeminiRef.current = null }
+            if (pendingLgRef.current) { setLgContents(pendingLgRef.current); pendingLgRef.current = null }
           } else if (event.type === 'stopped') {
             received = true
             markCancelled()
@@ -310,6 +349,8 @@ export default function AgentChat() {
         ))
       }
     } finally {
+      pendingGeminiRef.current = null
+      pendingLgRef.current = null
       if (!received) {
         setMessages(prev => {
           const pending = prev.find(m => m.id === pendingId)
@@ -326,6 +367,8 @@ export default function AgentChat() {
 
   function clearChat() {
     setMessages([])
+    setGeminiContents(null)
+    setLgContents(null)
   }
 
   function stop() {
