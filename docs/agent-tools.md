@@ -9,6 +9,8 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 
 Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
+**Loading indicator** — while the agent is running and no text has arrived yet, the pending bubble shows three small dots bouncing in sequence (custom `dot-jump` CSS animation, staggered 0/200/400 ms). Once cancelled or errored without any content, the dots become a static `⋯`.
+
 **Stop button** — the send button transforms into a ■ Stop button while the agent is running. Two paths based on whether text chunks have arrived:
 - **Tool round** (no chunks yet): POSTs `{ requestId }` to `/api/agent/stop`. The server sets a flag and aborts the per-request `AbortController`. The current tool round finishes atomically (tools are never killed mid-execution), `selfEval` runs so write-op confirmation is visible, then the SSE stream closes with `{ type: 'stopped' }`. The bubble shows a "Cancelled" footer label.
 - **Text round** (chunks arriving): aborts the SSE connection immediately. Partial streamed text is safe — all write ops are already done at this point.

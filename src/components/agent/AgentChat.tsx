@@ -423,7 +423,15 @@ export default function AgentChat() {
                       </div>
                     )}
                     {!msg.content ? (
-                      <span className="animate-pulse text-slate-400 text-sm">⋯</span>
+                      msg.isCancelled || msg.isError ? (
+                        <span className="text-slate-400 text-sm">⋯</span>
+                      ) : (
+                        <span className="inline-flex items-end gap-0.5 h-5">
+                          {['0ms', '200ms', '400ms'].map((delay) => (
+                            <span key={delay} className="w-1 h-1 bg-slate-400 rounded-full" style={{ animation: 'dot-jump 1s ease-in-out infinite', animationDelay: delay }} />
+                          ))}
+                        </span>
+                      )
                     ) : (
                       <>
                         <div className="prose prose-sm max-w-none text-slate-800 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:pb-1 [&_th]:pr-3 [&_td]:py-0.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-slate-100 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:my-1 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_code]:break-words">
