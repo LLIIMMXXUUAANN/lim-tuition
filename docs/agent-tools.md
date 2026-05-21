@@ -566,6 +566,8 @@ Supabase `select` with `.eq('id', id).maybeSingle()`. Merges DB `content` with i
 
 Generate a ready-to-send payment reminder message for a student. Calculates session dates and total fee automatically from the student's schedule and fee rate.
 
+> **LangGraph enforcement:** `template_agent`'s system prompt requires it to ALWAYS call this tool — it is prohibited from writing payment message content itself. This ensures the message contains real session dates and fees computed from the student's DB record, never hallucinated content.
+
 ### Input
 
 | Parameter | Type | Required | Default | Notes |
