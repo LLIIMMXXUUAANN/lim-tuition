@@ -526,7 +526,7 @@ export default function AgentChat() {
                   </div>
                 )}
                 {(msg.timestamp || msg.isError || msg.isCancelled) && (
-                  <div className="flex items-center justify-between w-full mt-1 px-1 min-w-[10rem]">
+                  <div className={`flex items-center w-full mt-1 px-1 min-w-[10rem] ${msg.role === 'user' ? 'justify-end' : 'justify-between'}`}>
                     {msg.timestamp && (
                       <span className="text-xs text-slate-400">
                         {formatMessageTime(msg.timestamp, renderNow)}
