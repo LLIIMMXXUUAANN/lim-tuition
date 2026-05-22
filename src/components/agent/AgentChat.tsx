@@ -115,7 +115,7 @@ export default function AgentChat() {
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
-  const [useLangGraph, setUseLangGraph] = useState(false)
+  const [useLangGraph, setUseLangGraph] = useState(true)
   // hydrated gates the save effects: on mount, save effects fire before the load
   // effect's setMessages/setUseLangGraph state updates have committed, so they would
   // overwrite localStorage with the initial empty state. Skipping saves until hydrated
@@ -125,7 +125,7 @@ export default function AgentChat() {
   const [lgContents, setLgContents] = useState<StoredLGMessage[] | null>(null)
   useEffect(() => {
     setMessages(loadStoredMessages())
-    setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) === 'true')
+    setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) !== 'false')
     try { const g = localStorage.getItem(GEMINI_HISTORY_KEY); if (g) setGeminiContents(JSON.parse(g)) } catch {}
     try { const l = localStorage.getItem(LG_HISTORY_KEY); if (l) setLgContents(JSON.parse(l)) } catch {}
     setHydrated(true)
@@ -410,10 +410,13 @@ export default function AgentChat() {
             title={useLangGraph ? 'Switch to classic mode' : 'Switch to LangGraph mode'}
             className="flex items-center gap-1.5 group"
           >
+            <span className={`text-xs font-medium text-navy transition-opacity ${useLangGraph ? 'opacity-35' : ''}`}>
+              Single
+            </span>
             <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useLangGraph ? 'bg-navy' : 'bg-slate-200'}`}>
               <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${useLangGraph ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </span>
-            <span className={`text-xs font-medium transition-colors ${useLangGraph ? 'text-navy' : 'text-slate-400'}`}>
+            <span className={`text-xs font-medium text-navy transition-opacity ${useLangGraph ? '' : 'opacity-35'}`}>
               LangGraph
             </span>
           </button>

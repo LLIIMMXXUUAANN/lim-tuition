@@ -5,7 +5,7 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 | Backend | Schema format | Entry point |
 |---|---|---|
 | **Classic** (default) | `FunctionDeclaration[]` in `src/lib/agent/domains/` composed by `src/lib/agent/schema.ts` | `src/app/api/agent/chat/route.ts` |
-| **LangGraph** (toggle on) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts`; single-turn supervisor calls the LLM via `.stream()` (enables token-by-token streaming) and dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
+| **LangGraph** (default; toggle right — **Single · LangGraph**) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts`; single-turn supervisor calls the LLM via `.stream()` (enables token-by-token streaming) and dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
 
 Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
 
