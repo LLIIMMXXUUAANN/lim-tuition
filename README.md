@@ -68,6 +68,34 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links
 - Access is controlled per student via `access_emails` array — admin adds emails in the student edit form
 
+## Design decisions
+
+### Prompt caching (not implemented — future work)
+
+Gemini context caching can cache the static prefix (system instruction + tool declarations) and serve it at a reduced token rate across calls. It is not used because:
+
+- **Prefix is too small.** The system instruction + 19 tool declarations is ~2,000–4,000 tokens. At Gemini 2.5 Flash pricing the per-request saving is a fraction of a cent.
+- **Single admin, low volume.** Cache hits across requests require the same cache to stay warm (TTL ≥ 1 min). Occasional usage means mostly cold-cache requests.
+- **Intra-request benefit is modest.** The classic agent loop sends the system instruction on every round (max 10), but 2–3 rounds is typical — too small a multiplier to justify lifecycle complexity.
+
+**When to add it:** inject large static documents (curriculum, full student roster, multi-page scheduling rules) into the system prompt. At 50k+ tokens the ~4× cached-token discount becomes material. Create a module-level cache with a 60-minute TTL and invalidate it on content change.
+
+### LangGraph history filtering (`isRoutingRelevant`)
+
+`lgHistory` (persisted in localStorage, sent on every request) contains only routing-level messages. Subagent-internal tool call/response pairs — e.g. `search_students → result → get_student → result` that happened inside `student_agent` — are stripped server-side before the `lg_history` SSE event is emitted.
+
+**Why:** subagent tool calls are ephemeral implementation detail. The supervisor only needs to know what task was dispatched and what conclusion the subagent reached — not the DB queries that got there. Keeping them would (1) grow `lgHistory` proportionally to tool depth per turn, (2) inject stale intermediate data into the supervisor's context across turns, and (3) risk the supervisor re-routing based on old results rather than issuing fresh lookups.
+
+**What is kept:** user messages, supervisor dispatch decisions (the `dispatch` AIMessage + ToolMessage pair), subagent final replies (the `transfer_back_to_supervisor` handoff pair, where the ToolMessage content is the actual answer), direct supervisor replies, and self-eval verdicts. This is exactly the routing-level transcript the supervisor needs to handle follow-up requests correctly.
+
+### Tool retrieval (not implemented)
+
+At 50–100+ tools, the industry uses embedding-based RAG to dynamically fetch only the most relevant tool schemas per query — avoiding context window bloat and attention degradation from too many competing descriptions. At 19 tools this is unnecessary: all schemas fit comfortably in a single prompt and Gemini selects correctly without a retrieval hint. The LangGraph mode further narrows each subagent's view to 3–11 tools via static domain partitioning, achieving the same scoping benefit without embeddings.
+
+### Stateless agent design (no LangGraph checkpointer)
+
+Both agent backends are stateless — the frontend sends conversation history on every request rather than storing it server-side via a LangGraph checkpointer. The primary reason: there is only one admin, with no concurrent sessions. Stateful checkpointing (e.g. `MemorySaver`, a Postgres checkpointer) is designed for many users each maintaining long-running threads that need to be resumed across devices or sessions. For a single user whose history already lives in localStorage and is sent back on every request, the infrastructure overhead (external store, thread ID management, TTL cleanup) buys nothing.
+
 ## Deployment
 
 Deployed on Vercel at `https://lim-tuition.vercel.app`. Push to `main` to redeploy automatically.

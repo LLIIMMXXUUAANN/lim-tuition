@@ -222,3 +222,35 @@ After each event, a belt-and-suspenders check reads `stopSignals.get(requestId)`
 - All parallel tasks (same-domain or cross-domain) go into ONE `dispatch` call with multiple entries — the `dispatch` tool is the single routing mechanism
 - Same agent, multiple entities → ONE combined entry (subagent batches tool calls internally). Different agents → one entry each (parallel via `Send` fan-out).
 - **Never expand or guess student names** — copy the exact name or partial name the user typed; `search_students` does partial matching so "Ang" is a valid task input
+
+---
+
+## Design decisions
+
+### Why LangGraph history omits subagent-internal tool calls (`isRoutingRelevant`)
+
+`lgHistory` (stored in localStorage, sent on every request) contains only routing-level messages. Subagent-internal tool calls — e.g. `search_students → result → get_student → result` that happened inside `student_agent` — are stripped by `isRoutingRelevant` before the `lg_history` SSE event is emitted.
+
+**Why subagent internals are excluded:**
+
+1. **They are ephemeral implementation detail, not conversation state.** The supervisor dispatched a task and received a conclusion. The specific DB queries that produced that conclusion are no longer load-bearing for future routing decisions — the supervisor only needs to know what was asked and what was answered.
+
+2. **Including them grows history proportionally to tool call depth.** A single subagent invocation can involve 3–6 tool call/response pairs. Keeping all of these would grow `lgHistory` quickly, increasing the token cost of every subsequent request.
+
+3. **They can mislead the supervisor across turns.** Stale intermediate tool results (e.g. a `get_student` result from two turns ago) in the supervisor's context could cause it to re-reason from old data rather than issuing a fresh lookup.
+
+4. **The supervisor has enough context to re-derive what it needs.** If the user says "do the same for Ang", the supervisor can see it previously dispatched to `student_agent` and got a reply — it will dispatch again and the subagent will make fresh DB calls. Repeating the prior DB results in history buys nothing.
+
+**What `isRoutingRelevant` keeps:**
+- `HumanMessage` — the user's request (every turn)
+- Supervisor `AIMessage` with a `dispatch` tool call — the routing decision
+- The paired `ToolMessage` confirming the dispatch
+- `transfer_back_to_supervisor` `AIMessage` + `ToolMessage` pairs — the subagent's final reply (the ToolMessage content is the actual answer)
+- `AIMessage` with no tool calls from the supervisor namespace — direct supervisor replies
+- `SystemMessage` with `name === 'self_eval'` — mutation verification verdicts
+
+This is exactly the information a human project manager would retain between meetings: what was asked, who handled it, and what conclusion they reached — not the full transcript of every step taken.
+
+### Why the agent is stateless (no LangGraph checkpointer)
+
+Both backends send conversation history from the client on every request rather than persisting it server-side via a LangGraph checkpointer. The primary reason is that there is only one admin with no concurrent sessions. Stateful checkpointing (`MemorySaver`, a Postgres checkpointer, etc.) is designed for many users each maintaining long-running threads that need to survive browser refreshes and be resumed across devices. For a single user whose history already lives in localStorage and is sent back on every request, the infrastructure overhead — external store, thread ID management, TTL/cleanup — provides no benefit.
