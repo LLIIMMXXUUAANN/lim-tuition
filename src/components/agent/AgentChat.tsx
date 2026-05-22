@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/outline'
+import { MicrophoneIcon, StopIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -123,6 +123,11 @@ export default function AgentChat() {
   const [hydrated, setHydrated] = useState(false)
   const [geminiContents, setGeminiContents] = useState<GeminiContent[] | null>(null)
   const [lgContents, setLgContents] = useState<StoredLGMessage[] | null>(null)
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const latestUserMsgId = useMemo(() =>
+    [...messages].reverse().find(m => m.role === 'user')?.id ?? null,
+  [messages])
   useEffect(() => {
     setMessages(loadStoredMessages())
     setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) !== 'false')
@@ -212,11 +217,15 @@ export default function AgentChat() {
     content: m.content,
   })
 
-  async function send(retryMsgId?: string) {
+  async function send(retryMsgId?: string, editPayload?: { userMsgId: string; newContent: string }) {
     if (loading) return
 
     let pendingId: string
     let apiMessages: { role: 'user' | 'model'; content: string }[]
+    let historyForFetch: Record<string, unknown> = {}
+    const isEditTurn = !!editPayload
+    let editPriorLg: StoredLGMessage[] | null = null
+    let editPriorGemini: GeminiContent[] | null = null
 
     if (retryMsgId) {
       const errorIdx = messages.findIndex(m => m.id === retryMsgId)
@@ -228,21 +237,75 @@ export default function AgentChat() {
           : m
       ))
       apiMessages = messages.slice(0, errorIdx).map(toApiMsg)
+      historyForFetch = useLangGraph
+        ? (lgContents ? { lgHistory: lgContents } : {})
+        : (geminiContents ? { geminiHistory: geminiContents } : {})
+    } else if (editPayload) {
+      const userMsgIdx = messages.findIndex(m => m.id === editPayload.userMsgId)
+      if (userMsgIdx === -1) return
+      const truncated = messages.slice(0, userMsgIdx)
+      const newUserMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: editPayload.newContent, timestamp: new Date().toISOString() }
+      pendingId = crypto.randomUUID()
+      const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
+      setMessages([...truncated, newUserMsg, pendingMsg])
+      apiMessages = [...truncated, newUserMsg].map(toApiMsg)
+      // Count completed prior user turns before the edited message.
+      const priorTurns = truncated.filter(m => m.role === 'user').length
+      if (useLangGraph && lgContents) {
+        const lgHumanCount = lgContents.filter(m => m.type === 'human').length
+        if (lgHumanCount > priorTurns) {
+          // The edited turn's HumanMessage is in lgContents — cut before the last one.
+          let cutIdx = lgContents.length
+          for (let i = lgContents.length - 1; i >= 0; i--) {
+            if (lgContents[i].type === 'human') { cutIdx = i; break }
+          }
+          editPriorLg = cutIdx > 0 ? lgContents.slice(0, cutIdx) : null
+        } else {
+          // Edited turn was stopped/cancelled — all existing history is valid prior context.
+          editPriorLg = lgContents.length > 0 ? lgContents : null
+        }
+        if (editPriorLg) historyForFetch = { lgHistory: editPriorLg }
+      } else if (!useLangGraph && geminiContents) {
+        const isGenuineHuman = (c: GeminiContent) =>
+          c.role === 'user' && !c.parts.some(p => 'functionResponse' in p)
+        const geminiHumanCount = geminiContents.filter(isGenuineHuman).length
+        if (geminiHumanCount > priorTurns) {
+          // The edited turn's Content is in geminiContents — cut before the last genuine human entry.
+          let cutIdx = geminiContents.length
+          for (let i = geminiContents.length - 1; i >= 0; i--) {
+            if (isGenuineHuman(geminiContents[i])) { cutIdx = i; break }
+          }
+          editPriorGemini = cutIdx > 0 ? geminiContents.slice(0, cutIdx) : null
+        } else {
+          // Edited turn was stopped/cancelled — all existing history is valid prior context.
+          editPriorGemini = geminiContents.length > 0 ? geminiContents : null
+        }
+        if (editPriorGemini) historyForFetch = { geminiHistory: editPriorGemini }
+      }
+      // Clear stored history; the done handler will repopulate with the new turn's result.
+      setGeminiContents(null)
+      setLgContents(null)
     } else {
       const text = input.trim()
       if (!text) return
       setInput('')
+      setEditingMsgId(null)
+      setEditDraft('')
       const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() }
       pendingId = crypto.randomUUID()
       const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
       setMessages([...messages, userMsg, pendingMsg])
       apiMessages = [...messages, userMsg].map(toApiMsg)
+      historyForFetch = useLangGraph
+        ? (lgContents ? { lgHistory: lgContents } : {})
+        : (geminiContents ? { geminiHistory: geminiContents } : {})
     }
 
     pendingIdRef.current = pendingId
     setLoading(true)
 
     let received = false
+    let doneReceived = false
     const markCancelled = () => setMessages(prev => prev.map(m =>
       m.id === pendingId ? { ...m, isCancelled: true } : m
     ))
@@ -262,10 +325,7 @@ export default function AgentChat() {
         body: JSON.stringify({
           messages: apiMessages,
           requestId,
-          ...(useLangGraph
-            ? (lgContents ? { lgHistory: lgContents } : {})
-            : (geminiContents ? { geminiHistory: geminiContents } : {})
-          ),
+          ...historyForFetch,
         }),
         signal: controller.signal,
       })
@@ -314,6 +374,7 @@ export default function AgentChat() {
             pendingLgRef.current = event.messages ?? null
           } else if (event.type === 'done') {
             received = true
+            doneReceived = true
             if (pendingGeminiRef.current) { setGeminiContents(pendingGeminiRef.current); pendingGeminiRef.current = null }
             if (pendingLgRef.current) { setLgContents(pendingLgRef.current); pendingLgRef.current = null }
           } else if (event.type === 'stopped') {
@@ -360,6 +421,12 @@ export default function AgentChat() {
           )
         })
       }
+      // If an edit turn didn't complete (stopped/cancelled/error), restore the prior history
+      // so future sends still have the context from turns before the edited message.
+      if (isEditTurn && !doneReceived) {
+        if (useLangGraph) setLgContents(editPriorLg)
+        else setGeminiContents(editPriorGemini)
+      }
       setLoading(false)
       abortControllerRef.current = null
     }
@@ -369,6 +436,8 @@ export default function AgentChat() {
     setMessages([])
     setGeminiContents(null)
     setLgContents(null)
+    setEditingMsgId(null)
+    setEditDraft('')
   }
 
   function stop() {
@@ -393,6 +462,15 @@ export default function AgentChat() {
     const userMsg = messages.slice(0, errorIdx).reverse().find(m => m.role === 'user')
     if (!userMsg) return
     void send(msgId)
+  }
+
+  function confirmEdit() {
+    if (!editingMsgId || !editDraft.trim()) return
+    const msgId = editingMsgId
+    const content = editDraft.trim()
+    setEditingMsgId(null)
+    setEditDraft('')
+    void send(undefined, { userMsgId: msgId, newContent: content })
   }
 
   return (
@@ -456,9 +534,42 @@ export default function AgentChat() {
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 {msg.role === 'user' ? (
-                  <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm">
-                    {msg.content}
-                  </div>
+                  editingMsgId === msg.id ? (
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <textarea
+                        autoFocus
+                        value={editDraft}
+                        onChange={e => setEditDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmEdit() }
+                          if (e.key === 'Escape') { setEditingMsgId(null) }
+                        }}
+                        rows={3}
+                        className="w-full rounded-2xl rounded-tr-sm border border-navy px-4 py-2.5 text-sm text-navy resize-none focus:outline-none bg-white"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setEditingMsgId(null)}
+                          className="text-xs text-slate-400 hover:text-navy transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmEdit}
+                          disabled={!editDraft.trim()}
+                          className="text-xs bg-navy text-white rounded-lg px-2.5 py-1 hover:bg-navy/80 disabled:opacity-40 transition-colors"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-navy text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm">
+                      {msg.content}
+                    </div>
+                  )
                 ) : (
                   <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm shadow-sm">
                     {msg.steps && msg.steps.length > 0 && (
@@ -528,12 +639,22 @@ export default function AgentChat() {
                     )}
                   </div>
                 )}
-                {(msg.timestamp || msg.isError || msg.isCancelled) && (
+                {editingMsgId !== msg.id && (msg.timestamp || msg.isError || msg.isCancelled || (msg.role === 'user' && msg.id === latestUserMsgId && !loading)) && (
                   <div className={`flex items-center w-full mt-1 px-1 min-w-[10rem] ${msg.role === 'user' ? 'justify-end' : 'justify-between'}`}>
                     {msg.timestamp && (
                       <span className="text-xs text-slate-400">
                         {formatMessageTime(msg.timestamp, renderNow)}
                       </span>
+                    )}
+                    {msg.role === 'user' && msg.id === latestUserMsgId && !loading && (
+                      <button
+                        type="button"
+                        onClick={() => { setEditingMsgId(msg.id); setEditDraft(msg.content) }}
+                        className="text-slate-400 hover:text-navy transition-colors ml-2.5"
+                        aria-label="Edit message"
+                      >
+                        <PencilSquareIcon className="w-3.5 h-3.5" />
+                      </button>
                     )}
                     {msg.isError && (
                       <button

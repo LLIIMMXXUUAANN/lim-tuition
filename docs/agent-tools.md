@@ -20,6 +20,8 @@ Clicking Stop sets `isCancelled: true` on the pending bubble immediately (optimi
 
 **Error handling and retry** — when a request fails (network error, API error, or empty stream), the agent bubble shows the error text and a `↻ Try again` button appears bottom-right (same row as the timestamp). User message timestamps are right-aligned; agent message timestamps are left-aligned. Clicking it replays the last user message in-place without duplicating it in history. The `isError` flag on the stored message persists in localStorage so the button survives a page refresh.
 
+**Edit message** — the latest user bubble shows a pencil icon to the right of its timestamp while the agent is not loading. Clicking it opens an inline textarea pre-filled with the original text. Pressing Send (or Enter without Shift) calls `send()` with an `editPayload`: messages after the edited turn are discarded, stored history is sliced to exclude the edited turn's content, and the agent re-runs from that point. Pressing Escape closes the textarea without sending. If the edit turn is stopped or cancelled before `done`, prior history is restored from local variables so context from earlier turns is not lost in subsequent requests. The pencil icon is hidden while the agent is running.
+
 **LangSmith tracing** — LangGraph runs are traced automatically when `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY` are set. Traces appear in the LangSmith web UI under the `LANGSMITH_PROJECT` name (default: `tuition-agent`). Classic-mode runs are not traced. See `.env.example` for the full set of LangSmith env vars.
 
 ---

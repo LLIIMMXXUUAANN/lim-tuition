@@ -6,7 +6,7 @@ src/components/
   students/     → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
   templates/    → TemplatesList, PaymentGenerator
   timetable/    → TimetableSection
-  agent/        → AgentChat (chat UI, localStorage persistence, tool step display)
+  agent/        → AgentChat (chat UI, localStorage persistence, tool step display, edit latest user message)
   landing/      → 13 static sections for the public landing page
   ui/           → shadcn/ui primitives (Button, Input, Card, Select, Tabs, etc.)
 ```
