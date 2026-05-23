@@ -92,6 +92,14 @@ Gemini context caching can cache the static prefix (system instruction + tool de
 
 At 50–100+ tools, the industry uses embedding-based RAG to dynamically fetch only the most relevant tool schemas per query — avoiding context window bloat and attention degradation from too many competing descriptions. At 19 tools this is unnecessary: all schemas fit comfortably in a single prompt and Gemini selects correctly without a retrieval hint. The LangGraph mode further narrows each subagent's view to 3–11 tools via static domain partitioning, achieving the same scoping benefit without embeddings.
 
+### Raw API over MCP / CLI
+
+All service integrations (Supabase, Google Drive/Calendar, Gemini) use their SDKs directly rather than MCP servers or CLI tools.
+
+- **MCP** is designed for exposing tools to an AI model running remotely, or in a multi-user environment where each user needs isolated tool context. Neither condition applies here — there is one admin and the route handlers run in the same server process as the tool calls.
+- **CLI** assumes a local shell environment. A Next.js server running on Vercel does not have one.
+- **Raw SDK calls** are the natural fit: no extra infrastructure to deploy or maintain, full TypeScript types, straightforward error handling, and no abstraction layer between the app and the service.
+
 ### Stateless agent design (no LangGraph checkpointer)
 
 Both agent backends are stateless — the frontend sends conversation history on every request rather than storing it server-side via a LangGraph checkpointer. The primary reason: there is only one admin, with no concurrent sessions. Stateful checkpointing (e.g. `MemorySaver`, a Postgres checkpointer) is designed for many users each maintaining long-running threads that need to be resumed across devices or sessions. For a single user whose history already lives in localStorage and is sent back on every request, the infrastructure overhead (external store, thread ID management, TTL cleanup) buys nothing.
