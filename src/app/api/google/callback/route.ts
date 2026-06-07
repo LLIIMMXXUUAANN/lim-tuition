@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { newOAuth2Client } from '@/lib/google/auth'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { newOAuth2Client } from '@/services/google/auth'
 
 export async function GET(req: NextRequest) {
   const { supabase, error } = await requireTutor()

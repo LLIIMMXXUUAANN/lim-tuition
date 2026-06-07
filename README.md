@@ -146,23 +146,34 @@ src/
     api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/sync-all/deletion
     api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
     auth/callback/                → Supabase auth code exchange
-  components/
-    shared/     → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList, ExternalLink)
-    students/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
-    templates/  → TemplatesList, PaymentGenerator
-    timetable/  → TimetableSection
-    agent/      → AgentChat (chat UI, localStorage persistence, react-markdown rendering, stop button)
-    landing/    → 13 public landing page sections
-    ui/         → shadcn/ui primitives
-  lib/
+  features/
+    agent/
+      components/ → AgentChat (chat UI, localStorage persistence, react-markdown rendering, stop button)
+      lib/        → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
+      lib/lg/     → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
+    students/
+      components/ → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
+    templates/
+      components/ → TemplatesList, PaymentGenerator
+    timetable/
+      components/ → TimetableSection
+      lib/        → timetable-slots.ts
+    landing/
+      components/ → 13 public landing page sections
+  services/
     supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
     google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
-    hooks/      → useClipboard() — copy-to-clipboard hook with reset timer and silent error handling
-    agent/      → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
-    agent/lg/   → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
-    templates.ts → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
-    payment.ts  → buildPaymentMessage() — pure payment calculation function shared by /api/generate-payment and the agent's generatePaymentMessage tool (single source of truth for fee arithmetic and message templates)
-    gemini.ts   → runGeminiSlotGeneration() — calls @google/genai with JSON responseSchema + Zod validation; also exports SlotSchema, GenerateSlotsResponseSchema
+    gemini/     → runGeminiSlotGeneration() — calls @google/genai with JSON responseSchema + Zod validation; also exports SlotSchema, GenerateSlotsResponseSchema
+  shared/
+    components/ → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList, ExternalLink)
+    ui/         → shadcn/ui primitives
+    lib/
+      templates.ts        → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
+      payment.ts          → buildPaymentMessage() — pure payment calculation function shared by /api/generate-payment and the agent's generatePaymentMessage tool (single source of truth for fee arithmetic and message templates)
+      timetable-canvas.ts → shared PNG drawing helpers (drawScheduleToCtx, drawSlotsToCtx, computeScheduleWindow, downloadCanvas, NAVY, SCALE, PNG_* constants) — used by TimetableSection and AgentChat
+  hooks/
+    useClipboard.ts → copy-to-clipboard hook with reset timer and silent error handling
+  lib/
     types.ts    → shared TypeScript types (Student, ClassSlot, etc.)
     utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, getMYTDateString, formatFee, ordinal, oxfordList, groupSlotsByDay
   proxy.ts      → Next.js middleware (auth + route protection)

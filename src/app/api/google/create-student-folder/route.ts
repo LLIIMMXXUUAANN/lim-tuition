@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { getOAuth2Client } from '@/lib/google/auth'
-import { createStudentDriveFolder } from '@/lib/google/drive'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { getOAuth2Client } from '@/services/google/auth'
+import { createStudentDriveFolder } from '@/services/google/drive'
 import type { ClassSlot } from '@/lib/types'
 
 export async function POST(req: NextRequest) {

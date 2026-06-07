@@ -1,4 +1,4 @@
-import StudentForm from '@/components/students/StudentForm'
+﻿import StudentForm from '@/features/students/components/StudentForm'
 
 export default function NewStudentPage() {
   return (

@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { createClient } from '@/services/supabase/client'
+import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 
 export default function StudentLoginPage() {
   const [email, setEmail] = useState('')

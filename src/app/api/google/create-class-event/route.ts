@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { getOAuth2Client } from '@/lib/google/auth'
-import { createWeeklyClassEvents } from '@/lib/google/calendar'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { getOAuth2Client } from '@/services/google/auth'
+import { createWeeklyClassEvents } from '@/services/google/calendar'
 import type { ClassSlot } from '@/lib/types'
 
 export async function POST(req: NextRequest) {

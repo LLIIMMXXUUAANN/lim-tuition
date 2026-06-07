@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
-import TemplatesList from '@/components/templates/TemplatesList'
+﻿import { createClient } from '@/services/supabase/server'
+import TemplatesList from '@/features/templates/components/TemplatesList'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'

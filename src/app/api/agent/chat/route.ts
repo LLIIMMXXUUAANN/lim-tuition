@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 import type { Content, FunctionCall, Part } from '@google/genai'
-import { requireTutor } from '@/lib/supabase/server'
+import { requireTutor } from '@/services/supabase/server'
 import {
   errMsg,
   searchStudents, getStudent, listStudents,
@@ -12,10 +12,10 @@ import {
   getTimetableSettings, updateTimetableRules, updateBufferMins,
   generateSlotAvailability, downloadTimetableImage,
   type Supabase,
-} from '@/lib/agent/tools'
-import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/lib/agent/schema'
-import { selfEval } from '@/lib/agent/eval'
-import { stopSignals } from '@/lib/agent/stop-signals'
+} from '@/features/agent/lib/tools'
+import { TOOL_DECLARATIONS, SYSTEM_INSTRUCTION } from '@/features/agent/lib/schema'
+import { selfEval } from '@/features/agent/lib/eval'
+import { stopSignals } from '@/features/agent/lib/stop-signals'
 
 export const dynamic = 'force-dynamic'
 

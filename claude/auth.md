@@ -34,5 +34,5 @@ Supabase SECURITY DEFINER functions:
 - `check_portal_access(p_email)` — returns true if given email is in any student's `access_emails` (used in student login page)
 
 Supabase clients:
-- `src/lib/supabase/client.ts` — browser client (used in `'use client'` components)
-- `src/lib/supabase/server.ts` — server client with cookie handling (used in Server Components and Route Handlers). Also exports `requireTutor()`: verifies the request comes from an authenticated tutor and returns `{ supabase, error }` — all tutor-only API routes call this instead of repeating the auth boilerplate.
+- `src/services/supabase/client.ts` — browser client (used in `'use client'` components)
+- `src/services/supabase/server.ts` — server client with cookie handling (used in Server Components and Route Handlers). Also exports `requireTutor()`: verifies the request comes from an authenticated tutor and returns `{ supabase, error }` — all tutor-only API routes call this instead of repeating the auth boilerplate.

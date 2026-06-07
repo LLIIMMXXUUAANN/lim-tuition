@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { getOAuth2Client } from '@/lib/google/auth'
-import { deleteStudentGoogle } from '@/lib/google/cleanup'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { getOAuth2Client } from '@/services/google/auth'
+import { deleteStudentGoogle } from '@/services/google/cleanup'
 
 export async function POST(req: NextRequest) {
   const { error } = await requireTutor()

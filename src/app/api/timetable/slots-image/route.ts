@@ -1,9 +1,9 @@
-import { NextRequest } from 'next/server'
+﻿import { NextRequest } from 'next/server'
 import { createCanvas } from '@napi-rs/canvas'
-import { requireTutor } from '@/lib/supabase/server'
+import { requireTutor } from '@/services/supabase/server'
 import type { ClassSlot } from '@/lib/types'
-import { PNG_W, PNG_H, SCALE, cellKey, drawSlotsToCtx, type SlotType } from '@/lib/timetable-canvas'
-import { buildBookedCellSet, type ClassifiedSlot } from '@/lib/timetable-slots'
+import { PNG_W, PNG_H, SCALE, cellKey, drawSlotsToCtx, type SlotType } from '@/shared/lib/timetable-canvas'
+import { buildBookedCellSet, type ClassifiedSlot } from '@/features/timetable/lib/timetable-slots'
 
 export const dynamic = 'force-dynamic'
 

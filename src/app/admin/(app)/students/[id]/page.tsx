@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import StudentDetail from '@/components/students/StudentDetail'
+import { createClient } from '@/services/supabase/server'
+import StudentDetail from '@/features/students/components/StudentDetail'
 import type { Student } from '@/lib/types'
 
 interface Props {

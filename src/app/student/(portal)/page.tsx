@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import StudentPortalView from '@/components/shared/StudentPortalView'
+﻿import { redirect } from 'next/navigation'
+import { createClient } from '@/services/supabase/server'
+import StudentPortalView from '@/shared/components/StudentPortalView'
 import type { Student } from '@/lib/types'
 
 export default async function PortalPage() {

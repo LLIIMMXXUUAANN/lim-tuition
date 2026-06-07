@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { getOAuth2Client } from '@/lib/google/auth'
-import { syncAllStudents } from '@/lib/google/sync'
+﻿import { NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { getOAuth2Client } from '@/services/google/auth'
+import { syncAllStudents } from '@/services/google/sync'
 
 function errMsg(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback

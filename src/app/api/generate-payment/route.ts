@@ -1,6 +1,6 @@
-import { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { buildPaymentMessage } from '@/lib/payment'
+﻿import { NextRequest } from 'next/server'
+import { createClient } from '@/services/supabase/server'
+import { buildPaymentMessage } from '@/shared/lib/payment'
 import type { ClassSlot } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'

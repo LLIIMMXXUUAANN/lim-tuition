@@ -1,16 +1,16 @@
-import Navbar from "@/components/landing/Navbar";
-import Hero from "@/components/landing/Hero";
-import About from "@/components/landing/About";
-import WhatIOffer from "@/components/landing/WhatIOffer";
-import HowLessonsWork from "@/components/landing/HowLessonsWork";
-import StudentLevelsLanguages from "@/components/landing/StudentLevelsLanguages";
-import Pricing from "@/components/landing/Pricing";
-import ClassDurationScheduling from "@/components/landing/ClassDurationScheduling";
-import PaymentMethods from "@/components/landing/PaymentMethods";
-import CommunicationPlatforms from "@/components/landing/CommunicationPlatforms";
-import OtherDetails from "@/components/landing/OtherDetails";
-import Testimonials from "@/components/landing/Testimonials";
-import Footer from "@/components/landing/Footer";
+﻿import Navbar from "@/features/landing/components/Navbar";
+import Hero from "@/features/landing/components/Hero";
+import About from "@/features/landing/components/About";
+import WhatIOffer from "@/features/landing/components/WhatIOffer";
+import HowLessonsWork from "@/features/landing/components/HowLessonsWork";
+import StudentLevelsLanguages from "@/features/landing/components/StudentLevelsLanguages";
+import Pricing from "@/features/landing/components/Pricing";
+import ClassDurationScheduling from "@/features/landing/components/ClassDurationScheduling";
+import PaymentMethods from "@/features/landing/components/PaymentMethods";
+import CommunicationPlatforms from "@/features/landing/components/CommunicationPlatforms";
+import OtherDetails from "@/features/landing/components/OtherDetails";
+import Testimonials from "@/features/landing/components/Testimonials";
+import Footer from "@/features/landing/components/Footer";
 
 export default function HomePage() {
   return (

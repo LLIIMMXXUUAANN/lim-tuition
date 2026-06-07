@@ -1,0 +1,165 @@
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@/services/supabase/client'
+import { useClipboard } from '@/hooks/useClipboard'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Button } from '@/shared/ui/button'
+import { Textarea } from '@/shared/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/ui/tabs'
+import PaymentGenerator from './PaymentGenerator'
+import type { Student } from '@/lib/types'
+import { TEMPLATE_META } from '@/shared/lib/templates'
+
+const TEMPLATE_ROWS: Record<string, number> = {
+  payment: 3,
+  payment2: 3,
+  review_request1: 5,
+  review_request2: 5,
+  recommendation_request1: 5,
+  recommendation_request2: 6,
+  first_approach: 5,
+}
+
+function TemplateCard({
+  id,
+  title,
+  description,
+  initialContent,
+}: {
+  id: string
+  title: string
+  description: string
+  initialContent: string
+}) {
+  const [saved, setSaved] = useState(initialContent)
+  const [content, setContent] = useState(initialContent)
+  const [editing, setEditing] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const { copied, copy } = useClipboard()
+  const supabase = createClient()
+
+  async function handleSave() {
+    setSaveState('saving')
+    const { error } = await supabase.from('templates').upsert({ id, content })
+    if (error) {
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 3000)
+      return
+    }
+    setSaved(content)
+    setSaveState('saved')
+    setEditing(false)
+    setTimeout(() => setSaveState('idle'), 2000)
+  }
+
+  function handleCancel() {
+    setContent(saved)
+    setEditing(false)
+  }
+
+  function handleCopy() {
+    copy(content)
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">{title}</CardTitle>
+            <p className="text-sm text-slate-500 mt-0.5">{description}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {saveState === 'saving' && <span className="text-xs text-slate-400">Saving…</span>}
+            {saveState === 'saved' && <span className="text-xs text-green-600">Saved</span>}
+            {saveState === 'error' && <span className="text-xs text-red-500">Save failed</span>}
+            {editing ? (
+              <>
+                <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+                <Button size="sm" onClick={handleSave} disabled={saveState === 'saving'}>Save</Button>
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
+                <Button size="sm" variant={copied ? 'outline' : 'default'} onClick={handleCopy}>
+                  {copied ? 'Copied!' : 'Copy'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {editing ? (
+          <Textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="text-sm leading-relaxed font-sans resize-y"
+            rows={TEMPLATE_ROWS[id] ?? 5}
+            autoFocus
+          />
+        ) : (
+          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{content}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function TemplateGroup({ ids, initialData }: { ids: string[]; initialData: Record<string, string> }) {
+  return (
+    <div className="space-y-4">
+      {ids.map((id) => {
+        const meta = TEMPLATE_META[id]
+        return (
+          <TemplateCard
+            key={id}
+            id={id}
+            title={meta.title}
+            description={meta.description}
+            initialContent={initialData[id] ?? ''}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+export default function TemplatesList({
+  initialData,
+  students,
+}: {
+  initialData: Record<string, string>
+  students: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
+}) {
+  return (
+    <Tabs defaultValue="payment">
+      <TabsList className="w-full">
+        <TabsTrigger value="payment" className="flex-1">Payment</TabsTrigger>
+        <TabsTrigger value="review" className="flex-1">Review</TabsTrigger>
+        <TabsTrigger value="recommendation" className="flex-1">Recommendation</TabsTrigger>
+        <TabsTrigger value="first_approach" className="flex-1">First Approach</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="payment" className="pt-4">
+        <div className="space-y-4">
+          <PaymentGenerator students={students} />
+          <TemplateGroup ids={['payment', 'payment2']} initialData={initialData} />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="review" className="pt-4">
+        <TemplateGroup ids={['review_request1', 'review_request2']} initialData={initialData} />
+      </TabsContent>
+
+      <TabsContent value="recommendation" className="pt-4">
+        <TemplateGroup ids={['recommendation_request1', 'recommendation_request2']} initialData={initialData} />
+      </TabsContent>
+
+      <TabsContent value="first_approach" className="pt-4">
+        <TemplateGroup ids={['first_approach']} initialData={initialData} />
+      </TabsContent>
+    </Tabs>
+  )
+}

@@ -1,9 +1,9 @@
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+﻿import Link from 'next/link'
+import { createClient } from '@/services/supabase/server'
 import { DAYS } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import StudentCard from '@/components/students/StudentCard'
-import SyncAllButton from '@/components/students/SyncAllButton'
+import { Button } from '@/shared/ui/button'
+import StudentCard from '@/features/students/components/StudentCard'
+import SyncAllButton from '@/features/students/components/SyncAllButton'
 import type { Student, StudentStatus } from '@/lib/types'
 
 const TABS: { label: string; value: StudentStatus | 'All' }[] = [

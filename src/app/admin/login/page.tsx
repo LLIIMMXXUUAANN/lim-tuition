@@ -1,11 +1,11 @@
-'use client'
+﻿'use client'
 
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { createClient } from '@/services/supabase/client'
+import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 
 function LoginForm() {
   const searchParams = useSearchParams()

@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { runSlotGeneration, type BookedSlot } from '@/lib/timetable-slots'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { runSlotGeneration, type BookedSlot } from '@/features/timetable/lib/timetable-slots'
 
 export const dynamic = 'force-dynamic'
 

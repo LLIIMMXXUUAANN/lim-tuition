@@ -1,7 +1,7 @@
-import { createCanvas } from '@napi-rs/canvas'
-import { requireTutor } from '@/lib/supabase/server'
+﻿import { createCanvas } from '@napi-rs/canvas'
+import { requireTutor } from '@/services/supabase/server'
 import type { ClassSlot } from '@/lib/types'
-import { PNG_W, SCALE, scheduleCanvasHeight, drawScheduleToCtx } from '@/lib/timetable-canvas'
+import { PNG_W, SCALE, scheduleCanvasHeight, drawScheduleToCtx } from '@/shared/lib/timetable-canvas'
 
 export const dynamic = 'force-dynamic'
 

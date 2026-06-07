@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireTutor } from '@/lib/supabase/server'
-import { stopSignals, requestAbortControllers } from '@/lib/agent/stop-signals'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { requireTutor } from '@/services/supabase/server'
+import { stopSignals, requestAbortControllers } from '@/features/agent/lib/stop-signals'
 
 export const dynamic = 'force-dynamic'
 
