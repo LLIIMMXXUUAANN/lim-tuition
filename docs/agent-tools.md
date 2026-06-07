@@ -4,10 +4,10 @@ All 19 tools available to the AI agent at `/admin/agent`. The same tool logic is
 
 | Backend | Schema format | Entry point |
 |---|---|---|
-| **Classic** (default) | `FunctionDeclaration[]` in `src/lib/agent/domains/` composed by `src/lib/agent/schema.ts` | `src/app/api/agent/chat/route.ts` |
-| **LangGraph** (default; toggle right — **Single · LangGraph**) | LangGraph `tool()` wrappers with Zod schemas in `src/lib/agent/lg/tool-factories.ts`; single-turn supervisor calls the LLM via `.stream()` (enables token-by-token streaming) and dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
+| **Classic** (default) | `FunctionDeclaration[]` in `src/features/agent/lib/domains/` composed by `src/features/agent/lib/schema.ts` | `src/app/api/agent/chat/route.ts` |
+| **LangGraph** (default; toggle right — **Single · LangGraph**) | LangGraph `tool()` wrappers with Zod schemas in `src/features/agent/lib/lg/tool-factories.ts`; single-turn supervisor calls the LLM via `.stream()` (enables token-by-token streaming) and dispatches to specialist subagents in parallel via `Send` | `src/app/api/agent/lg/chat/route.ts` |
 
-Tool implementations live in `src/lib/agent/tools.ts` and are called by both backends.
+Tool implementations live in `src/features/agent/lib/tools/` (split by domain: `student-tools.ts`, `template-tools.ts`, `timetable-tools.ts`; barrel `index.ts`) and are called by both backends.
 
 **History round-trip** — both backends are stateless. The frontend persists history in localStorage after each clean turn (`geminiHistory: Content[]` for classic, `lgHistory: StoredMessage[]` for LangGraph) and sends it back on the next request. For LangGraph, lgHistory contains only routing-level messages — user inputs, supervisor dispatch decisions, subagent final replies (via `transfer_back_to_supervisor` ToolMessages), and self-eval verdicts. Subagent-internal tool call pairs (`search_students`, `get_student`, etc.) are stripped server-side by `isRoutingRelevant` before the `lg_history` SSE event is emitted, keeping context lean without losing any meaningful facts. The server returns the updated history in a `{ type: 'history' }` / `{ type: 'lg_history' }` SSE event before `done`; the frontend commits it only on `done` so a cancelled or errored turn never corrupts the stored history.
 
@@ -512,7 +512,7 @@ None.
 
 ### Process
 
-Pure synchronous function — no DB call. Reads from the in-memory `TEMPLATE_META` constant in `src/lib/templates.ts`.
+Pure synchronous function — no DB call. Reads from the in-memory `TEMPLATE_META` constant in `src/shared/lib/templates.ts`.
 
 ### Output
 
@@ -585,7 +585,7 @@ Generate a ready-to-send payment reminder message for a student. Calculates sess
 1. Resolves month/year — defaults to next calendar month in MYT if not supplied
 2. Fetches student: `name`, `contact_person`, `class_schedule`, `fee_per_hour`, `status`
 3. Validates student is Active
-4. Delegates all calculation and message building to `buildPaymentMessage()` from `src/lib/payment.ts` (shared with the UI's `/api/generate-payment` route)
+4. Delegates all calculation and message building to `buildPaymentMessage()` from `src/shared/lib/payment.ts` (shared with the UI's `/api/generate-payment` route)
 
 `buildPaymentMessage()` internally:
 - Groups slots by day; calls `getWeekdayDates` for each day to find every occurrence in the target month
@@ -712,7 +712,7 @@ After the tool completes, the route emits a `slots_ready` SSE event and a **Down
 
 1. Fetches `timetable_rules`, `timetable_buffer_mins`, and all active students' `class_schedule` in a single `Promise.all`
 2. Returns `{ error }` immediately if no rules are configured
-3. Calls `runSlotGeneration` from `src/lib/timetable-slots.ts`:
+3. Calls `runSlotGeneration` from `src/features/timetable/lib/timetable-slots.ts`:
    - Computes buffer zones in code via `computeBufferSlots`
    - Builds the classifiable slot list (non-booked, non-buffered) via `buildBookedCellSet`
    - Sends prompt to Gemini with structured JSON output schema
