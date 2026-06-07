@@ -31,7 +31,7 @@ src/
   features/         → feature slices (components + feature-specific lib)
     agent/
       components/   → AgentChat
-      lib/          → tools.ts, schema.ts, eval.ts, stop-signals.ts, domains/, lg/
+      lib/          → tools/ (student-tools · template-tools · timetable-tools · shared), schema.ts, eval.ts, stop-signals.ts, domains/, lg/
     students/
       components/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
     templates/

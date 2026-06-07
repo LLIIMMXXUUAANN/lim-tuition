@@ -3,7 +3,7 @@
 POST route handler. No external AI — delegates all calculation to `buildPaymentMessage()` from `src/shared/lib/payment.ts`:
 - Validates request body (month 1–12, year 2020–2100, carryover required for template 2), fetches student from DB, then calls `buildPaymentMessage()` with the student data + params
 - Returns `{ message }` on success, `{ error }` on validation/not-found failures
-- `src/shared/lib/payment.ts` is the single source of truth for fee calculation and message templates — do not inline payment logic in this route or in `tools.ts`
+- `src/shared/lib/payment.ts` is the single source of truth for fee calculation and message templates — do not inline payment logic in this route or in `tools/`
 
 ## AI Agent (`src/app/admin/(app)/agent/`, `src/app/api/agent/`, `src/features/agent/lib/`)
 
@@ -15,7 +15,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - **`api/agent/chat/route.ts`** — stateless POST handler; drives the Gemini loop
 - **`api/agent/stop/route.ts`** — tutor-only POST; sets the `stopSignals` flag and aborts the registered `AbortController` for the given `requestId`; called by the frontend stop button
 - **`features/agent/lib/stop-signals.ts`** — module-level singletons: `stopSignals: Map<string, boolean>` (soft-stop flags), `requestAbortControllers: Map<string, AbortController>` (per-request controllers for hard abort), `isAbortError(err)` helper; imported by both chat routes and the LangGraph stream adapter
-- **`features/agent/lib/tools.ts`** — all 19 tool implementations + `errMsg` helper + `ALLOWED_UPDATE_KEYS`
+- **`features/agent/lib/tools/`** — 19 tool implementations split by domain: `student-tools.ts` (11), `template-tools.ts` (3), `timetable-tools.ts` (5); `shared.ts` exports `errMsg` helper + `Supabase` type; `index.ts` barrel re-exports all; `ALLOWED_UPDATE_KEYS` lives in `student-tools.ts`
 - **`features/agent/lib/schema.ts`** — thin composer: exports `TOOL_DECLARATIONS` and `SYSTEM_INSTRUCTION` by spreading the three domain arrays and interpolating the three rule strings; rule 14 (parallel calls) lives inline here as it is cross-domain
 - **`features/agent/lib/domains/students.ts`** — `STUDENT_DECLARATIONS` (11 tools: `search_students` … `get_fee_summary`) + `STUDENT_RULES` (rules 1–13); imports `DAYS` from `src/lib/utils`
 - **`features/agent/lib/domains/templates.ts`** — `TEMPLATE_DECLARATIONS` (3 tools: `list_templates`, `get_template`, `generate_payment_message`) + `TEMPLATE_RULES` (rules 15–16); imports `TEMPLATE_META` for the `get_template` enum
@@ -73,7 +73,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 - `update_buffer_mins`: reads back `timetable_buffer_mins` and compares parsed integer → `✓ buffer set to Xm` or `⚠ could not verify buffer`
 - Result is appended to `steps[]` (not `reply`) so it appears in the tool-steps section
 
-**Tool implementation notes (`features/agent/lib/tools.ts`):**
+**Tool implementation notes (`features/agent/lib/tools/`):**
 - `ALLOWED_UPDATE_KEYS` Set — allowlist of writable columns for `update_student`; prevents prompt injection from touching any column not in the set
 - `update_student` auto-syncs Calendar + Drive when `class_schedule` is in the updated fields: if `calendar_event_ids` + `google_meet_link` are set, calls `updateWeeklyClassEvents` (nuke-and-repave) and `updateStudentMeetDoc` in parallel via `Promise.allSettled`; if a new Meet link is generated (primary was deleted), also saves it to DB and re-updates the Drive doc; Google failures are non-fatal (returned as `googleWarnings`); if Google is not set up, returns `suggestGoogleSetup: true` instead
 - `create_student` returns `suggestGoogleSetup: true` when a `class_schedule` was provided — the system instruction rule 11 tells Gemini to ask the user if they want Google setup
@@ -145,7 +145,7 @@ Natural language interface for managing students. Gemini 2.5 Flash drives a func
 
 ## LangGraph multi-agent system (`src/features/agent/lib/lg/`, `src/app/api/agent/lg/`)
 
-Alternative agent backend toggled via the **LangGraph** switch in the chat header. Uses `@langchain/langgraph` with a supervisor+subagent architecture instead of the classic single-agent Gemini loop. Both backends share the same 19 tool implementations in `src/features/agent/lib/tools.ts`; the LangGraph layer wraps them in Zod schemas via `tool-factories.ts`.
+Alternative agent backend toggled via the **LangGraph** switch in the chat header. Uses `@langchain/langgraph` with a supervisor+subagent architecture instead of the classic single-agent Gemini loop. Both backends share the same 19 tool implementations in `src/features/agent/lib/tools/`; the LangGraph layer wraps them in Zod schemas via `tool-factories.ts`.
 
 **LangSmith tracing:** LangGraph runs are traced automatically when `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY` are set in the environment. Traces (tool calls, LLM inputs/outputs, latency) appear in the LangSmith web UI under `LANGSMITH_PROJECT` (`tuition-agent` by default). Classic-mode runs are not traced. Required env vars: `LANGCHAIN_TRACING`, `LANGSMITH_ENDPOINT`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — all documented in `.env.example`.
 

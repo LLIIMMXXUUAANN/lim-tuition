@@ -149,7 +149,7 @@ src/
   features/
     agent/
       components/ → AgentChat (chat UI, localStorage persistence, react-markdown rendering, stop button)
-      lib/        → tools.ts (19 tool implementations), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
+      lib/        → tools/ (student-tools · template-tools · timetable-tools, barrel index), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
       lib/lg/     → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
     students/
       components/ → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
