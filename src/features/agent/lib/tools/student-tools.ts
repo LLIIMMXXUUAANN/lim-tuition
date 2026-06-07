@@ -1,20 +1,11 @@
-import { createClient } from '@/services/supabase/server'
 import type { StudentMode, PaymentMethod, StudentStatus, ClassSlot } from '@/lib/types'
-import { timeToMins, DAY_INDEX, getWeekdayDates, groupSlotsByDay } from '@/lib/utils'
-import { buildPaymentMessage } from '@/shared/lib/payment'
+import { timeToMins, getWeekdayDates, groupSlotsByDay } from '@/lib/utils'
 import { getOAuth2Client } from '@/services/google/auth'
 import { createWeeklyClassEvents, updateWeeklyClassEvents } from '@/services/google/calendar'
 import { createStudentDriveFolder, updateStudentMeetDoc } from '@/services/google/drive'
 import { deleteStudentGoogle } from '@/services/google/cleanup'
 import { syncAllStudents } from '@/services/google/sync'
-import { TEMPLATE_META, templateMeta } from '@/shared/lib/templates'
-import { runSlotGeneration, buildBookedCellSet, type ClassifiedSlot } from '@/features/timetable/lib/timetable-slots'
-
-export type Supabase = Awaited<ReturnType<typeof createClient>>
-
-export function errMsg(err: unknown, fallback = 'Unknown error') {
-  return err instanceof Error ? err.message : fallback
-}
+import { errMsg, type Supabase } from './shared'
 
 export const ALLOWED_UPDATE_KEYS = new Set([
   'name', 'mode', 'fee_per_hour', 'payment_method', 'status',
@@ -382,66 +373,6 @@ export async function getSchedule(supabase: Supabase, day: string) {
   return { day, students }
 }
 
-export function listTemplates() {
-  return {
-    templates: Object.entries(TEMPLATE_META).map(([id, meta]) => ({ id, ...meta })),
-  }
-}
-
-export async function getTemplate(supabase: Supabase, id: string) {
-  const { data, error } = await supabase
-    .from('templates')
-    .select('id, content')
-    .eq('id', id)
-    .maybeSingle()
-  if (error) return { error: error.message }
-  if (!data) return { error: `Template "${id}" not found` }
-
-  return { template: { id: data.id, ...templateMeta(data.id), content: data.content as string } }
-}
-
-export async function generatePaymentMessage(
-  supabase: Supabase,
-  params: {
-    student_id: string
-    month?: number
-    year?: number
-    template_type?: 1 | 2
-    carryover?: number
-  }
-) {
-  const myt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }))
-  myt.setMonth(myt.getMonth() + 1)
-  const resolvedMonth = params.month ?? (myt.getMonth() + 1)
-  const resolvedYear = params.year ?? myt.getFullYear()
-  const templateType = params.template_type ?? 1
-  const carryover = params.carryover ?? 0
-
-  const { data: student, error } = await supabase
-    .from('students')
-    .select('name, contact_person, class_schedule, fee_per_hour, status')
-    .eq('id', params.student_id)
-    .single()
-
-  if (error || !student) return { error: 'Student not found' }
-  if (student.status !== 'Active') return { error: 'Student is not active' }
-
-  const result = buildPaymentMessage({
-    student: {
-      name: student.name,
-      contact_person: student.contact_person,
-      class_schedule: student.class_schedule as ClassSlot[],
-      fee_per_hour: student.fee_per_hour,
-    },
-    month: resolvedMonth,
-    year: resolvedYear,
-    templateType,
-    carryover,
-  })
-  if ('error' in result) return { error: result.error }
-  return { message: result.message, month: resolvedMonth, year: resolvedYear, monthName: result.monthName }
-}
-
 export async function getFeeSummary(supabase: Supabase, month?: number, year?: number) {
   const myt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }))
   const resolvedMonth = month ?? (myt.getMonth() + 1)
@@ -472,71 +403,4 @@ export async function getFeeSummary(supabase: Supabase, month?: number, year?: n
 
   const total = Math.round(rawFees.reduce((a, b) => a + b, 0) * 100) / 100
   return { month: resolvedMonth, year: resolvedYear, students, total }
-}
-
-export async function getTimetableSettings(supabase: Supabase) {
-  const [rulesRow, bufferRow] = await Promise.all([
-    supabase.from('settings').select('value').eq('key', 'timetable_rules').maybeSingle(),
-    supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').maybeSingle(),
-  ])
-  return {
-    rules: rulesRow.data?.value ?? '',
-    bufferMins: bufferRow.data ? parseInt(bufferRow.data.value, 10) : 15,
-  }
-}
-
-export async function updateTimetableRules(supabase: Supabase, rules: string) {
-  const { error } = await supabase
-    .from('settings')
-    .upsert({ key: 'timetable_rules', value: rules }, { onConflict: 'key' })
-  if (error) return { error: error.message }
-  return { ok: true }
-}
-
-export async function updateBufferMins(supabase: Supabase, bufferMins: number) {
-  if (bufferMins < 0 || bufferMins > 60) return { error: 'bufferMins must be 0–60' }
-  const { error } = await supabase
-    .from('settings')
-    .upsert({ key: 'timetable_buffer_mins', value: String(bufferMins) }, { onConflict: 'key' })
-  if (error) return { error: error.message }
-  return { ok: true }
-}
-
-export async function generateSlotAvailability(
-  supabase: Supabase,
-  studentAvailability: string,
-): Promise<{ slots: ClassifiedSlot[] } | { error: string }> {
-  const [rulesRow, bufferRow, studentsRow] = await Promise.all([
-    supabase.from('settings').select('value').eq('key', 'timetable_rules').maybeSingle(),
-    supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').maybeSingle(),
-    supabase.from('students').select('class_schedule').eq('status', 'Active'),
-  ])
-
-  const rules = rulesRow.data?.value ?? ''
-  if (!rules.trim()) return { error: 'No timetable rules configured. Use update_timetable_rules first.' }
-
-  const bufferMins = bufferRow.data ? parseInt(bufferRow.data.value, 10) : 15
-  const bookedSlots = (studentsRow.data ?? []).flatMap(s => (s.class_schedule as ClassSlot[]) ?? [])
-
-  try {
-    const slots = await runSlotGeneration(rules, studentAvailability, bookedSlots, bufferMins)
-    return { slots }
-  } catch (err) {
-    return { error: errMsg(err, 'Slot generation failed') }
-  }
-}
-
-export async function downloadTimetableImage(supabase: Supabase) {
-  const { data, error } = await supabase
-    .from('students')
-    .select('name, class_schedule')
-    .eq('status', 'Active')
-    .order('name')
-  if (error) return { error: error.message }
-  return {
-    students: (data ?? []).map(s => ({
-      name: s.name as string,
-      class_schedule: (s.class_schedule as ClassSlot[]) ?? [],
-    })),
-  }
 }
