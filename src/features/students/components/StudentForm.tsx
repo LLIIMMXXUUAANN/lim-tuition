@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/services/supabase/client'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
@@ -78,7 +77,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     setError('')
     setCalendarWarning('')
     setSaving(true)
-    const supabase = createClient()
     const payload: StudentUpdate = {
       ...form,
       access_emails: (form.access_emails ?? []).filter(e => e.trim() !== ''),
@@ -138,8 +136,15 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
 
     try {
       if (student) {
-        const { error: err } = await supabase.from('students').update(payload).eq('id', student.id)
-        if (err) throw err
+        const res = await fetch(`/api/students/${student.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail ?? 'Failed to save')
+        }
         router.refresh()
         if (calendarMsg) {
           setCalendarWarning(calendarMsg)
@@ -148,8 +153,15 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           onSaved?.()
         }
       } else {
-        const { error: err } = await supabase.from('students').insert(payload as StudentInsert)
-        if (err) throw err
+        const res = await fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail ?? 'Failed to save')
+        }
         router.push('/admin/students')
         router.refresh()
       }
@@ -191,10 +203,10 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         }
       }
 
-      const supabase = createClient()
-      const { error: err } = await supabase.from('students').delete().eq('id', student.id)
-      if (err) {
-        setError(`Failed to delete student: ${err.message}`)
+      const delRes = await fetch(`/api/students/${student.id}`, { method: 'DELETE' })
+      if (!delRes.ok) {
+        const data = await delRes.json().catch(() => ({}))
+        setError(`Failed to delete student: ${data.detail ?? 'unknown error'}`)
         setShowDeleteDialog(false)
         return
       }

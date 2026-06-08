@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/services/supabase/client'
 import { useClipboard } from '@/hooks/useClipboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Button } from '@/shared/ui/button'
@@ -37,12 +36,15 @@ function TemplateCard({
   const [editing, setEditing] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const { copied, copy } = useClipboard()
-  const supabase = createClient()
 
   async function handleSave() {
     setSaveState('saving')
-    const { error } = await supabase.from('templates').upsert({ id, content })
-    if (error) {
+    const res = await fetch(`/api/templates/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    })
+    if (!res.ok) {
       setSaveState('error')
       setTimeout(() => setSaveState('idle'), 3000)
       return
