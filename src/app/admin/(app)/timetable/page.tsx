@@ -1,22 +1,19 @@
-﻿import { createClient } from '@/services/supabase/server'
+import { fetchFastAPI } from '@/lib/fastapi'
 import TimetableSection from '@/features/timetable/components/TimetableSection'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TimetablePage() {
-  const supabase = await createClient()
-
-  const [studentsResult, rulesResult, bufferResult] = await Promise.all([
-    supabase.from('students').select('name, class_schedule').eq('status', 'Active').order('name'),
-    supabase.from('settings').select('value').eq('key', 'timetable_rules').single(),
-    supabase.from('settings').select('value').eq('key', 'timetable_buffer_mins').single(),
+  const [studentsRes, rulesRes, bufferRes] = await Promise.all([
+    fetchFastAPI('/students?status=Active'),
+    fetchFastAPI('/timetable/rules'),
+    fetchFastAPI('/timetable/buffer-mins'),
   ])
 
-  if (studentsResult.error) console.error('[TimetablePage] failed to load students:', studentsResult.error.message)
-  const students = studentsResult.error ? [] : (studentsResult.data ?? []) as Pick<Student, 'name' | 'class_schedule'>[]
-  const initialRules = rulesResult.data?.value ?? ''
-  const initialBufferMins = bufferResult.data ? parseInt(bufferResult.data.value, 10) : 15
+  const students: Pick<Student, 'name' | 'class_schedule'>[] = studentsRes.ok ? await studentsRes.json() : []
+  const { rules: initialRules = '' } = rulesRes.ok ? await rulesRes.json() : {}
+  const { buffer_mins: initialBufferMins = 15 } = bufferRes.ok ? await bufferRes.json() : {}
 
   return (
     <div className="max-w-4xl mx-auto p-6">

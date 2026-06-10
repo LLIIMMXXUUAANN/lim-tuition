@@ -1,5 +1,6 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/services/supabase/server'
+import { fetchFastAPI } from '@/lib/fastapi'
 import StudentPortalView from '@/shared/components/StudentPortalView'
 import type { Student } from '@/lib/types'
 
@@ -9,12 +10,8 @@ export default async function PortalPage() {
 
   if (!user?.email) redirect('/student/login')
 
-  const { data: student } = await supabase
-    .from('students')
-    .select('*')
-    .contains('access_emails', [user.email])
-    .limit(1)
-    .maybeSingle()
+  const res = await fetchFastAPI(`/students/portal-lookup?email=${encodeURIComponent(user.email)}`)
+  const student: Student | null = res.ok ? await res.json() : null
 
   if (!student) {
     return (
@@ -25,5 +22,5 @@ export default async function PortalPage() {
     )
   }
 
-  return <StudentPortalView student={student as Student} />
+  return <StudentPortalView student={student} />
 }

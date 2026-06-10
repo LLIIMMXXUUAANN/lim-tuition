@@ -1,32 +1,32 @@
-﻿import { createClient } from '@/services/supabase/server'
+import { fetchFastAPI } from '@/lib/fastapi'
 import TemplatesList from '@/features/templates/components/TemplatesList'
 import type { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TemplatesPage() {
-  const supabase = await createClient()
-
-  const [templatesResult, studentsResult] = await Promise.all([
-    supabase.from('templates').select('id, content').order('id'),
-    supabase.from('students').select('id, name, class_schedule, fee_per_hour').eq('status', 'Active').order('name'),
+  const [templatesRes, studentsRes] = await Promise.all([
+    fetchFastAPI('/templates'),
+    fetchFastAPI('/students?status=Active'),
   ])
 
-  if (templatesResult.error) {
+  const templatesData: { id: string; content: string }[] | null = templatesRes.ok
+    ? await templatesRes.json()
+    : null
+  const activeStudents: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[] = studentsRes.ok
+    ? await studentsRes.json()
+    : []
+
+  if (!templatesData) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <h1 className="text-2xl font-bold text-navy mb-4">Templates</h1>
-        <p className="text-red-500">Failed to load templates: {templatesResult.error.message}</p>
+        <p className="text-red-500">Failed to load templates.</p>
       </div>
     )
   }
 
-  const byId = Object.fromEntries(
-    (templatesResult.data ?? []).map((t) => [t.id, t.content])
-  )
-  const activeStudents = studentsResult.error
-    ? []
-    : (studentsResult.data ?? []) as Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
+  const byId = Object.fromEntries(templatesData.map((t) => [t.id, t.content]))
 
   return (
     <div className="max-w-4xl mx-auto p-6">

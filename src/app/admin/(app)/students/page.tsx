@@ -1,6 +1,6 @@
-﻿import Link from 'next/link'
-import { createClient } from '@/services/supabase/server'
+import Link from 'next/link'
 import { DAYS } from '@/lib/utils'
+import { fetchFastAPI } from '@/lib/fastapi'
 import { Button } from '@/shared/ui/button'
 import StudentCard from '@/features/students/components/StudentCard'
 import SyncAllButton from '@/features/students/components/SyncAllButton'
@@ -24,12 +24,10 @@ export default async function StudentsPage({ searchParams }: Props) {
     ? (status as StudentStatus | 'All')
     : 'Active'
 
-  const supabase = await createClient()
-  let query = supabase.from('students').select('id, name, status, mode, contact_person, class_schedule, payment_method, google_meet_link, calendar_event_ids').order('name')
-  if (activeTab !== 'All') query = query.eq('status', activeTab)
-
-  const { data: students, error } = await query
-  const list = (students ?? []) as Student[]
+  const url = activeTab !== 'All' ? `/students?status=${encodeURIComponent(activeTab)}` : '/students'
+  const res = await fetchFastAPI(url)
+  const list: Student[] = res.ok ? await res.json() : []
+  const error = res.ok ? null : { message: 'Failed to load students' }
 
   const byDay = DAYS.map((day) => {
     const entries = list

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/services/supabase/server'
+import { fetchFastAPI } from '@/lib/fastapi'
 import StudentDetail from '@/features/students/components/StudentDetail'
 import type { Student } from '@/lib/types'
 
@@ -9,10 +9,9 @@ interface Props {
 
 export default async function StudentDetailPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data } = await supabase.from('students').select('*').eq('id', id).single()
+  const res = await fetchFastAPI(`/students/${id}`)
+  if (!res.ok) notFound()
+  const data: Student = await res.json()
 
-  if (!data) notFound()
-
-  return <StudentDetail student={data as Student} />
+  return <StudentDetail student={data} />
 }
