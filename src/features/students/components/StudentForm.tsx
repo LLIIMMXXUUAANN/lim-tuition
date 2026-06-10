@@ -115,7 +115,11 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
             const data = await res.json()
             if (res.ok) {
               payload.calendar_event_ids = data.eventIds
-              if (data.meetLink) {
+              if (data.scheduleCleared) {
+                payload.google_meet_link = null
+                set('google_meet_link', '')
+                set('calendar_event_ids', null)
+              } else if (data.meetLink) {
                 payload.google_meet_link = data.meetLink
                 set('google_meet_link', data.meetLink)
               }
