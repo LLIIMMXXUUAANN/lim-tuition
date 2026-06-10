@@ -164,6 +164,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
   const [studentAvailability, setStudentAvailability] = useState('')
   const [isSaving, setIsSaving] = useState<Record<'rules' | 'buffer', boolean>>({ rules: false, buffer: false })
   const [saveStatus, setSaveStatus] = useState<Record<'rules' | 'buffer', SaveStatus>>({ rules: 'idle', buffer: 'idle' })
+  const [saveErrors, setSaveErrors] = useState<Record<'rules' | 'buffer', string>>({ rules: '', buffer: '' })
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
@@ -191,10 +192,17 @@ export default function TimetableSection({ students, initialRules = '', initialB
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const status: SaveStatus = res.ok ? 'saved' : 'error'
-      setSaveStatus(prev => ({ ...prev, [key]: status }))
+      if (res.ok) {
+        setSaveStatus(prev => ({ ...prev, [key]: 'saved' }))
+        setSaveErrors(prev => ({ ...prev, [key]: '' }))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setSaveStatus(prev => ({ ...prev, [key]: 'error' }))
+        setSaveErrors(prev => ({ ...prev, [key]: data.error ?? 'Save failed' }))
+      }
     } catch {
       setSaveStatus(prev => ({ ...prev, [key]: 'error' }))
+      setSaveErrors(prev => ({ ...prev, [key]: 'Network error' }))
     } finally {
       setIsSaving(prev => ({ ...prev, [key]: false }))
       saveTimers.current[key] = setTimeout(() => setSaveStatus(prev => ({ ...prev, [key]: 'idle' })), 2500)
@@ -293,6 +301,9 @@ export default function TimetableSection({ students, initialRules = '', initialB
                 >
                   {saveLabel(isSaving.rules, saveStatus.rules, 'Save Rules')}
                 </button>
+                {saveStatus.rules === 'error' && saveErrors.rules && (
+                  <span className="text-xs text-red-500">{saveErrors.rules}</span>
+                )}
                 <div className="flex items-center gap-1.5 ml-auto">
                   <label className="text-xs text-slate-500 whitespace-nowrap">Buffer between classes</label>
                   <input
@@ -311,6 +322,9 @@ export default function TimetableSection({ students, initialRules = '', initialB
                   >
                     {saveLabel(isSaving.buffer, saveStatus.buffer, 'Save')}
                   </button>
+                  {saveStatus.buffer === 'error' && saveErrors.buffer && (
+                    <span className="text-xs text-red-500">{saveErrors.buffer}</span>
+                  )}
                 </div>
               </div>
             </div>

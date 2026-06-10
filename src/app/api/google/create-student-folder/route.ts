@@ -9,11 +9,16 @@ export async function POST(req: NextRequest) {
   if (error) return error
 
   const body = await req.json().catch(() => ({}))
-  const upstream = await fetch(`${FASTAPI}/google/create-student-folder`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': SECRET },
-    body: JSON.stringify(body),
-  })
-  const data = await upstream.json()
+  let upstream: Response
+  try {
+    upstream = await fetch(`${FASTAPI}/google/create-student-folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': SECRET },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    return NextResponse.json({ detail: `FastAPI unreachable: ${err}` }, { status: 502 })
+  }
+  const data = await upstream.json().catch(() => ({ detail: 'FastAPI returned empty response' }))
   return NextResponse.json(data, { status: upstream.status })
 }

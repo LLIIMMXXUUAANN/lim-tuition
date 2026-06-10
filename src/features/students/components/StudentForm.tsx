@@ -143,7 +143,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data.detail ?? 'Failed to save')
+          throw new Error(data.error ?? 'Failed to save')
         }
         router.refresh()
         if (calendarMsg) {
@@ -160,7 +160,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data.detail ?? 'Failed to save')
+          throw new Error(data.error ?? 'Failed to save')
         }
         router.push('/admin/students')
         router.refresh()
@@ -183,34 +183,16 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     setDeleteGoogleError('')
 
     try {
-      let googleError = ''
-      if (student.google_drive_link || student.calendar_event_ids?.length) {
-        try {
-          const res = await fetch('/api/google/delete-student', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              drive_folder_url: student.google_drive_link,
-              calendar_event_ids: student.calendar_event_ids,
-            }),
-          })
-          const data = await res.json()
-          if (data.driveError || data.calendarError) {
-            googleError = [data.driveError, data.calendarError].filter(Boolean).join(' | ')
-          }
-        } catch {
-          googleError = 'Google cleanup failed — check Drive and Calendar manually.'
-        }
-      }
-
       const delRes = await fetch(`/api/students/${student.id}`, { method: 'DELETE' })
+      const data = await delRes.json().catch(() => ({}))
+
       if (!delRes.ok) {
-        const data = await delRes.json().catch(() => ({}))
-        setError(`Failed to delete student: ${data.detail ?? 'unknown error'}`)
+        setError(`Failed to delete student: ${data.error ?? 'unknown error'}`)
         setShowDeleteDialog(false)
         return
       }
 
+      const googleError = [data.drive_error, data.calendar_error].filter(Boolean).join(' | ')
       if (googleError) {
         setDeleteGoogleError(googleError)
         return

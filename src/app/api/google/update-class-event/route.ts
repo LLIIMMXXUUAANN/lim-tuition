@@ -15,5 +15,9 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify(body),
   })
   const data = await upstream.json()
-  return NextResponse.json(data, { status: upstream.status })
+  if (!upstream.ok) return NextResponse.json(data, { status: upstream.status })
+  return NextResponse.json(
+    { eventIds: data.event_ids, meetLink: data.meet_link, driveDocError: data.drive_doc_error },
+    { status: upstream.status },
+  )
 }
