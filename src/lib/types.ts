@@ -31,5 +31,5 @@ export interface Student {
   updated_at: string
 }
 
-export type StudentInsert = Omit<Student, 'id' | 'created_at' | 'updated_at'>
+export type StudentInsert = Omit<Student, 'id' | 'created_at' | 'updated_at' | 'google_meet_link' | 'google_drive_link' | 'calendar_event_ids'>
 export type StudentUpdate = Partial<StudentInsert>

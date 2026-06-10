@@ -9,8 +9,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import ClassScheduleEditor from './ClassScheduleEditor'
-import CreateDriveFolderButton from './CreateDriveFolderButton'
-import CreateCalendarEventButton from './CreateCalendarEventButton'
+import { ExternalLink } from '@/shared/components/student-fields'
 import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -26,9 +25,6 @@ const emptyForm: StudentInsert = {
   student_phone: '',
   mode: 'My Python Syllabus',
   class_schedule: [],
-  google_meet_link: '',
-  google_drive_link: '',
-  calendar_event_ids: null,
   fee_per_hour: 60,
   payment_method: 'Monthly',
   latest_payment: '',
@@ -49,9 +45,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           student_phone: student.student_phone ?? '',
           mode: student.mode,
           class_schedule: student.class_schedule ?? [],
-          google_meet_link: student.google_meet_link ?? '',
-          google_drive_link: student.google_drive_link ?? '',
-          calendar_event_ids: student.calendar_event_ids ?? null,
           fee_per_hour: student.fee_per_hour,
           payment_method: student.payment_method,
           latest_payment: student.latest_payment ?? '',
@@ -63,7 +56,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [calendarWarning, setCalendarWarning] = useState('')
+  const [googleWarning, setGoogleWarning] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteGoogleError, setDeleteGoogleError] = useState('')
@@ -75,7 +68,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    setCalendarWarning('')
+    setGoogleWarning('')
     setSaving(true)
     const payload: StudentUpdate = {
       ...form,
@@ -83,59 +76,9 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       contact_person: form.contact_person || null,
       contact_phone: form.contact_phone || null,
       student_phone: form.student_phone || null,
-      google_meet_link: form.google_meet_link || null,
-      google_drive_link: form.google_drive_link || null,
       latest_payment: form.latest_payment || null,
       today_homework: form.today_homework || null,
       notes: form.notes || null,
-    }
-
-    // Use a local variable so the warning is only shown after a successful DB save,
-    // and so we can decide whether to keep the form open.
-    let calendarMsg = ''
-
-    if (student) {
-      const scheduleChanged = JSON.stringify(form.class_schedule) !== JSON.stringify(student.class_schedule)
-      if (scheduleChanged) {
-        const hasEventIds = (form.calendar_event_ids ?? []).length > 0
-        const hasMeetLink = !!form.google_meet_link
-        if (hasEventIds && hasMeetLink) {
-          try {
-            const res = await fetch('/api/google/update-class-event', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: form.name.trim(),
-                class_schedule: form.class_schedule,
-                event_ids: form.calendar_event_ids,
-                meet_link: form.google_meet_link,
-                drive_folder_url: form.google_drive_link || undefined,
-              }),
-            })
-            const data = await res.json()
-            if (res.ok) {
-              payload.calendar_event_ids = data.eventIds
-              if (data.scheduleCleared) {
-                payload.google_meet_link = null
-                set('google_meet_link', '')
-                set('calendar_event_ids', null)
-              } else if (data.meetLink) {
-                payload.google_meet_link = data.meetLink
-                set('google_meet_link', data.meetLink)
-              }
-              if (data.driveDocError) calendarMsg = `Calendar updated. Drive doc not updated: ${data.driveDocError}`
-            } else {
-              calendarMsg = `Calendar not updated: ${data.error ?? 'unknown error'}`
-            }
-          } catch {
-            calendarMsg = 'Calendar not updated: network error'
-          }
-        } else if (!hasEventIds) {
-          calendarMsg = 'Schedule saved — Google Calendar and Drive doc were not updated (no calendar event IDs). Click "Create Calendar Event" to set up sync.'
-        } else {
-          calendarMsg = 'Schedule saved — Google Calendar and Drive doc were not updated (Meet link is missing).'
-        }
-      }
     }
 
     try {
@@ -145,13 +88,11 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error ?? 'Failed to save')
-        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Failed to save')
         router.refresh()
-        if (calendarMsg) {
-          setCalendarWarning(calendarMsg)
+        if (data.google_warning) {
+          setGoogleWarning(data.google_warning)
           setSaving(false)
         } else {
           onSaved?.()
@@ -162,12 +103,15 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error ?? 'Failed to save')
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+        if (data.google_warning) {
+          setGoogleWarning(data.google_warning)
+          setSaving(false)
+        } else {
+          router.push('/admin/students')
+          router.refresh()
         }
-        router.push('/admin/students')
-        router.refresh()
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
@@ -263,29 +207,16 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
               value={form.class_schedule ?? []}
               onChange={(slots) => set('class_schedule', slots)}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_meet_link">Google Meet Link</Label>
-            <Input id="google_meet_link" value={form.google_meet_link ?? ''} onChange={(e) => set('google_meet_link', e.target.value)} placeholder="https://meet.google.com/..." />
-            <CreateCalendarEventButton
-              name={form.name}
-              classSchedule={form.class_schedule ?? []}
-              onSuccess={(meetLink, eventIds) => {
-                set('google_meet_link', meetLink)
-                set('calendar_event_ids', eventIds)
-              }}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_drive_link">Google Drive Link</Label>
-            <Input id="google_drive_link" value={form.google_drive_link ?? ''} onChange={(e) => set('google_drive_link', e.target.value)} placeholder="https://drive.google.com/..." />
-            <CreateDriveFolderButton
-              name={form.name}
-              meetLink={form.google_meet_link ?? ''}
-              classSchedule={form.class_schedule ?? []}
-              mode={form.mode}
-              onSuccess={(url) => set('google_drive_link', url)}
-            />
+            {student?.google_meet_link && (
+              <p className="text-sm text-slate-500">
+                Meet: <ExternalLink href={student.google_meet_link}>{student.google_meet_link}</ExternalLink>
+              </p>
+            )}
+            {student?.google_drive_link && (
+              <p className="text-sm text-slate-500">
+                Drive: <ExternalLink href={student.google_drive_link}>{student.google_drive_link}</ExternalLink>
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Portal Access Emails</Label>
@@ -365,7 +296,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         </CardContent>
       </Card>
 
-      {calendarWarning && <p className="text-sm text-amber-600">{calendarWarning}</p>}
+      {googleWarning && <p className="text-sm text-amber-600">{googleWarning}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-3 flex-wrap">
