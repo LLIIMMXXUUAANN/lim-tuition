@@ -91,8 +91,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error ?? 'Failed to save')
         router.refresh()
-        if (data.google_warning) {
-          setGoogleWarning(data.google_warning)
+        if (data.googleWarning) {
+          setGoogleWarning(data.googleWarning)
           setSaving(false)
         } else {
           onSaved?.()
@@ -105,8 +105,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error ?? 'Failed to save')
-        if (data.google_warning) {
-          setGoogleWarning(data.google_warning)
+        if (data.googleWarning) {
+          setGoogleWarning(data.googleWarning)
           setSaving(false)
         } else {
           router.push('/admin/students')
@@ -140,7 +140,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         return
       }
 
-      const googleError = [data.drive_error, data.calendar_error].filter(Boolean).join(' | ')
+      const googleError = [data.driveError, data.calendarError].filter(Boolean).join(' | ')
       if (googleError) {
         setDeleteGoogleError(googleError)
         return

@@ -13,7 +13,7 @@ export default async function TimetablePage() {
 
   const students: Pick<Student, 'name' | 'class_schedule'>[] = studentsRes.ok ? await studentsRes.json() : []
   const { rules: initialRules = '' } = rulesRes.ok ? await rulesRes.json() : {}
-  const { buffer_mins: initialBufferMins = 15 } = bufferRes.ok ? await bufferRes.json() : {}
+  const { bufferMins: initialBufferMins = 15 } = bufferRes.ok ? await bufferRes.json() : {}
 
   return (
     <div className="max-w-4xl mx-auto p-6">
