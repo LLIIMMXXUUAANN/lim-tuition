@@ -387,13 +387,13 @@ export default function AgentChat() {
                 ? { ...m, content: `Something went wrong: ${event.message}`, isError: true }
                 : m
             ))
-          } else if (event.type === 'download_schedule') {
+          } else if (event.type === 'ui_action' && event.action === 'download_schedule') {
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, scheduleStudents: event.students ?? [] } : m
+              m.id === pendingId ? { ...m, scheduleStudents: event.payload?.students ?? [] } : m
             ))
-          } else if (event.type === 'slots_ready') {
+          } else if (event.type === 'ui_action' && event.action === 'slots_ready') {
             setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, slotData: event.slots ?? [] } : m
+              m.id === pendingId ? { ...m, slotData: event.payload?.slots ?? [] } : m
             ))
           }
         }
