@@ -2,15 +2,27 @@
 
 Public landing page + private admin dashboard for managing tuition students, class schedules, payments, and message templates.
 
+## Documentation
+
+| File | Covers |
+|---|---|
+| `README.md` | Project overview, features, deployment, project structure |
+| `docs/decisions.md` | Non-obvious design decisions and the reasoning behind them |
+| `CLAUDE.md` | AI assistant guidance — includes all `claude/` sub-docs |
+| `claude/routing.md` | Route protection, login pages, Supabase RPC calls, API clients |
+| `claude/ui.md` | Component reference, theming conventions, shared patterns |
+| `claude/timetable.md` | Timetable page, TimetableSection, PNG exports |
+| `claude/google.md` | Google Drive + Calendar integration (frontend side) |
+| `claude/agent.md` | AgentChat UI, SSE handling, `[student_id:NAME:UUID]` token protocol |
+
+For backend documentation see `tuition-api/README.md` and `tuition-api/CLAUDE.md`.
+
 ## Stack
 
 - **Next.js 16** (App Router) + TypeScript
 - **Supabase** — Postgres database + magic link auth
 - **Tailwind CSS v4** + shadcn/ui + @heroicons/react
-- **Gemini 2.5 Flash** (`@google/genai` v1.x) — AI slot classification with structured output + classic AI agent (single-model function-calling loop)
-- **LangChain + LangGraph** (`@langchain/google`, `@langchain/langgraph`) — multi-agent supervisor/subagent backend (opt-in via toggle)
-- **LangSmith** — optional LangGraph run tracing; enable with `LANGCHAIN_TRACING=true` and `LANGSMITH_API_KEY`
-- **Zod** — runtime validation of AI responses
+- **FastAPI backend** (`tuition-api/`) — all business logic, Google services, AI agent, timetable slot generation
 
 ## Getting Started
 
@@ -18,8 +30,8 @@ Copy the environment variables:
 
 ```bash
 cp .env.example .env.local
-# Fill in your Supabase URL, anon key, Google OAuth credentials, and GEMINI_API_KEY
-# Optional: set LANGCHAIN_TRACING=true + LANGSMITH_API_KEY to enable LangGraph tracing in LangSmith
+# Fill in your Supabase URL and anon key
+# Also start the FastAPI backend (tuition-api/) — see tuition-api/README.md
 ```
 
 Run the dev server:
@@ -42,67 +54,19 @@ Open [http://localhost:3000](http://localhost:3000) to see the public landing pa
 - **Status filter** — filter students by Active / On Hold / Completed
 - **Templates** — editable message templates stored in Supabase, organised into 4 sub-tabs: **Payment** (payment reminder templates + payment generator), **Review** (review request templates), **Recommendation** (recommendation request templates), **First Approach** (Superprof outreach template)
 - **Payment generator** — lives inside the Payment tab; auto-calculates session dates and fees for a given student and month; supports carryover session deductions
-- **Google Calendar event creation** — "Create Google Calendar Event" button on the new student form; creates a weekly recurring event in the Superprof calendar for each class slot, auto-generates a Google Meet link, and auto-fills the `google_meet_link` field. Event IDs are stored per-slot so the same Meet link can be reused on reschedule.
-- **Google Calendar rescheduling** — when a student's class schedule is changed and saved, the route searches Calendar by name to find all events (including any rogue ones not tracked in the DB), merges them with the stored event IDs, then applies nuke-and-repave: the event that owns the Google Meet conference is patched to the new schedule, all others are deleted, and fresh events are created for any remaining slots. The Meet link is always preserved; if the primary event was accidentally deleted, a new one with a fresh Meet link is auto-generated and the new link is saved to the DB and Drive doc. An amber warning is shown if Drive update fails, but the save still proceeds
-- **Google Drive folder creation** — button label adapts to the student's mode: **"Create Google Drive Folder (My Python Syllabus)"** creates the full folder structure (Teaching Slides shortcut, coding notebooks, homework folders, Google Meet Link doc); **"Create Google Drive Folder (Other Syllabus)"** creates the root folder with only the Google Meet Link doc. Both require the Meet link to be set first and set anyone-with-link viewer access
-- **Sync Google** — a **Sync Google** button at the bottom of the students list syncs all active students' Calendar events and Drive "Google Meet Link" docs to match the DB schedule. Always searches Calendar by student name and merges any discovered events with the stored IDs (catches rogue events from previous bad syncs). Applies nuke-and-repave per student: keep the Meet-conference event, delete everything else, recreate cleanly. If the primary event was deleted, a new Meet link is generated and saved automatically. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown
-- **AI Agent** — natural language interface at `/admin/agent` with two backends toggled via the **Single · LangGraph** switch in the header (LangGraph on by default). See [`docs/agent-tools.md`](docs/agent-tools.md) for the full input/process/output reference for all 19 tools. Both backends share the same tool implementations and SSE event format.
-  - **Classic mode** (default): Gemini 2.5 Flash drives a single-model function-calling loop (up to 10 rounds) via `@google/genai`. Tool calls run in parallel within each round; a timing step shows `⏱ parallel ×N — tool1 Xms, tool2 Yms (total Zms)`. After mutations a `selfEval` DB query appends a `✓` / `⚠` step.
-  - **LangGraph mode** (toggle on): supervisor + 3 specialist subagents via `@langchain/langgraph`. Single-turn supervisor node (one LLM call per turn via `.stream()`, no React loop) dispatches to `student_agent`, `template_agent`, or `timetable_agent` via LangGraph `Send` for true parallel execution; calling `.stream()` (not `.invoke()`) enables token-by-token streaming for direct supervisor replies via LangGraph's `messages` mode. Each subagent is a standard ReAct agent with all domain tools visible — Gemini can return multiple tool calls per round and `ToolNode` executes them in parallel (same-domain batching). Post-hook self-eval runs inside each subagent after mutations. Both backends are stateless — the frontend sends history on every request (`geminiHistory: Content[]` for classic, `lgHistory: StoredMessage[]` for LangGraph), persisted in localStorage after each clean turn. LangGraph lgHistory contains only routing-level messages (user inputs, supervisor decisions, subagent final replies); subagent-internal tool calls are stripped server-side before the `lg_history` SSE event is emitted.
-  - **19 tools** (fine-grained reads, coarse-grained writes): `search_students`, `get_student`, `list_students` (optional status filter), `create_student`, `update_student`, `delete_student`, `setup_student_google`, `sync_all_students`, `manage_portal_access`, `get_schedule` (students by day of week), `get_fee_summary` (monthly revenue per student + total), `list_templates` (discover template ids/titles), `get_template` (fetch a single template's content by id), `generate_payment_message` (generate a ready-to-send payment reminder for a student; defaults to next month), `get_timetable_settings` (read scheduling rules + buffer mins), `update_timetable_rules` (save new rules text), `update_buffer_mins` (0–60 min buffer around booked classes), `generate_slot_availability` (AI-classify every free slot using Gemini), `download_timetable_image` (fetch students for schedule PNG)
-  - **SSE streaming:** both routes return `text/event-stream`. Tool steps appear immediately as each tool fires; the final reply streams token-by-token. The frontend patches a placeholder message in place as events arrive. SSE event types: `step`, `chunk`, `history` (classic — full `Content[]` on clean completion), `lg_history` (LangGraph — full `StoredMessage[]` on clean completion), `done`, `stopped`, `error`, `download_schedule`, `slots_ready`. The `history`/`lg_history` events are committed to state only on `done` so a cancelled or errored turn never corrupts the stored history.
-  - **Stop button:** the send button becomes a ■ Stop button while the agent is running. Behaviour is split on whether text chunks have started arriving: **tool round** (no chunks yet) — POSTs to `/api/agent/stop` which sets a server-side flag and aborts the per-request `AbortController`; the server finishes the current tool round atomically, emits selfEval confirmation for any write op, then closes with `{ type: 'stopped' }`; **text round** (chunks arriving) — aborts the SSE connection immediately (partial text is safe; all write ops are already done by this point). Clicking Stop also immediately marks the pending bubble as "Cancelled" in the UI (optimistic update) regardless of server timing.
-  - **Auto Google sync:** updating a student's `class_schedule` via the agent automatically patches Calendar events and rewrites the Drive Meet doc (parallel, non-fatal)
-  - **Google setup suggestion:** creating a student with a schedule, or updating a schedule when Google isn't set up, triggers a `suggestGoogleSetup` flag — Gemini asks the user if they want Google setup before calling `setup_student_google`
-  - **Timetable via agent:** `generate_slot_availability` runs the same Gemini slot-classifier as the timetable tab and triggers a **Download Slot Availability PNG** button in the chat; `download_timetable_image` triggers a **Download Schedule PNG** button — both render client-side using the shared `timetable-canvas.ts` lib
-  - **Safety:** `delete_student` requires explicit "yes" in conversation + warns about Calendar/Drive removal; `update_student` uses `ALLOWED_UPDATE_KEYS` allowlist to prevent prompt injection; `sync_all_students` requires explicit confirmation; `update_timetable_rules` shows proposed rules and confirms before writing; in LangGraph mode, `template_agent` always calls `generate_payment_message` rather than writing payment content directly (guarantees real DB data in the output)
-  - **UI:** markdown-rendered replies (tables, bold, blockquotes via `react-markdown` + `remark-gfm`); tool steps shown above each reply; one `"View NAME →"` link per affected student rendered from `[student_id:NAME:UUID]` tokens; inline PNG download buttons after timetable tool calls; voice input via Web Speech API (Chrome/Edge/Safari); **timestamps** shown below each bubble in MYT (time only for today, date + time for older messages); user message timestamps are right-aligned, agent message timestamps are left-aligned; **retry button** — failed agent messages show a `↻ Try again` button bottom-right (same row as the timestamp); one click replays the request in-place without duplicating the user message; **edit message** — the latest user bubble shows a pencil icon next to its timestamp (hidden while the agent is running); clicking it opens an inline textarea pre-filled with the message text; Send re-runs from that point (truncates subsequent messages and history), Escape restores the original bubble; if the edit turn is stopped/cancelled, prior history is restored so context from earlier turns is not lost; **loading indicator** — pending agent bubble shows three animated bouncing dots while waiting for a response; cancelled/error bubbles show a static `⋯` instead
+- **Google Calendar + Drive** — Google Calendar events and Drive folders are set up via the AI agent (`setup_student_google` tool). When a student's schedule is changed and saved, the backend automatically patches Calendar events (nuke-and-repave) and rewrites the Drive Meet doc; an amber warning is shown if the Google update fails but the save still proceeds.
+- **Sync Google** — a **Sync Google** button at the bottom of the students list bulk-syncs all active students' Calendar events and Drive Meet docs to match the DB schedule. Results show per-student (✓ synced / – skipped / ✗ error); if Google auth has expired, a reconnect link is shown.
+- **AI Agent** — natural language interface at `/admin/agent` with two backends toggled via the **Single · LangGraph** switch in the header (LangGraph on by default). See `tuition-api/docs/agent-tools.md` for the full tool reference. UI: markdown-rendered replies (`react-markdown` + `remark-gfm`); tool steps shown above each reply; one `"View NAME →"` link per affected student; inline PNG download buttons after timetable tool calls; voice input (Chrome/Edge/Safari); timestamps in MYT; retry button on failed messages; edit latest user message; animated loading dots; Stop button (aborts connection mid-text, or POSTs to `/api/agent/stop` during tool calls)
 - **Timetable** — two-tab layout:
   - **Weekly Schedule tab** — live HTML grid showing all current class blocks (navy `#0A1A2F`, auto-cropped to active hours) with a **Download Schedule** button that exports the same view as a PNG (`weekly_schedule.png`)
   - **Slot Availability tab** (state preserved across tab switches):
-    - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; Gemini 2.5 Flash classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are computed in code (configurable, saved to DB), not by the LLM. Time-range end boundaries in rules are exclusive: `"08:00 to 10:00 unavailable"` leaves the 10:00 slot fully available
+    - **AI slot generator** — type scheduling rules (saved to DB) and optional student availability, click **Generate Slots**; the backend classifies every free slot as preferred / normal / unavailable and repaints the grid; buffer zones between booked classes are configurable and saved to DB
     - **Manual override** — after AI generation, drag or click any cell to manually cycle its state
     - **Download Available Slots** — colour-coded availability grid with legend (`slot_availability.png`)
 
 ### Student portal (authenticated students/parents)
 - **Student portal** — students and parents log in at `/student/login` with a magic link; they see their own schedule, fees, homework, notes, and Google Meet/Drive links
 - Access is controlled per student via `access_emails` array — admin adds emails in the student edit form
-
-## Design decisions
-
-### Prompt caching (not implemented — future work)
-
-Gemini context caching can cache the static prefix (system instruction + tool declarations) and serve it at a reduced token rate across calls. It is not used because:
-
-- **Prefix is too small.** The system instruction + 19 tool declarations is ~2,000–4,000 tokens. At Gemini 2.5 Flash pricing the per-request saving is a fraction of a cent.
-- **Single admin, low volume.** Cache hits across requests require the same cache to stay warm (TTL ≥ 1 min). Occasional usage means mostly cold-cache requests.
-- **Intra-request benefit is modest.** The classic agent loop sends the system instruction on every round (max 10), but 2–3 rounds is typical — too small a multiplier to justify lifecycle complexity.
-
-**When to add it:** inject large static documents (curriculum, full student roster, multi-page scheduling rules) into the system prompt. At 50k+ tokens the ~4× cached-token discount becomes material. Create a module-level cache with a 60-minute TTL and invalidate it on content change.
-
-### LangGraph history filtering (`isRoutingRelevant`)
-
-`lgHistory` (persisted in localStorage, sent on every request) contains only routing-level messages. Subagent-internal tool call/response pairs — e.g. `search_students → result → get_student → result` that happened inside `student_agent` — are stripped server-side before the `lg_history` SSE event is emitted.
-
-**Why:** subagent tool calls are ephemeral implementation detail. The supervisor only needs to know what task was dispatched and what conclusion the subagent reached — not the DB queries that got there. Keeping them would (1) grow `lgHistory` proportionally to tool depth per turn, (2) inject stale intermediate data into the supervisor's context across turns, and (3) risk the supervisor re-routing based on old results rather than issuing fresh lookups.
-
-**What is kept:** user messages, supervisor dispatch decisions (the `dispatch` AIMessage + ToolMessage pair), subagent final replies (the `transfer_back_to_supervisor` handoff pair, where the ToolMessage content is the actual answer), direct supervisor replies, and self-eval verdicts. This is exactly the routing-level transcript the supervisor needs to handle follow-up requests correctly.
-
-### Tool retrieval (not implemented)
-
-At 50–100+ tools, the industry uses embedding-based RAG to dynamically fetch only the most relevant tool schemas per query — avoiding context window bloat and attention degradation from too many competing descriptions. At 19 tools this is unnecessary: all schemas fit comfortably in a single prompt and Gemini selects correctly without a retrieval hint. The LangGraph mode further narrows each subagent's view to 3–11 tools via static domain partitioning, achieving the same scoping benefit without embeddings.
-
-### Raw API over MCP / CLI
-
-All service integrations (Supabase, Google Drive/Calendar, Gemini) use their SDKs directly rather than MCP servers or CLI tools.
-
-- **MCP** is designed for exposing tools to an AI model running remotely, or in a multi-user environment where each user needs isolated tool context. Neither condition applies here — there is one admin and the route handlers run in the same server process as the tool calls.
-- **CLI** assumes a local shell environment. A Next.js server running on Vercel does not have one.
-- **Raw SDK calls** are the natural fit: no extra infrastructure to deploy or maintain, full TypeScript types, straightforward error handling, and no abstraction layer between the app and the service.
-
-### Stateless agent design (no LangGraph checkpointer)
-
-Both agent backends are stateless — the frontend sends conversation history on every request rather than storing it server-side via a LangGraph checkpointer. The primary reason: there is only one admin, with no concurrent sessions. Stateful checkpointing (e.g. `MemorySaver`, a Postgres checkpointer) is designed for many users each maintaining long-running threads that need to be resumed across devices or sessions. For a single user whose history already lives in localStorage and is sent back on every request, the infrastructure overhead (external store, thread ID management, TTL cleanup) buys nothing.
 
 ## Deployment
 
@@ -113,63 +77,38 @@ After deploying, add the Vercel URL to Supabase → Authentication → Redirect 
 https://lim-tuition.vercel.app/**
 ```
 
-## Email (magic link delivery)
-
-Magic link emails are sent via Gmail SMTP. Configured in Supabase Dashboard → Authentication → SMTP Settings:
-
-| Field | Value |
-|---|---|
-| Host | `smtp.gmail.com` |
-| Port | `587` |
-| Sender | `limxuan520@gmail.com` |
-| Password | Gmail App Password (not the account password) |
-
-To regenerate: Google Account → Security → search "App Passwords".
-
 ## Project structure
 
 ```
 src/
   app/
-    page.tsx                      → public landing page
-    admin/login/                  → admin magic link login
-    admin/(app)/students/         → student list, detail, new form
-    admin/(app)/templates/        → message templates + payment generator
-    admin/(app)/timetable/        → weekly availability grid
-    admin/(app)/agent/            → AI agent chat UI
-    api/agent/chat/               → classic Gemini function-calling loop (max 10 rounds, SSE streaming, parallel tool execution)
-    api/agent/lg/chat/            → LangGraph supervisor+subagent backend (SSE streaming, same event format)
-    api/agent/stop/               → soft-stop endpoint: sets stop flag + aborts per-request AbortController
-    student/login/                → student portal login
-    student/(portal)/             → student dashboard
-    api/generate-payment/         → fee calculation API route
-    api/google/                   → Google OAuth setup, Drive folder creation/deletion, Calendar event creation/update/sync-all/deletion
-    api/timetable/                → rules CRUD, buffer-mins CRUD, AI slot generation (Gemini)
-    auth/callback/                → Supabase auth code exchange
+    page.tsx                → public landing page
+    admin/login/            → admin magic link login
+    admin/(app)/students/   → student list, detail, new form
+    admin/(app)/templates/  → message templates + payment generator
+    admin/(app)/timetable/  → weekly availability grid
+    admin/(app)/agent/      → AI agent chat UI
+    api/[...path]/          → catch-all proxy — forwards /api/* to tuition-api/ backend
+    student/login/          → student portal login
+    student/(portal)/       → student dashboard
+    auth/callback/          → Supabase auth code exchange
   features/
     agent/
       components/ → AgentChat (chat UI, localStorage persistence, react-markdown rendering, stop button)
-      lib/        → tools/ (student-tools · template-tools · timetable-tools, barrel index), schema.ts (thin composer), domains/ (students · templates · timetable), eval.ts (selfEval), stop-signals.ts (shared stop/abort singletons)
-      lib/lg/     → LangGraph multi-agent: model.ts, handoff.ts, progressive.ts, custom-supervisor.ts, supervisor.ts, *-agent.ts, tool-factories.ts, post-hooks.ts, stream-adapter.ts
     students/
-      components/ → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
+      components/ → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, SyncAllButton
     templates/
       components/ → TemplatesList, PaymentGenerator
     timetable/
       components/ → TimetableSection
-      lib/        → timetable-slots.ts
     landing/
       components/ → 13 public landing page sections
   services/
-    supabase/   → browser + server Supabase clients; server also exports requireTutor() used by all tutor-only API routes
-    google/     → getOAuth2Client() (with DB), newOAuth2Client() (bare); Drive folder creation/update/deletion (parallel); Calendar event creation/update/deletion (parallel)
-    gemini/     → runGeminiSlotGeneration() — calls @google/genai with JSON responseSchema + Zod validation; also exports SlotSchema, GenerateSlotsResponseSchema
+    supabase/   → browser + server Supabase clients; server also exports requireTutor()
   shared/
     components/ → AppNav, LogoutButton, StudentPortalView, student-fields (Row, BlockField, statusBadge, ScheduleList, ExternalLink)
     ui/         → shadcn/ui primitives
     lib/
-      templates.ts        → TEMPLATE_META (shared id→title/description map) + templateMeta() helper — used by TemplatesList and agent tools
-      payment.ts          → buildPaymentMessage() — pure payment calculation function shared by /api/generate-payment and the agent's generatePaymentMessage tool (single source of truth for fee arithmetic and message templates)
       timetable-canvas.ts → shared PNG drawing helpers (drawScheduleToCtx, drawSlotsToCtx, computeScheduleWindow, downloadCanvas, NAVY, SCALE, PNG_* constants) — used by TimetableSection and AgentChat
   hooks/
     useClipboard.ts → copy-to-clipboard hook with reset timer and silent error handling
@@ -178,14 +117,6 @@ src/
     utils.ts    → formatTime, cn, DAYS, TIME_SLOTS, timeToMins, DAY_INDEX, MONTH_NAMES, getWeekdayDates, getMYTDateString, formatFee, ordinal, oxfordList, groupSlotsByDay
   proxy.ts      → Next.js middleware (auth + route protection)
 ```
-
-## Google OAuth
-
-One-time setup: visit `/api/google/auth` as admin → complete Google consent → refresh token is saved to the `settings` table.
-
-**Avoid 7-day token expiry:** Google expires refresh tokens every 7 days for apps in Testing mode. Publish the app to **In production** in Google Cloud Console → APIs & Services → OAuth consent screen → Publish App. No verification needed for a single-user app — you'll just see an "unverified app" warning during your own OAuth flow.
-
-If you see `invalid_grant` errors, re-visit `/api/google/auth` to re-authorize. After publishing to production, this should only happen if you change your Google account password or manually revoke access.
 
 ## Commands
 

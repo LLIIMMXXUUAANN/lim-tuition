@@ -3,11 +3,24 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 @AGENTS.md
-@claude/auth.md
-@claude/components.md
+@claude/routing.md
+@claude/ui.md
 @claude/timetable.md
 @claude/google.md
 @claude/agent.md
+
+## Documentation files
+
+| File | Covers |
+|---|---|
+| `docs/decisions.md` | Non-obvious design decisions and the reasoning behind them |
+| `claude/routing.md` | Route protection (`proxy.ts`), login pages, Supabase RPC calls, API clients |
+| `claude/ui.md` | Component reference, theming conventions, shared patterns |
+| `claude/timetable.md` | Timetable page, `TimetableSection`, PNG exports, shared canvas lib |
+| `claude/google.md` | Google Drive + Calendar integration (frontend side only) |
+| `claude/agent.md` | `AgentChat` UI, SSE handling, `[student_id:NAME:UUID]` token protocol |
+
+Backend documentation: `tuition-api/README.md` and `tuition-api/CLAUDE.md`.
 
 ## Commands
 
@@ -25,32 +38,30 @@ No test suite. Use `npm run build` to verify type correctness before committing.
 
 ### Source structure
 
+All business logic, Google services, agent tools, and AI backend live in `tuition-api/` (FastAPI). This Next.js repo contains only the UI, auth middleware, and Supabase client code. Server Components call the backend directly via `fetchFastAPI` (`src/lib/fastapi.ts`); client-side calls use `fetch('/api/...')` which is forwarded to the backend by the catch-all proxy at `src/app/api/[...path]/route.ts`.
+
 ```
 src/
   app/              → Next.js routes (see Route structure below)
-  features/         → feature slices (components + feature-specific lib)
+  features/         → feature slices (components only — no lib)
     agent/
       components/   → AgentChat
-      lib/          → tools/ (student-tools · template-tools · timetable-tools · shared), schema.ts, eval.ts, stop-signals.ts, domains/, lg/
     students/
-      components/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, CreateDriveFolderButton, CreateCalendarEventButton, SyncAllButton
+      components/   → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, SyncAllButton
     templates/
       components/   → TemplatesList, PaymentGenerator
     timetable/
       components/   → TimetableSection
-      lib/          → timetable-slots.ts
     landing/
       components/   → 13 static landing page sections
   services/         → external API clients
     supabase/       → client.ts, server.ts (+ requireTutor())
-    google/         → auth.ts, calendar.ts, drive.ts, cleanup.ts, sync.ts
-    gemini/         → index.ts (runGeminiSlotGeneration)
   shared/           → cross-feature shared code
     components/     → AppNav, LogoutButton, StudentPortalView, student-fields
     ui/             → shadcn/ui primitives
-    lib/            → payment.ts, templates.ts, timetable-canvas.ts
+    lib/            → templates.ts, timetable-canvas.ts
   hooks/            → useClipboard.ts
-  lib/              → types.ts, utils.ts (universal primitives only)
+  lib/              → types.ts, utils.ts, fastapi.ts
   proxy.ts          → Next.js middleware (auth + route protection)
 ```
 
