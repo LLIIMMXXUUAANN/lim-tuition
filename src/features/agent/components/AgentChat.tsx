@@ -353,8 +353,11 @@ export default function AgentChat() {
             type: string
             content?: string
             message?: string
-            students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
-            slots?: { day: string; time: string; state: string }[]
+            action?: string
+            payload?: {
+              students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
+              slots?: { day: string; time: string; state: string }[]
+            }
             contents?: GeminiContent[]
             messages?: StoredLGMessage[]
           }
