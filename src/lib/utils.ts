@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { WeekDay, ClassSlot } from "@/lib/types"
+import type { WeekDay } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -27,57 +27,4 @@ for (let h = 8; h < 22; h++) {
 export function timeToMins(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
-}
-
-export const DAY_INDEX: Record<string, number> = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-  Thursday: 4, Friday: 5, Saturday: 6,
-}
-
-export const MONTH_NAMES: string[] = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-]
-
-export function formatFee(fee: number): string {
-  const rounded = Math.round(fee * 100) / 100
-  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(2)
-}
-
-export function ordinal(n: number): string {
-  const v = n % 100
-  if (v >= 11 && v <= 13) return `${n}th`
-  switch (n % 10) {
-    case 1: return `${n}st`
-    case 2: return `${n}nd`
-    case 3: return `${n}rd`
-    default: return `${n}th`
-  }
-}
-
-export function oxfordList(items: string[]): string {
-  if (items.length === 0) return ''
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} and ${items[1]}`
-  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
-}
-
-export function groupSlotsByDay(schedule: ClassSlot[]): Map<string, ClassSlot[]> {
-  const map = new Map<string, ClassSlot[]>()
-  for (const slot of schedule) {
-    const existing = map.get(slot.day)
-    if (existing) existing.push(slot)
-    else map.set(slot.day, [slot])
-  }
-  return map
-}
-
-export function getMYTDateString(): string {
-  return new Intl.DateTimeFormat('en-MY', {
-    timeZone: 'Asia/Kuala_Lumpur',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date())
 }
