@@ -4,33 +4,13 @@ import { requireTutor } from '@/services/supabase/server'
 const FASTAPI = process.env.FASTAPI_BASE_URL ?? 'http://127.0.0.1:8000'
 const SECRET = process.env.INTERNAL_API_SECRET ?? ''
 
-// Paths requiring tutor auth (exact or prefix match)
-const AUTH_REQUIRED = new Set([
-  'agent/chat',
-  'agent/lg/chat',
-  'agent/stop',
-  'google/create-class-event',
-  'google/create-student-folder',
-  'google/delete-student',
-  'google/sync-all',
-  'google/update-class-event',
-  'students',
-  'templates',
-  'timetable/buffer-mins',
-  'timetable/generate-slots',
-  'timetable/rules',
-])
-
 export const dynamic = 'force-dynamic'
 
 async function proxy(req: NextRequest, segments: string[]): Promise<Response> {
   const path = segments.join('/')
 
-  // Auth check for protected routes
-  if ([...AUTH_REQUIRED].some(p => path === p || path.startsWith(p + '/'))) {
-    const { error } = await requireTutor()
-    if (error) return error
-  }
+  const { error } = await requireTutor()
+  if (error) return error
 
   // Build upstream URL, preserving query string
   const upstreamUrl = new URL(`${FASTAPI}/${path}`)

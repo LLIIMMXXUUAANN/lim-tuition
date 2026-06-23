@@ -32,4 +32,4 @@
 
 **Backend (FastAPI):**
 - `src/lib/fastapi.ts` — exports `fetchFastAPI(path, init?)`: prepends `FASTAPI_BASE_URL` and injects the `X-Internal-Secret` header. Used by **Server Components** to call the backend directly (not via the proxy, which is only for browser requests).
-- `src/app/api/[...path]/route.ts` — catch-all proxy that forwards all `/api/*` browser requests to the FastAPI backend. Injects `X-Internal-Secret`, calls `requireTutor()` for paths in the `AUTH_REQUIRED` set, preserves query strings, streams response bodies unchanged. Handles GET, POST, PUT, DELETE. All `/api/*` paths map 1:1 to FastAPI paths — no URL translation.
+- `src/app/api/[...path]/route.ts` — catch-all proxy that forwards all `/api/*` browser requests to the FastAPI backend. Injects `X-Internal-Secret`, calls `requireTutor()` on every request (all `/api/*` routes are admin-only by design), preserves query strings, streams response bodies unchanged. Handles GET, POST, PUT, DELETE. All `/api/*` paths map 1:1 to FastAPI paths — no URL translation.
