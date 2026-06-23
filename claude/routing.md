@@ -10,7 +10,7 @@
 - Unauthenticated users hitting `/admin/*` → redirect to `/admin/login`; hitting `/student` → redirect to `/student/login`
 - Logged-in admin hitting `/admin/login` → redirect to `/admin/students`
 - Logged-in student hitting `/admin/login` → allowed (so they can see "No access." rather than being silently redirected)
-- `proxy.ts` calls `is_tutor()` RPC (SECURITY DEFINER) to determine admin vs student; if RPC errors, fails open (safe — RLS still enforces data access)
+- `proxy.ts` calls `is_tutor()` RPC (SECURITY DEFINER) to determine admin vs student; if RPC errors, fails closed — redirects to the appropriate login page (`/student/login` for student routes, `/admin/login` for everything else)
 
 **Supabase RPC functions called by the frontend:**
 - `is_tutor()` — returns true if `auth.email()` is in `tutors`; used in `proxy.ts` and RLS policies

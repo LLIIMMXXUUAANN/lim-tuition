@@ -45,7 +45,10 @@ export async function proxy(request: NextRequest) {
   }
 
   const { data: isAdmin, error: rpcError } = await supabase.rpc('is_tutor')
-  if (rpcError) return supabaseResponse
+  if (rpcError) {
+    const loginUrl = pathname.startsWith('/student') ? '/student/login' : '/admin/login'
+    return NextResponse.redirect(new URL(loginUrl, request.url))
+  }
 
   // Admin: redirect away from login, allow everything else
   if (isAdmin) {
