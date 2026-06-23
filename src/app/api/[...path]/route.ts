@@ -64,9 +64,13 @@ async function proxy(req: NextRequest, segments: string[]): Promise<Response> {
     return NextResponse.json({ error: 'Backend unavailable' }, { status: 502 })
   }
 
+  const headers = new Headers(upstream.headers)
+  headers.delete('content-encoding')
+  headers.delete('content-length')
+
   return new Response(upstream.body, {
     status: upstream.status,
-    headers: upstream.headers,
+    headers,
   })
 }
 
