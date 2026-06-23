@@ -53,7 +53,7 @@ export default function PaymentGenerator({ students }: Props) {
     setErrorMsg('')
 
     try {
-      const res = await fetch('/api/generate-payment', {
+      const res = await fetch('/api/payment/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

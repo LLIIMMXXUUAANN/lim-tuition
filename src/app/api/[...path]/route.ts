@@ -4,11 +4,6 @@ import { requireTutor } from '@/services/supabase/server'
 const FASTAPI = process.env.FASTAPI_BASE_URL ?? 'http://127.0.0.1:8000'
 const SECRET = process.env.INTERNAL_API_SECRET ?? ''
 
-// Next.js API path → FastAPI path (only for URL mismatches)
-const PATH_MAP: Record<string, string> = {
-  'generate-payment': 'payment/generate',
-}
-
 // Paths requiring tutor auth (exact or prefix match)
 const AUTH_REQUIRED = new Set([
   'agent/chat',
@@ -37,11 +32,8 @@ async function proxy(req: NextRequest, segments: string[]): Promise<Response> {
     if (error) return error
   }
 
-  // Resolve FastAPI path (handles the few URL mismatches)
-  const fastapiPath = PATH_MAP[path] ?? path
-
   // Build upstream URL, preserving query string
-  const upstreamUrl = new URL(`${FASTAPI}/${fastapiPath}`)
+  const upstreamUrl = new URL(`${FASTAPI}/${path}`)
   req.nextUrl.searchParams.forEach((value, key) => upstreamUrl.searchParams.set(key, value))
 
   const headers: Record<string, string> = { 'X-Internal-Secret': SECRET }
