@@ -16,7 +16,7 @@ function LoginForm() {
     searchParams.get('error') === 'invalid_link' ? 'Login link expired or invalid. Request a new one.' : ''
   )
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.BaseSyntheticEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)

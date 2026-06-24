@@ -12,7 +12,7 @@ export default function StudentLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)

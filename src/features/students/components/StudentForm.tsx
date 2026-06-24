@@ -65,7 +65,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault()
     setError('')
     setGoogleWarning('')
