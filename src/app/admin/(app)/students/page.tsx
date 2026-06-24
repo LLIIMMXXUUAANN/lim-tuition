@@ -75,7 +75,7 @@ export default async function StudentsPage({ searchParams }: Props) {
         </div>
       ) : list.length === 0 ? (
         <div className="text-center py-16 text-slate-500">
-          <p className="text-lg">No {activeTab !== 'All' ? activeTab.toLowerCase() : ''} students.</p>
+          <p className="text-lg">{activeTab === 'All' ? 'No students.' : `No ${activeTab.toLowerCase()} students.`}</p>
           {activeTab === 'Active' && <p className="text-sm mt-1">Click &quot;Add Student&quot; to get started.</p>}
         </div>
       ) : (
