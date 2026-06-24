@@ -52,15 +52,10 @@ function formatMessageTime(iso: string, now: Date): string {
 
 function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
   const students: { name: string; id: string }[] = []
-  const newFormat = /\[student_id:([^:\]]+):([0-9a-f-]+)\]/gi
+  const format = /\[student_id:([^:\]]+):([0-9a-f-]+)\]/gi
   let match
-  while ((match = newFormat.exec(content)) !== null) {
+  while ((match = format.exec(content)) !== null) {
     students.push({ name: match[1].trim(), id: match[2] })
-  }
-  // Legacy format: [student_id:UUID] — present in messages persisted before the NAME:UUID change
-  if (students.length === 0) {
-    const legacy = content.match(/\[student_id:([0-9a-f-]{36})\]/i)
-    if (legacy) students.push({ name: 'student', id: legacy[1] })
   }
   const text = content.replace(/\[student_id:[^\]]+\]/gi, '').trim()
   const unique = students.filter((s, i) => students.findIndex(x => x.id === s.id) === i)

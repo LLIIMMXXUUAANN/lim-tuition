@@ -8,7 +8,6 @@ Natural language interface for managing students. The agent backend (tool implem
 **`[student_id:NAME:UUID]` token protocol:**
 - The agent backend appends one `[student_id:NAME:UUID]` token per affected student at the end of replies after create/update
 - `parseAgentReply(content)` in `AgentChat.tsx` extracts all tokens via regex, strips them from the display text, deduplicates by `id`, and returns `{ text, students: [{ name, id }] }` (agent sometimes emits the same token twice; dedup prevents React duplicate key warnings)
-- Legacy `[student_id:UUID]` tokens (no name, stored in localStorage before the format change) are matched by a fallback branch that produces `{ name: 'student', id }` so old messages still render a link
 - One `"View NAME →"` `<Link>` is rendered per entry in `students[]`, displayed side-by-side bottom-right of the agent bubble
 
 **AgentChat UI (`features/agent/components/AgentChat.tsx`):**
