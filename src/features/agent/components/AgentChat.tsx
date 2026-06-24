@@ -59,8 +59,7 @@ function loadStoredMessages(): ChatMessage[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return []
-    const parsed = JSON.parse(stored) as ChatMessage[]
-    return parsed.map(m => m.id ? m : { ...m, id: crypto.randomUUID() })
+    return JSON.parse(stored) as ChatMessage[]
   } catch {
     return []
   }
