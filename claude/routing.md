@@ -24,6 +24,18 @@
 - Both pages share identical structure: `bg-softBg` full-screen centred layout, `bg-white rounded-2xl shadow-sm border border-slate-100 p-10` card, `</>` navy/gold brand mark inside the card, `text-accentGold` back link. Do not use a shadcn `<Card>` here — the custom structure keeps styling consistent with the brand.
 - Both normalise email with `.trim().toLowerCase()` before RPC + OTP calls
 
+## Auth callback (`src/app/auth/callback/route.ts`)
+
+Handles the magic link redirect after Supabase OTP login. Both admin and student login pages embed a `?next=` param in the `emailRedirectTo` URL:
+- Admin: `emailRedirectTo: '.../auth/callback?next=/admin/students'`
+- Student: `emailRedirectTo: '.../auth/callback?next=/student'`
+
+On arrival, the route calls `supabase.auth.exchangeCodeForSession(code)` to convert the one-time code into a session cookie, then redirects to `next`.
+
+**Error redirect** is inferred from `next`: if `next` starts with `/student`, errors go to `/student/login`; otherwise `/admin/login`. This ensures a student with an expired link lands on the student login page, not the admin one.
+
+**Open redirect protection:** `next` is validated — must start with `/` and must not start with `//`. Anything else (e.g. `//evil.com`, `https://evil.com`) falls back to `/admin/students`. This blocks open redirect attacks where an attacker crafts a link to redirect a logged-in user off-site.
+
 ## API clients
 
 **Supabase:**
