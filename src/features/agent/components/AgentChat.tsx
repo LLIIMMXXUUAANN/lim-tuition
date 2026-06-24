@@ -17,6 +17,8 @@ const STORAGE_KEY = 'agent_chat_messages'
 const LG_STORAGE_KEY = 'agent_use_lg'
 const GEMINI_HISTORY_KEY = 'agent_gemini_contents'
 const LG_HISTORY_KEY = 'agent_lg_contents'
+const TYPEWRITER_CHARS = 3
+const TYPEWRITER_MS = 30
 
 type GeminiContent = { role: string; parts: { text?: string; functionCall?: unknown; functionResponse?: unknown }[] }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +33,7 @@ interface ChatMessage {
   steps?: string[]
   scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
+  students?: { name: string; id: string }[]
   timestamp?: string
 }
 
@@ -50,17 +53,6 @@ function formatMessageTime(iso: string, now: Date): string {
     : `${dayMonth} ${date.getFullYear()}, ${timeStr}`
 }
 
-function parseAgentReply(content: string): { text: string; students: { name: string; id: string }[] } {
-  const students: { name: string; id: string }[] = []
-  const format = /\[student_id:([^:\]]+):([0-9a-f-]+)\]/gi
-  let match
-  while ((match = format.exec(content)) !== null) {
-    students.push({ name: match[1].trim(), id: match[2] })
-  }
-  const text = content.replace(/\[student_id:[^\]]+\]/gi, '').trim()
-  const unique = students.filter((s, i) => students.findIndex(x => x.id === s.id) === i)
-  return { text, students: unique }
-}
 
 function loadStoredMessages(): ChatMessage[] {
   if (typeof window === 'undefined') return []
@@ -143,6 +135,10 @@ export default function AgentChat() {
   const pendingIdRef = useRef<string>('')
   const pendingGeminiRef = useRef<GeminiContent[] | null>(null)
   const pendingLgRef = useRef<StoredLGMessage[] | null>(null)
+  const typewriterQueueRef = useRef<string>('')
+  const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamDoneRef = useRef(false)
+  const onDrainRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!hydrated) return
@@ -177,6 +173,7 @@ export default function AgentChat() {
   }, [loading])
 
   useEffect(() => () => { recognitionRef.current?.stop() }, [])
+  useEffect(() => () => { stopTypewriter() }, [])
 
   function cleanupRecognition(focus = false) {
     setListening(false)
@@ -212,8 +209,48 @@ export default function AgentChat() {
     content: m.content,
   })
 
+  function startTypewriter(pid: string) {
+    if (typewriterIntervalRef.current) return
+    typewriterIntervalRef.current = setInterval(() => {
+      if (!typewriterQueueRef.current) {
+        if (streamDoneRef.current) {
+          streamDoneRef.current = false
+          stopTypewriter()
+          onDrainRef.current?.()
+          onDrainRef.current = null
+        }
+        return
+      }
+      const chars = typewriterQueueRef.current.slice(0, TYPEWRITER_CHARS)
+      typewriterQueueRef.current = typewriterQueueRef.current.slice(TYPEWRITER_CHARS)
+      setMessages(prev => prev.map(m =>
+        m.id === pid ? { ...m, content: (m.content ?? '') + chars } : m
+      ))
+    }, TYPEWRITER_MS)
+  }
+
+  function stopTypewriter() {
+    if (typewriterIntervalRef.current) {
+      clearInterval(typewriterIntervalRef.current)
+      typewriterIntervalRef.current = null
+    }
+  }
+
+  function flushTypewriter(pid: string) {
+    stopTypewriter()
+    const remaining = typewriterQueueRef.current
+    typewriterQueueRef.current = ''
+    if (remaining) {
+      setMessages(prev => prev.map(m =>
+        m.id === pid ? { ...m, content: (m.content ?? '') + remaining } : m
+      ))
+    }
+  }
+
   async function send(retryMsgId?: string, editPayload?: { userMsgId: string; newContent: string }) {
     if (loading) return
+    stopTypewriter()
+    typewriterQueueRef.current = ''
 
     let pendingId: string
     let apiMessages: { role: 'user' | 'model'; content: string }[]
@@ -301,6 +338,7 @@ export default function AgentChat() {
 
     let received = false
     let doneReceived = false
+    let loadingDeferredToTypewriter = false
     const markCancelled = () => setMessages(prev => prev.map(m =>
       m.id === pendingId ? { ...m, isCancelled: true } : m
     ))
@@ -352,6 +390,7 @@ export default function AgentChat() {
             payload?: {
               students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
               slots?: { day: string; time: string; state: string }[]
+              studentLinks?: { name: string; id: string }[]
             }
             contents?: GeminiContent[]
             messages?: StoredLGMessage[]
@@ -363,9 +402,8 @@ export default function AgentChat() {
           } else if (event.type === 'chunk') {
             received = true
             receivedChunkRef.current = true
-            setMessages(prev => prev.map(m =>
-              m.id === pendingId ? { ...m, content: (m.content ?? '') + event.content! } : m
-            ))
+            typewriterQueueRef.current += event.content!
+            startTypewriter(pendingId)
           } else if (event.type === 'history') {
             pendingGeminiRef.current = event.contents ?? null
           } else if (event.type === 'lg_history') {
@@ -375,11 +413,22 @@ export default function AgentChat() {
             doneReceived = true
             if (pendingGeminiRef.current) { setGeminiContents(pendingGeminiRef.current); pendingGeminiRef.current = null }
             if (pendingLgRef.current) { setLgContents(pendingLgRef.current); pendingLgRef.current = null }
+            if (typewriterIntervalRef.current) {
+              loadingDeferredToTypewriter = true
+              streamDoneRef.current = true
+              onDrainRef.current = () => {
+                setLoading(false)
+                abortControllerRef.current = null
+              }
+            }
           } else if (event.type === 'stopped') {
             received = true
+            flushTypewriter(pendingId)
             markCancelled()
           } else if (event.type === 'error') {
             received = true
+            stopTypewriter()
+            typewriterQueueRef.current = ''
             setMessages(prev => prev.map(m =>
               m.id === pendingId
                 ? { ...m, content: `Something went wrong: ${event.message}`, isError: true }
@@ -393,14 +442,21 @@ export default function AgentChat() {
             setMessages(prev => prev.map(m =>
               m.id === pendingId ? { ...m, slotData: event.payload?.slots ?? [] } : m
             ))
+          } else if (event.type === 'ui_action' && event.action === 'student_links') {
+            setMessages(prev => prev.map(m =>
+              m.id === pendingId ? { ...m, students: event.payload?.studentLinks ?? [] } : m
+            ))
           }
         }
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         received = true
+        flushTypewriter(pendingId)
         markCancelled()
       } else {
+        stopTypewriter()
+        typewriterQueueRef.current = ''
         setMessages(prev => prev.map(m =>
           m.id === pendingId
             ? { ...m, content: `Something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`, isError: true }
@@ -425,8 +481,12 @@ export default function AgentChat() {
         if (useLangGraph) setLgContents(editPriorLg)
         else setGeminiContents(editPriorGemini)
       }
-      setLoading(false)
-      abortControllerRef.current = null
+      if (!loadingDeferredToTypewriter) {
+        stopTypewriter()
+        typewriterQueueRef.current = ''
+        setLoading(false)
+        abortControllerRef.current = null
+      }
     }
   }
 
@@ -525,9 +585,8 @@ export default function AgentChat() {
         )}
 
         {messages.map((msg) => {
-          const { text: msgText, students: msgStudents } = msg.role === 'agent'
-            ? parseAgentReply(msg.content)
-            : { text: msg.content, students: [] }
+          const msgText = msg.content
+          const msgStudents = msg.role === 'agent' ? (msg.students ?? []) : []
           return (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
