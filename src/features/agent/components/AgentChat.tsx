@@ -13,23 +13,15 @@ import {
   drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight, downloadCanvas,
 } from '@/shared/lib/timetable-canvas'
 
-const STORAGE_KEY = 'agent_chat_messages'
 const LG_STORAGE_KEY = 'agent_use_lg'
-const GEMINI_HISTORY_KEY = 'agent_gemini_contents'
-const LG_HISTORY_KEY = 'agent_lg_contents'
 const TYPEWRITER_CHARS = 3
 const TYPEWRITER_MS = 30
-
-type GeminiContent = { role: string; parts: { text?: string; functionCall?: unknown; functionResponse?: unknown }[] }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type StoredLGMessage = { type: string; data: Record<string, any> }
 
 interface ChatMessage {
   id: string
   role: 'user' | 'agent'
   content: string
   isError?: boolean
-  isCancelled?: boolean
   steps?: string[]
   scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
@@ -51,18 +43,6 @@ function formatMessageTime(iso: string, now: Date): string {
   return date.getFullYear() === now.getFullYear()
     ? `${dayMonth}, ${timeStr}`
     : `${dayMonth} ${date.getFullYear()}, ${timeStr}`
-}
-
-
-function loadStoredMessages(): ChatMessage[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-    return JSON.parse(stored) as ChatMessage[]
-  } catch {
-    return []
-  }
 }
 
 function downloadSchedulePng(students: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]) {
@@ -102,49 +82,33 @@ export default function AgentChat() {
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
   const [useLangGraph, setUseLangGraph] = useState(true)
-  // hydrated gates the save effects: on mount, save effects fire before the load
-  // effect's setMessages/setUseLangGraph state updates have committed, so they would
-  // overwrite localStorage with the initial empty state. Skipping saves until hydrated
-  // prevents this race.
   const [hydrated, setHydrated] = useState(false)
-  const [geminiContents, setGeminiContents] = useState<GeminiContent[] | null>(null)
-  const [lgContents, setLgContents] = useState<StoredLGMessage[] | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const latestUserMsgId = useMemo(() =>
     [...messages].reverse().find(m => m.role === 'user')?.id ?? null,
   [messages])
+
   useEffect(() => {
-    setMessages(loadStoredMessages())
-    setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) !== 'false')
-    try { const g = localStorage.getItem(GEMINI_HISTORY_KEY); if (g) setGeminiContents(JSON.parse(g)) } catch {}
-    try { const l = localStorage.getItem(LG_HISTORY_KEY); if (l) setLgContents(JSON.parse(l)) } catch {}
-    setHydrated(true)
+    const init = async () => {
+      setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) !== 'false')
+      try {
+        const res = await fetch('/api/agent/conversations/current')
+        const { id, messages: loaded } = await res.json() as { id: string; messages: ChatMessage[] }
+        setConversationId(id)
+        setMessages(loaded)
+      } catch {
+        // non-fatal — chat stays empty
+      }
+      setHydrated(true)
+    }
+    void init()
   }, [])
+
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
   }, [])
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const requestIdRef = useRef<string>('')
-  const receivedChunkRef = useRef<boolean>(false)
-  const pendingIdRef = useRef<string>('')
-  const pendingGeminiRef = useRef<GeminiContent[] | null>(null)
-  const pendingLgRef = useRef<StoredLGMessage[] | null>(null)
-  const typewriterQueueRef = useRef<string>('')
-  const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const streamDoneRef = useRef(false)
-  const onDrainRef = useRef<(() => void) | null>(null)
-
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
-    } catch {}
-  }, [hydrated, messages])
 
   useEffect(() => {
     if (!hydrated) return
@@ -153,23 +117,36 @@ export default function AgentChat() {
     } catch {}
   }, [hydrated, useLangGraph])
 
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      if (geminiContents) localStorage.setItem(GEMINI_HISTORY_KEY, JSON.stringify(geminiContents))
-      else localStorage.removeItem(GEMINI_HISTORY_KEY)
-      if (lgContents) localStorage.setItem(LG_HISTORY_KEY, JSON.stringify(lgContents))
-      else localStorage.removeItem(LG_HISTORY_KEY)
-    } catch {}
-  }, [hydrated, geminiContents, lgContents])
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef<string>('')
+  const receivedChunkRef = useRef<boolean>(false)
+  const pendingIdRef = useRef<string>('')
+  const typewriterQueueRef = useRef<string>('')
+  const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamDoneRef = useRef(false)
+  const onDrainRef = useRef<(() => void) | null>(null)
+  const shouldReloadRef = useRef(false)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
   useEffect(() => {
-    if (!loading) inputRef.current?.focus()
-  }, [loading])
+    if (!loading) {
+      inputRef.current?.focus()
+      if (shouldReloadRef.current && conversationId) {
+        shouldReloadRef.current = false
+        void fetch(`/api/agent/conversations/${conversationId}/messages`)
+          .then(r => r.json() as Promise<{ messages: ChatMessage[] }>)
+          .then(({ messages: loaded }) => setMessages(loaded))
+          .catch(() => {})
+      }
+    }
+  }, [loading, conversationId])
 
   useEffect(() => () => { recognitionRef.current?.stop() }, [])
   useEffect(() => () => { stopTypewriter() }, [])
@@ -202,11 +179,6 @@ export default function AgentChat() {
     recognition.start()
     setListening(true)
   }
-
-  const toApiMsg = (m: ChatMessage) => ({
-    role: m.role === 'agent' ? ('model' as const) : ('user' as const),
-    content: m.content,
-  })
 
   function startTypewriter(pid: string) {
     if (typewriterIntervalRef.current) return
@@ -248,15 +220,12 @@ export default function AgentChat() {
 
   async function send(retryMsgId?: string, editPayload?: { userMsgId: string; newContent: string }) {
     if (loading) return
+    if ((retryMsgId || editPayload) && !conversationId) return
     stopTypewriter()
     typewriterQueueRef.current = ''
 
     let pendingId: string
-    let apiMessages: { role: 'user' | 'model'; content: string }[]
-    let historyForFetch: Record<string, unknown> = {}
-    const isEditTurn = !!editPayload
-    let editPriorLg: StoredLGMessage[] | null = null
-    let editPriorGemini: GeminiContent[] | null = null
+    let bodyPayload: Record<string, unknown>
 
     if (retryMsgId) {
       const errorIdx = messages.findIndex(m => m.id === retryMsgId)
@@ -264,13 +233,10 @@ export default function AgentChat() {
       pendingId = retryMsgId
       setMessages(prev => prev.map(m =>
         m.id === pendingId
-          ? { ...m, content: '', steps: [], isError: false, isCancelled: false, scheduleStudents: undefined, slotData: undefined }
+          ? { ...m, content: '', steps: [], isError: false, scheduleStudents: undefined, slotData: undefined }
           : m
       ))
-      apiMessages = messages.slice(0, errorIdx).map(toApiMsg)
-      historyForFetch = useLangGraph
-        ? (lgContents ? { lgHistory: lgContents } : {})
-        : (geminiContents ? { geminiHistory: geminiContents } : {})
+      bodyPayload = { conversation_id: conversationId, retry_message_id: retryMsgId }
     } else if (editPayload) {
       const userMsgIdx = messages.findIndex(m => m.id === editPayload.userMsgId)
       if (userMsgIdx === -1) return
@@ -279,43 +245,7 @@ export default function AgentChat() {
       pendingId = crypto.randomUUID()
       const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
       setMessages([...truncated, newUserMsg, pendingMsg])
-      apiMessages = [...truncated, newUserMsg].map(toApiMsg)
-      // Count completed prior user turns before the edited message.
-      const priorTurns = truncated.filter(m => m.role === 'user').length
-      if (useLangGraph && lgContents) {
-        const lgHumanCount = lgContents.filter(m => m.type === 'human').length
-        if (lgHumanCount > priorTurns) {
-          // The edited turn's HumanMessage is in lgContents — cut before the last one.
-          let cutIdx = lgContents.length
-          for (let i = lgContents.length - 1; i >= 0; i--) {
-            if (lgContents[i].type === 'human') { cutIdx = i; break }
-          }
-          editPriorLg = cutIdx > 0 ? lgContents.slice(0, cutIdx) : null
-        } else {
-          // Edited turn was stopped/cancelled — all existing history is valid prior context.
-          editPriorLg = lgContents.length > 0 ? lgContents : null
-        }
-        if (editPriorLg) historyForFetch = { lgHistory: editPriorLg }
-      } else if (!useLangGraph && geminiContents) {
-        const isGenuineHuman = (c: GeminiContent) =>
-          c.role === 'user' && !c.parts.some(p => 'functionResponse' in p)
-        const geminiHumanCount = geminiContents.filter(isGenuineHuman).length
-        if (geminiHumanCount > priorTurns) {
-          // The edited turn's Content is in geminiContents — cut before the last genuine human entry.
-          let cutIdx = geminiContents.length
-          for (let i = geminiContents.length - 1; i >= 0; i--) {
-            if (isGenuineHuman(geminiContents[i])) { cutIdx = i; break }
-          }
-          editPriorGemini = cutIdx > 0 ? geminiContents.slice(0, cutIdx) : null
-        } else {
-          // Edited turn was stopped/cancelled — all existing history is valid prior context.
-          editPriorGemini = geminiContents.length > 0 ? geminiContents : null
-        }
-        if (editPriorGemini) historyForFetch = { geminiHistory: editPriorGemini }
-      }
-      // Clear stored history; the done handler will repopulate with the new turn's result.
-      setGeminiContents(null)
-      setLgContents(null)
+      bodyPayload = { conversation_id: conversationId, edit_user_message_id: editPayload.userMsgId, new_content: editPayload.newContent }
     } else {
       const text = input.trim()
       if (!text) return
@@ -326,24 +256,19 @@ export default function AgentChat() {
       pendingId = crypto.randomUUID()
       const pendingMsg: ChatMessage = { id: pendingId, role: 'agent', content: '', steps: [], timestamp: new Date().toISOString() }
       setMessages([...messages, userMsg, pendingMsg])
-      apiMessages = [...messages, userMsg].map(toApiMsg)
-      historyForFetch = useLangGraph
-        ? (lgContents ? { lgHistory: lgContents } : {})
-        : (geminiContents ? { geminiHistory: geminiContents } : {})
+      bodyPayload = { conversation_id: conversationId, message: text }
     }
 
     pendingIdRef.current = pendingId
     setLoading(true)
 
     let received = false
-    let doneReceived = false
     let loadingDeferredToTypewriter = false
-    const markCancelled = () => setMessages(prev => prev.map(m =>
-      m.id === pendingId ? { ...m, isCancelled: true } : m
+    const markError = () => setMessages(prev => prev.map(m =>
+      m.id === pendingId ? { ...m, isError: true } : m
     ))
 
     try {
-
       const controller = new AbortController()
       abortControllerRef.current = controller
       const requestId = crypto.randomUUID()
@@ -354,11 +279,7 @@ export default function AgentChat() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: apiMessages,
-          requestId,
-          ...historyForFetch,
-        }),
+        body: JSON.stringify({ ...bodyPayload, request_id: requestId }),
         signal: controller.signal,
       })
 
@@ -391,8 +312,6 @@ export default function AgentChat() {
               slots?: { day: string; time: string; state: string }[]
               studentLinks?: { name: string; id: string }[]
             }
-            contents?: GeminiContent[]
-            messages?: StoredLGMessage[]
           }
           if (event.type === 'step') {
             setMessages(prev => prev.map(m =>
@@ -403,15 +322,9 @@ export default function AgentChat() {
             receivedChunkRef.current = true
             typewriterQueueRef.current += event.content!
             startTypewriter(pendingId)
-          } else if (event.type === 'history') {
-            pendingGeminiRef.current = event.contents ?? null
-          } else if (event.type === 'lg_history') {
-            pendingLgRef.current = event.messages ?? null
           } else if (event.type === 'done') {
             received = true
-            doneReceived = true
-            if (pendingGeminiRef.current) { setGeminiContents(pendingGeminiRef.current); pendingGeminiRef.current = null }
-            if (pendingLgRef.current) { setLgContents(pendingLgRef.current); pendingLgRef.current = null }
+            shouldReloadRef.current = true
             if (typewriterIntervalRef.current) {
               loadingDeferredToTypewriter = true
               streamDoneRef.current = true
@@ -423,7 +336,7 @@ export default function AgentChat() {
           } else if (event.type === 'stopped') {
             received = true
             flushTypewriter(pendingId)
-            markCancelled()
+            markError()
           } else if (event.type === 'error') {
             received = true
             stopTypewriter()
@@ -452,7 +365,7 @@ export default function AgentChat() {
       if (err instanceof Error && err.name === 'AbortError') {
         received = true
         flushTypewriter(pendingId)
-        markCancelled()
+        markError()
       } else {
         stopTypewriter()
         typewriterQueueRef.current = ''
@@ -463,22 +376,14 @@ export default function AgentChat() {
         ))
       }
     } finally {
-      pendingGeminiRef.current = null
-      pendingLgRef.current = null
       if (!received) {
         setMessages(prev => {
           const pending = prev.find(m => m.id === pendingId)
-          if (pending?.isCancelled) return prev
+          if (pending?.isError) return prev
           return prev.map(m =>
             m.id === pendingId ? { ...m, content: 'No response received — please try again.', isError: true } : m
           )
         })
-      }
-      // If an edit turn didn't complete (stopped/cancelled/error), restore the prior history
-      // so future sends still have the context from turns before the edited message.
-      if (isEditTurn && !doneReceived) {
-        if (useLangGraph) setLgContents(editPriorLg)
-        else setGeminiContents(editPriorGemini)
       }
       if (!loadingDeferredToTypewriter) {
         stopTypewriter()
@@ -490,17 +395,17 @@ export default function AgentChat() {
   }
 
   function clearChat() {
+    if (!conversationId) return
     setMessages([])
-    setGeminiContents(null)
-    setLgContents(null)
     setEditingMsgId(null)
     setEditDraft('')
+    fetch(`/api/agent/conversations/${conversationId}/clear`, { method: 'POST' }).catch(() => {})
   }
 
   function stop() {
     // Optimistic update — instant visual feedback regardless of server timing
     setMessages(prev => prev.map(m =>
-      m.id === pendingIdRef.current ? { ...m, isCancelled: true } : m
+      m.id === pendingIdRef.current ? { ...m, isError: true } : m
     ))
     if (receivedChunkRef.current) {
       abortControllerRef.current?.abort()
@@ -636,7 +541,7 @@ export default function AgentChat() {
                       </div>
                     )}
                     {!msg.content ? (
-                      msg.isCancelled || msg.isError ? (
+                      msg.isError ? (
                         <span className="text-slate-400 text-sm">⋯</span>
                       ) : (
                         <span className="inline-flex items-end gap-0.5 h-5">
@@ -695,7 +600,7 @@ export default function AgentChat() {
                     )}
                   </div>
                 )}
-                {editingMsgId !== msg.id && (msg.timestamp || msg.isError || msg.isCancelled || (msg.role === 'user' && msg.id === latestUserMsgId && !loading)) && (
+                {editingMsgId !== msg.id && (msg.timestamp || msg.isError || (msg.role === 'user' && msg.id === latestUserMsgId && !loading)) && (
                   <div className={`flex items-center w-full mt-1 px-1 min-w-[10rem] ${msg.role === 'user' ? 'justify-end' : 'justify-between'}`}>
                     {msg.timestamp && (
                       <span className="text-xs text-slate-400">
@@ -716,14 +621,11 @@ export default function AgentChat() {
                       <button
                         type="button"
                         onClick={() => retry(msg.id)}
-                        disabled={loading}
+                        disabled={loading || editingMsgId !== null}
                         className="text-xs text-slate-400 hover:text-navy transition-colors disabled:opacity-40"
                       >
                         ↻ Try again
                       </button>
-                    )}
-                    {msg.isCancelled && (
-                      <span className="text-xs text-slate-400 italic">Cancelled</span>
                     )}
                   </div>
                 )}
@@ -780,7 +682,7 @@ export default function AgentChat() {
         ) : (
           <Button
             onClick={() => void send()}
-            disabled={!input.trim()}
+            disabled={!input.trim() || !hydrated}
             className="bg-navy text-white px-4 py-2.5 hover:bg-navy/90"
           >
             Send
