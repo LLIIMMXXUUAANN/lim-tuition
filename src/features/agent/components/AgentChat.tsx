@@ -13,7 +13,6 @@ import {
   drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight, downloadCanvas,
 } from '@/shared/lib/timetable-canvas'
 
-const LG_STORAGE_KEY = 'agent_use_lg'
 const TYPEWRITER_CHARS = 3
 const TYPEWRITER_MS = 30
 
@@ -81,7 +80,6 @@ export default function AgentChat() {
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
-  const [useLangGraph, setUseLangGraph] = useState(true)
   const [hydrated, setHydrated] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
@@ -95,7 +93,6 @@ export default function AgentChat() {
 
   useEffect(() => {
     const init = async () => {
-      setUseLangGraph(localStorage.getItem(LG_STORAGE_KEY) !== 'false')
       try {
         const res = await fetch('/api/agent/conversations/current')
         const { id, messages: loaded } = await res.json() as { id: string; messages: ChatMessage[] }
@@ -112,13 +109,6 @@ export default function AgentChat() {
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
   }, [])
-
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      localStorage.setItem(LG_STORAGE_KEY, String(useLangGraph))
-    } catch {}
-  }, [hydrated, useLangGraph])
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -278,7 +268,7 @@ export default function AgentChat() {
       requestIdRef.current = requestId
       receivedChunkRef.current = false
 
-      const endpoint = useLangGraph ? '/api/agent/lg/chat' : '/api/agent/chat'
+      const endpoint = '/api/agent/chat'
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -445,24 +435,6 @@ export default function AgentChat() {
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-navy">AI Agent</h1>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={useLangGraph}
-            onClick={() => setUseLangGraph(v => !v)}
-            title={useLangGraph ? 'Switch to classic mode' : 'Switch to LangGraph mode'}
-            className="flex items-center gap-1.5 group"
-          >
-            <span className={`text-xs font-medium text-navy transition-opacity ${useLangGraph ? 'opacity-35' : ''}`}>
-              Single
-            </span>
-            <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useLangGraph ? 'bg-navy' : 'bg-slate-200'}`}>
-              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${useLangGraph ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </span>
-            <span className={`text-xs font-medium text-navy transition-opacity ${useLangGraph ? '' : 'opacity-35'}`}>
-              LangGraph
-            </span>
-          </button>
         </div>
         {messages.length > 0 && (
           <button

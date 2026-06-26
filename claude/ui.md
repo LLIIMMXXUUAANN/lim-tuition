@@ -4,7 +4,7 @@
 src/
   features/
     agent/
-      components/ → AgentChat (chat UI, localStorage persistence, tool step display, edit latest user message)
+      components/ → AgentChat (chat UI, server-side persistence, tool step display, edit latest user message)
     students/
       components/ → StudentCard, StudentDetail, StudentForm, ClassScheduleEditor, SyncAllButton
     templates/
