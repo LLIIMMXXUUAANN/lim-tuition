@@ -89,6 +89,9 @@ export default function AgentChat() {
   const latestUserMsgId = useMemo(() =>
     [...messages].reverse().find(m => m.role === 'user')?.id ?? null,
   [messages])
+  const latestAgentMsgId = useMemo(() =>
+    [...messages].reverse().find(m => m.role === 'agent')?.id ?? null,
+  [messages])
 
   useEffect(() => {
     const init = async () => {
@@ -617,7 +620,7 @@ export default function AgentChat() {
                         <PencilSquareIcon className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    {msg.isError && (
+                    {msg.isError && msg.id === latestAgentMsgId && (
                       <button
                         type="button"
                         onClick={() => retry(msg.id)}
