@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import ClassScheduleEditor from './ClassScheduleEditor'
 import { ExternalLink } from '@/shared/components/student-fields'
-import type { Student, StudentInsert, StudentUpdate, StudentStatus } from '@/lib/types'
+import { decamelizeKeys } from '@/lib/utils'
+import type { Student, StudentInsert, StudentMode, PaymentMethod, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
   student?: Student
@@ -19,16 +20,16 @@ interface StudentFormProps {
 
 const emptyForm: StudentInsert = {
   name: '',
-  access_emails: [],
-  contact_person: '',
-  contact_phone: '',
-  student_phone: '',
+  accessEmails: [],
+  contactPerson: '',
+  contactPhone: '',
+  studentPhone: '',
   mode: 'My Python Syllabus',
-  class_schedule: [],
-  fee_per_hour: 60,
-  payment_method: 'Monthly',
-  latest_payment: '',
-  today_homework: '',
+  classSchedule: [],
+  feePerHour: 60,
+  paymentMethod: 'Monthly',
+  latestPayment: '',
+  todayHomework: '',
   notes: '',
   status: 'Active',
 }
@@ -39,16 +40,16 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     student
       ? {
           name: student.name,
-          access_emails: student.access_emails ?? [],
-          contact_person: student.contact_person ?? '',
-          contact_phone: student.contact_phone ?? '',
-          student_phone: student.student_phone ?? '',
+          accessEmails: student.accessEmails ?? [],
+          contactPerson: student.contactPerson ?? '',
+          contactPhone: student.contactPhone ?? '',
+          studentPhone: student.studentPhone ?? '',
           mode: student.mode,
-          class_schedule: student.class_schedule ?? [],
-          fee_per_hour: student.fee_per_hour,
-          payment_method: student.payment_method,
-          latest_payment: student.latest_payment ?? '',
-          today_homework: student.today_homework ?? '',
+          classSchedule: student.classSchedule ?? [],
+          feePerHour: student.feePerHour,
+          paymentMethod: student.paymentMethod,
+          latestPayment: student.latestPayment ?? '',
+          todayHomework: student.todayHomework ?? '',
           notes: student.notes ?? '',
           status: student.status ?? 'Active',
         }
@@ -70,16 +71,16 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     setError('')
     setGoogleWarning('')
     setSaving(true)
-    const payload: StudentUpdate = {
+    const payload = decamelizeKeys({
       ...form,
-      access_emails: (form.access_emails ?? []).filter(e => e.trim() !== ''),
-      contact_person: form.contact_person || null,
-      contact_phone: form.contact_phone || null,
-      student_phone: form.student_phone || null,
-      latest_payment: form.latest_payment || null,
-      today_homework: form.today_homework || null,
+      accessEmails: (form.accessEmails ?? []).filter(e => e.trim() !== ''),
+      contactPerson: form.contactPerson || null,
+      contactPhone: form.contactPhone || null,
+      studentPhone: form.studentPhone || null,
+      latestPayment: form.latestPayment || null,
+      todayHomework: form.todayHomework || null,
       notes: form.notes || null,
-    }
+    })
 
     try {
       if (student) {
@@ -177,18 +178,18 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           </div>
           <div className="flex gap-4">
             <div className="space-y-2 flex-1">
-              <Label htmlFor="student_phone">Student Phone</Label>
-              <Input id="student_phone" type="tel" value={form.student_phone ?? ''} onChange={(e) => set('student_phone', e.target.value)} placeholder="e.g. 012-3456789" />
+              <Label htmlFor="studentPhone">Student Phone</Label>
+              <Input id="studentPhone" type="tel" value={form.studentPhone ?? ''} onChange={(e) => set('studentPhone', e.target.value)} placeholder="e.g. 012-3456789" />
             </div>
           </div>
           <div className="flex gap-4">
             <div className="space-y-2 flex-1">
-              <Label htmlFor="contact_person">Contact Person</Label>
-              <Input id="contact_person" value={form.contact_person ?? ''} onChange={(e) => set('contact_person', e.target.value)} placeholder="e.g. Mrs. Pooi Kit" />
+              <Label htmlFor="contactPerson">Contact Person</Label>
+              <Input id="contactPerson" value={form.contactPerson ?? ''} onChange={(e) => set('contactPerson', e.target.value)} placeholder="e.g. Mrs. Pooi Kit" />
             </div>
             <div className="space-y-2 flex-1">
-              <Label htmlFor="contact_phone">Contact Phone</Label>
-              <Input id="contact_phone" type="tel" value={form.contact_phone ?? ''} onChange={(e) => set('contact_phone', e.target.value)} placeholder="e.g. 012-3456789" />
+              <Label htmlFor="contactPhone">Contact Phone</Label>
+              <Input id="contactPhone" type="tel" value={form.contactPhone ?? ''} onChange={(e) => set('contactPhone', e.target.value)} placeholder="e.g. 012-3456789" />
             </div>
           </div>
           <div className="space-y-2">
@@ -204,17 +205,17 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           <div className="space-y-2">
             <Label>Class Schedule</Label>
             <ClassScheduleEditor
-              value={form.class_schedule ?? []}
-              onChange={(slots) => set('class_schedule', slots)}
+              value={form.classSchedule ?? []}
+              onChange={(slots) => set('classSchedule', slots)}
             />
-            {student?.google_meet_link && (
+            {student?.googleMeetLink && (
               <p className="text-sm text-slate-500">
-                Meet: <ExternalLink href={student.google_meet_link}>{student.google_meet_link}</ExternalLink>
+                Meet: <ExternalLink href={student.googleMeetLink}>{student.googleMeetLink}</ExternalLink>
               </p>
             )}
-            {student?.google_drive_link && (
+            {student?.googleDriveLink && (
               <p className="text-sm text-slate-500">
-                Drive: <ExternalLink href={student.google_drive_link}>{student.google_drive_link}</ExternalLink>
+                Drive: <ExternalLink href={student.googleDriveLink}>{student.googleDriveLink}</ExternalLink>
               </p>
             )}
           </div>
@@ -222,22 +223,22 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
             <Label>Portal Access Emails</Label>
             <p className="text-xs text-slate-500">Anyone with these emails can log in to the student portal and view this student&apos;s info.</p>
             <div className="space-y-2">
-              {(form.access_emails ?? []).map((email, i) => (
+              {(form.accessEmails ?? []).map((email, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <Input
                     type="email"
                     value={email}
                     onChange={(e) => {
-                      const updated = [...(form.access_emails ?? [])]
+                      const updated = [...(form.accessEmails ?? [])]
                       updated[i] = e.target.value
-                      set('access_emails', updated)
+                      set('accessEmails', updated)
                     }}
                     placeholder="email@example.com"
                     className="flex-1"
                   />
                   <button
                     type="button"
-                    onClick={() => set('access_emails', (form.access_emails ?? []).filter((_, j) => j !== i))}
+                    onClick={() => set('accessEmails', (form.accessEmails ?? []).filter((_, j) => j !== i))}
                     className="text-slate-400 hover:text-red-500 text-lg leading-none px-1"
                     aria-label="Remove"
                   >
@@ -249,7 +250,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => set('access_emails', [...(form.access_emails ?? []), ''])}
+                onClick={() => set('accessEmails', [...(form.accessEmails ?? []), ''])}
               >
                 + Add email
               </Button>
@@ -262,12 +263,12 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         <CardHeader><CardTitle>Fees &amp; Payment</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fee_per_hour">Fee Per Hour (RM) *</Label>
-            <Input id="fee_per_hour" type="number" value={form.fee_per_hour} onChange={(e) => set('fee_per_hour', parseFloat(e.target.value))} required />
+            <Label htmlFor="feePerHour">Fee Per Hour (RM) *</Label>
+            <Input id="feePerHour" type="number" value={form.feePerHour} onChange={(e) => set('feePerHour', parseFloat(e.target.value))} required />
           </div>
           <div className="space-y-2">
             <Label>Payment Method *</Label>
-            <Select value={form.payment_method} onValueChange={(v) => set('payment_method', v as StudentInsert['payment_method'])}>
+            <Select value={form.paymentMethod} onValueChange={(v) => set('paymentMethod', v as StudentInsert['paymentMethod'])}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Monthly">Monthly</SelectItem>
@@ -276,8 +277,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="latest_payment">Latest Payment Status</Label>
-            <Input id="latest_payment" value={form.latest_payment ?? ''} onChange={(e) => set('latest_payment', e.target.value)} placeholder="e.g. April done" />
+            <Label htmlFor="latestPayment">Latest Payment Status</Label>
+            <Input id="latestPayment" value={form.latestPayment ?? ''} onChange={(e) => set('latestPayment', e.target.value)} placeholder="e.g. April done" />
           </div>
         </CardContent>
       </Card>
@@ -286,8 +287,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         <CardHeader><CardTitle>Progress</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="today_homework">Today&apos;s Homework</Label>
-            <Textarea id="today_homework" value={form.today_homework ?? ''} onChange={(e) => set('today_homework', e.target.value)} placeholder="e.g. Topic 6 Q1-3" rows={3} />
+            <Label htmlFor="todayHomework">Today&apos;s Homework</Label>
+            <Textarea id="todayHomework" value={form.todayHomework ?? ''} onChange={(e) => set('todayHomework', e.target.value)} placeholder="e.g. Topic 6 Q1-3" rows={3} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>

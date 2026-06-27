@@ -13,7 +13,7 @@ export default async function TemplatesPage() {
   const templatesData: { id: string; content: string }[] | null = templatesRes.ok
     ? await templatesRes.json()
     : null
-  const activeStudents: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[] = studentsRes.ok
+  const activeStudents: Pick<Student, 'id' | 'name' | 'classSchedule' | 'feePerHour'>[] = studentsRes.ok
     ? await studentsRes.json()
     : []
 

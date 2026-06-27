@@ -3,7 +3,7 @@ import type { Student } from '@/lib/types'
 import { Row, BlockField, statusBadge, ScheduleList, ExternalLink } from './student-fields'
 
 export default function StudentPortalView({ student }: { student: Student }) {
-  const schedule = student.class_schedule ?? []
+  const schedule = student.classSchedule ?? []
 
   return (
     <div className="max-w-2xl mx-auto px-6 pt-6 pb-12 space-y-4">
@@ -14,10 +14,10 @@ export default function StudentPortalView({ student }: { student: Student }) {
         </span>
       </div>
 
-      {(student.google_meet_link || student.google_drive_link) && (
+      {(student.googleMeetLink || student.googleDriveLink) && (
         <div className="flex gap-4">
-          {student.google_meet_link && <ExternalLink href={student.google_meet_link}>Join Google Meet →</ExternalLink>}
-          {student.google_drive_link && <ExternalLink href={student.google_drive_link}>Open Drive →</ExternalLink>}
+          {student.googleMeetLink && <ExternalLink href={student.googleMeetLink}>Join Google Meet →</ExternalLink>}
+          {student.googleDriveLink && <ExternalLink href={student.googleDriveLink}>Open Drive →</ExternalLink>}
         </div>
       )}
 
@@ -25,9 +25,9 @@ export default function StudentPortalView({ student }: { student: Student }) {
         <CardHeader className="pb-2"><CardTitle className="text-base">Student Info</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
           <Row label="Mode" value={student.mode} />
-          <Row label="Student Phone" value={student.student_phone} />
-          <Row label="Contact Person" value={student.contact_person} />
-          <Row label="Contact Phone" value={student.contact_phone} />
+          <Row label="Student Phone" value={student.studentPhone} />
+          <Row label="Contact Person" value={student.contactPerson} />
+          <Row label="Contact Phone" value={student.contactPhone} />
         </CardContent>
       </Card>
 
@@ -41,16 +41,16 @@ export default function StudentPortalView({ student }: { student: Student }) {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Fees &amp; Payment</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <Row label="Fee Per Hour" value={`RM${student.fee_per_hour}`} />
-          <Row label="Payment Method" value={student.payment_method} />
-          <Row label="Latest Payment" value={student.latest_payment} />
+          <Row label="Fee Per Hour" value={`RM${student.feePerHour}`} />
+          <Row label="Payment Method" value={student.paymentMethod} />
+          <Row label="Latest Payment" value={student.latestPayment} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Progress</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <BlockField label="Today's Homework" value={student.today_homework} />
+          <BlockField label="Today's Homework" value={student.todayHomework} />
           <BlockField label="Notes" value={student.notes} />
         </CardContent>
       </Card>

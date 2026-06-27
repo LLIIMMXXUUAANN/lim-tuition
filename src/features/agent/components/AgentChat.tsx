@@ -12,6 +12,7 @@ import {
   cellKey, type SlotType,
   drawSlotsToCtx, drawScheduleToCtx, scheduleCanvasHeight, downloadCanvas,
 } from '@/shared/lib/timetable-canvas'
+import { camelizeKeys } from '@/lib/utils'
 
 const TYPEWRITER_CHARS = 3
 const TYPEWRITER_MS = 30
@@ -22,7 +23,7 @@ interface ChatMessage {
   content: string
   isError?: boolean
   steps?: string[]
-  scheduleStudents?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
+  scheduleStudents?: { name: string; classSchedule: { day: string; start: string; end: string }[] }[]
   slotData?: { day: string; time: string; state: string }[]
   students?: { name: string; id: string }[]
   timestamp?: string
@@ -44,7 +45,7 @@ function formatMessageTime(iso: string, now: Date): string {
     : `${dayMonth} ${date.getFullYear()}, ${timeStr}`
 }
 
-function downloadSchedulePng(students: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]) {
+function downloadSchedulePng(students: { name: string; classSchedule: { day: string; start: string; end: string }[] }[]) {
   const sch_h = scheduleCanvasHeight(students)
   const canvas = document.createElement('canvas')
   canvas.width = PNG_W * SCALE
@@ -295,13 +296,13 @@ export default function AgentChat() {
           if (!line.startsWith('data: ')) continue
           const json = line.slice(6).trim()
           if (!json) continue
-          const event = JSON.parse(json) as {
+          const event = camelizeKeys(JSON.parse(json)) as {
             type: string
             content?: string
             message?: string
             action?: string
             payload?: {
-              students?: { name: string; class_schedule: { day: string; start: string; end: string }[] }[]
+              students?: { name: string; classSchedule: { day: string; start: string; end: string }[] }[]
               slots?: { day: string; time: string; state: string }[]
               studentLinks?: { name: string; id: string }[]
             }
@@ -406,7 +407,7 @@ export default function AgentChat() {
       fetch('/api/agent/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId: requestIdRef.current }),
+        body: JSON.stringify({ request_id: requestIdRef.current }),
       }).catch(() => {})
     }
   }

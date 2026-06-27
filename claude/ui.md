@@ -47,8 +47,9 @@ src/
 
 ## Patterns
 
-- **Data fetching:** Server Components fetch from the backend via `fetchFastAPI` (`src/lib/fastapi.ts`) and pass data as props to client components. Client components call the backend via `fetch('/api/...')` which goes through the catch-all proxy.
-- The students list page groups students by weekday using `flatMap` over `class_schedule` — a student with multiple slots appears under each day.
+- **Data fetching:** Server Components fetch from the backend via `fetchFastAPI` (`src/lib/fastapi.ts`) and pass data as props to client components. Client components call the backend via `fetch('/api/...')` which goes through the catch-all proxy. Both boundaries apply `camelizeKeys()` automatically — all component code uses camelCase fields.
+- **Sending data to the backend:** apply `decamelizeKeys()` (from `src/lib/utils.ts`) to the payload object before `JSON.stringify`. Both `camelizeKeys` and `decamelizeKeys` are hand-rolled in `src/lib/utils.ts`. All types, state, and props use camelCase — conversion happens only at the wire boundary.
+- The students list page groups students by weekday using `flatMap` over `classSchedule` — a student with multiple slots appears under each day.
 - The shadcn/ui Select in this project uses Base UI (`@base-ui/react/select`), not Radix. `SelectValue` renders the raw value string — use a manual `<span>` inside `SelectTrigger` to show the display label.
 - Times are stored as `"HH:MM"` strings in Supabase but displayed in 12-hour format. Use `formatTime` from `src/lib/utils.ts` for all display. Do **not** apply it to `ClassScheduleEditor` inputs or `PaymentGenerator` (those need raw `HH:MM`).
 - `DAYS`, `TIME_SLOTS`, `timeToMins` are exported from `src/lib/utils.ts` — import them from there rather than redefining locally. Never redeclare any of these in route files or components.

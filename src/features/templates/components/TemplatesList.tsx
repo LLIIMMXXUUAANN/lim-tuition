@@ -133,7 +133,7 @@ export default function TemplatesList({
   students,
 }: {
   initialData: Record<string, string>
-  students: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
+  students: Pick<Student, 'id' | 'name' | 'classSchedule' | 'feePerHour'>[]
 }) {
   return (
     <Tabs defaultValue="payment">

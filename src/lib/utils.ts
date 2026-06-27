@@ -28,3 +28,29 @@ export function timeToMins(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
 }
+
+export function camelizeKeys<T>(obj: T): T {
+  if (Array.isArray(obj)) return obj.map(camelizeKeys) as unknown as T
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj as object).map(([k, v]) => [
+        k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()),
+        camelizeKeys(v),
+      ])
+    ) as T
+  }
+  return obj
+}
+
+export function decamelizeKeys<T>(obj: T): T {
+  if (Array.isArray(obj)) return obj.map(decamelizeKeys) as unknown as T
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj as object).map(([k, v]) => [
+        k.replace(/([A-Z])/g, (_, c: string) => `_${c.toLowerCase()}`),
+        decamelizeKeys(v),
+      ])
+    ) as T
+  }
+  return obj
+}

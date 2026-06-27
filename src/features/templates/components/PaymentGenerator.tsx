@@ -12,6 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/shared/ui/select'
+import { decamelizeKeys } from '@/lib/utils'
 import type { Student, ClassSlot } from '@/lib/types'
 
 const MONTHS = [
@@ -20,7 +21,7 @@ const MONTHS = [
 ]
 
 interface Props {
-  students: Pick<Student, 'id' | 'name' | 'class_schedule' | 'fee_per_hour'>[]
+  students: Pick<Student, 'id' | 'name' | 'classSchedule' | 'feePerHour'>[]
 }
 
 export default function PaymentGenerator({ students }: Props) {
@@ -56,13 +57,13 @@ export default function PaymentGenerator({ students }: Props) {
       const res = await fetch('/api/payment/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(decamelizeKeys({
           studentId,
           month: parseInt(month, 10),
           year: parsedYear,
           templateType: parseInt(templateType, 10) as 1 | 2,
           ...(templateType === '2' ? { carryover: parseInt(carryover, 10) || 0 } : {}),
-        }),
+        })),
       })
 
       const data = await res.json()
@@ -116,10 +117,10 @@ export default function PaymentGenerator({ students }: Props) {
           {studentId && (() => {
             const s = students.find((s) => s.id === studentId)
             if (!s) return null
-            const slots = (s.class_schedule as ClassSlot[]) ?? []
+            const slots = (s.classSchedule as ClassSlot[]) ?? []
             return (
               <p className="mt-1.5 px-1 text-xs text-slate-400">
-                {slots.map((slot) => `${slot.day} · ${slot.start}–${slot.end}`).join('  ·  ')}  ·  RM{s.fee_per_hour}/hr
+                {slots.map((slot) => `${slot.day} · ${slot.start}–${slot.end}`).join('  ·  ')}  ·  RM{s.feePerHour}/hr
               </p>
             )
           })()}

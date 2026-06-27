@@ -34,7 +34,7 @@ export function cellKey(day: string, ts: string): string {
 
 export interface ScheduleStudent {
   name: string
-  class_schedule: { day: string; start: string; end: string }[]
+  classSchedule: { day: string; start: string; end: string }[]
 }
 
 export function computeScheduleWindow(students: ScheduleStudent[]): {
@@ -44,7 +44,7 @@ export function computeScheduleWindow(students: ScheduleStudent[]): {
 } {
   let minMin = 22 * 60, maxMin = 8 * 60
   for (const s of students)
-    for (const slot of s.class_schedule) {
+    for (const slot of s.classSchedule) {
       minMin = Math.min(minMin, timeToMins(slot.start))
       maxMin = Math.max(maxMin, timeToMins(slot.end))
     }
@@ -222,7 +222,7 @@ export function drawScheduleToCtx(ctx: AnyCtx, students: ScheduleStudent[]) {
   }
 
   for (const student of students) {
-    for (const slot of student.class_schedule) {
+    for (const slot of student.classSchedule) {
       const dayIdx = DAYS.indexOf(slot.day as (typeof DAYS)[number])
       if (dayIdx === -1) continue
       const sMin = timeToMins(slot.start)

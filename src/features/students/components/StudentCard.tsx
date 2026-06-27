@@ -36,23 +36,23 @@ export default function StudentCard({ student, slot, showStatus = false }: Stude
               </span>
             </div>
           </div>
-          {student.contact_person && (
-            <p className="text-sm text-slate-500">{student.contact_person}</p>
+          {student.contactPerson && (
+            <p className="text-sm text-slate-500">{student.contactPerson}</p>
           )}
         </CardHeader>
         <CardContent className="text-sm">
           {slot ? (
             <div className="flex items-center justify-between gap-2">
               <p className="text-slate-600 flex items-center gap-1"><ClockIcon className="w-3.5 h-3.5 shrink-0" />{formatTime(slot.start)} – {formatTime(slot.end)}</p>
-              <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.payment_method}</p>
+              <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.paymentMethod}</p>
             </div>
-          ) : student.class_schedule?.length > 0 ? (
+          ) : student.classSchedule?.length > 0 ? (
             <div className="text-slate-600 space-y-0.5">
-              {student.class_schedule.map((s, i) => (
+              {student.classSchedule.map((s, i) => (
                 <p key={i} className="flex items-center gap-1"><CalendarDaysIcon className="w-3.5 h-3.5 shrink-0" />{s.day} {formatTime(s.start)} – {formatTime(s.end)}</p>
               ))}
               <div className="flex justify-end">
-                <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.payment_method}</p>
+                <p className="text-slate-400 text-xs flex items-center gap-1"><CreditCardIcon className="w-3.5 h-3.5 shrink-0" />{student.paymentMethod}</p>
               </div>
             </div>
           ) : (

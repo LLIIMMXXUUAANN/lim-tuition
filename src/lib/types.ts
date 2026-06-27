@@ -11,25 +11,25 @@ export interface ClassSlot {
 
 export interface Student {
   id: string
-  access_emails: string[] | null
+  accessEmails: string[] | null
   name: string
-  contact_person: string | null
-  contact_phone: string | null
-  student_phone: string | null
+  contactPerson: string | null
+  contactPhone: string | null
+  studentPhone: string | null
   mode: StudentMode
-  class_schedule: ClassSlot[]
-  google_meet_link: string | null
-  google_drive_link: string | null
-  calendar_event_ids: string[] | null
-  fee_per_hour: number
-  payment_method: PaymentMethod
-  latest_payment: string | null
-  today_homework: string | null
+  classSchedule: ClassSlot[]
+  googleMeetLink: string | null
+  googleDriveLink: string | null
+  calendarEventIds: string[] | null
+  feePerHour: number
+  paymentMethod: PaymentMethod
+  latestPayment: string | null
+  todayHomework: string | null
   notes: string | null
   status: StudentStatus
-  created_at: string
-  updated_at: string
+  createdAt: string
+  updatedAt: string
 }
 
-export type StudentInsert = Omit<Student, 'id' | 'created_at' | 'updated_at' | 'google_meet_link' | 'google_drive_link' | 'calendar_event_ids'>
+export type StudentInsert = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'googleMeetLink' | 'googleDriveLink' | 'calendarEventIds'>
 export type StudentUpdate = Partial<StudentInsert>

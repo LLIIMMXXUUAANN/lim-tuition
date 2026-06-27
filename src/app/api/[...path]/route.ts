@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireTutor } from '@/services/supabase/server'
+import { camelizeKeys } from '@/lib/utils'
 
 const FASTAPI = process.env.FASTAPI_BASE_URL ?? 'http://127.0.0.1:8000'
 const SECRET = process.env.INTERNAL_API_SECRET ?? ''
@@ -39,6 +40,15 @@ async function proxy(req: NextRequest, segments: string[]): Promise<Response> {
   const responseHeaders = new Headers(upstream.headers)
   responseHeaders.delete('content-encoding')
   responseHeaders.delete('content-length')
+
+  const upstreamCt = upstream.headers.get('content-type') ?? ''
+  if (upstreamCt.includes('application/json')) {
+    const camelized = camelizeKeys(await upstream.json())
+    return new Response(JSON.stringify(camelized), {
+      status: upstream.status,
+      headers: responseHeaders,
+    })
+  }
 
   return new Response(upstream.body, {
     status: upstream.status,

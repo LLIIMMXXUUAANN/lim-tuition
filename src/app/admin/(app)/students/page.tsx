@@ -32,7 +32,7 @@ export default async function StudentsPage({ searchParams }: Props) {
   const byDay = DAYS.map((day) => {
     const entries = list
       .flatMap((s) =>
-        s.class_schedule
+        s.classSchedule
           .filter((slot) => slot.day === day)
           .map((slot) => ({ student: s, slot }))
       )
@@ -40,7 +40,7 @@ export default async function StudentsPage({ searchParams }: Props) {
     return { day, entries }
   })
 
-  const unscheduled = list.filter((s) => !s.class_schedule || s.class_schedule.length === 0)
+  const unscheduled = list.filter((s) => !s.classSchedule || s.classSchedule.length === 0)
 
   return (
     <div className="max-w-4xl mx-auto p-6">

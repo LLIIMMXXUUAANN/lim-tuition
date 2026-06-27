@@ -9,6 +9,22 @@ Non-obvious decisions and the reasoning behind them. Code-level detail lives in 
 **Catch-all proxy instead of individual API route files**
 All `/api/*` browser requests are forwarded by a single handler at `src/app/api/[...path]/route.ts` rather than one file per endpoint. The alternative — a separate `route.ts` for every FastAPI endpoint — would require updating two files every time a backend route is added or renamed. The catch-all keeps the Next.js repo thin: the backend is the source of truth for routes, and the proxy just forwards. The only exception is a `PATH_MAP` for one URL mismatch (`generate-payment` → `payment/generate`) that couldn't be resolved on the backend side.
 
+**snake_case / camelCase split — frontend owns the conversion**
+The backend (FastAPI/Python) always speaks pure snake_case. The frontend converts at its two fetch boundaries:
+- `src/lib/fastapi.ts` — applies `camelizeKeys()` to every JSON response for Server Components
+- `src/app/api/[...path]/route.ts` — applies `camelizeKeys()` to every JSON response for client components
+- SSE streams pass through the proxy unchanged; `AgentChat.tsx` applies `camelizeKeys(JSON.parse(data))` manually per event inside its reading loop
+
+When sending to the backend, `decamelizeKeys()` (also in `src/lib/utils.ts`) is applied to the payload object before `JSON.stringify` — at the submission site in `StudentForm`, `PaymentGenerator`, and `TimetableSection`. Both utilities are hand-rolled in `src/lib/utils.ts` and cover the standard case (single-capital runs: `feePerHour → fee_per_hour`). All component code, types, and state use camelCase uniformly.
+
+Where larger teams go further:
+
+| What | Industry upgrade | Why |
+|---|---|---|
+| Hand-rolled `camelizeKeys` / `decamelizeKeys` | Use `humps` or `camelcase-keys` npm package | Handles edge cases like `HTMLParser → htmlParser` vs `h_t_m_l_parser` that the hand-rolled regex gets wrong |
+| Hand-written `Student` type | Code-gen from FastAPI's OpenAPI spec (`openapi-typescript` + `orval`) | Types always in sync with backend schema, zero manual upkeep |
+| Manual SSE parsing | Same — no better alternative for SSE | SSE isn't JSON, so manual per-event handling is correct regardless |
+
 **Two-path API calling (Server Components vs client components)**
 Server Components call the FastAPI backend directly via `fetchFastAPI` (injecting `X-Internal-Secret`), bypassing the catch-all proxy entirely. Client components call `fetch('/api/...')` which goes through the proxy. The reason: Server Components run on the server and can safely hold the internal secret; routing them through the proxy would be a pointless extra hop. Client components have no other choice — the FastAPI backend is not exposed to the browser directly.
 

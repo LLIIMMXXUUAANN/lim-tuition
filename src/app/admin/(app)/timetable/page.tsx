@@ -11,7 +11,7 @@ export default async function TimetablePage() {
     fetchFastAPI('/timetable/buffer-mins'),
   ])
 
-  const students: Pick<Student, 'name' | 'class_schedule'>[] = studentsRes.ok ? await studentsRes.json() : []
+  const students: Pick<Student, 'name' | 'classSchedule'>[] = studentsRes.ok ? await studentsRes.json() : []
   const { rules: initialRules = '' } = rulesRes.ok ? await rulesRes.json() : {}
   const { bufferMins: initialBufferMins = 15 } = bufferRes.ok ? await bufferRes.json() : {}
 

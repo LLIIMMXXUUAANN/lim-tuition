@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { ClassSlot, WeekDay } from '@/lib/types'
-import { formatTime, DAYS, TIME_SLOTS, timeToMins } from '@/lib/utils'
+import { formatTime, DAYS, TIME_SLOTS, timeToMins, decamelizeKeys } from '@/lib/utils'
 import {
   NAVY, SCALE, PNG_W, PNG_H, SCHEDULE_CELL_H,
   DAY_SHORT, fmt12,
@@ -35,10 +35,10 @@ function addMinutes(time: string, mins: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-function buildBookedSet(students: { class_schedule: ClassSlot[] }[]): Set<string> {
+function buildBookedSet(students: { classSchedule: ClassSlot[] }[]): Set<string> {
   const s = new Set<string>()
   for (const student of students)
-    for (const slot of student.class_schedule)
+    for (const slot of student.classSchedule)
       for (const ts of TIME_SLOTS) {
         const tsEnd = addMinutes(ts, 30)
         if (ts < slot.end && tsEnd > slot.start)
@@ -72,7 +72,7 @@ function drawAndDownload(grid: Map<string, SlotType>, bookedSet: Set<string>) {
 }
 
 
-function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[]) {
+function drawSchedule(students: { name: string; classSchedule: ClassSlot[] }[]) {
   const sch_h = scheduleCanvasHeight(students)
   const canvas = document.createElement('canvas')
   canvas.width = PNG_W * SCALE
@@ -84,7 +84,7 @@ function drawSchedule(students: { name: string; class_schedule: ClassSlot[] }[])
   downloadCanvas(canvas, 'weekly_schedule.png')
 }
 
-function WeeklyScheduleView({ students }: { students: { name: string; class_schedule: ClassSlot[] }[] }) {
+function WeeklyScheduleView({ students }: { students: { name: string; classSchedule: ClassSlot[] }[] }) {
   const { startMin, activeSlots } = computeScheduleWindow(students)
   const gridHeight = activeSlots.length * SCHEDULE_CELL_H
   const stripeGradient = `repeating-linear-gradient(to bottom, #f8fafc 0px, #f8fafc ${SCHEDULE_CELL_H}px, #ffffff ${SCHEDULE_CELL_H}px, #ffffff ${SCHEDULE_CELL_H * 2}px)`
@@ -92,10 +92,10 @@ function WeeklyScheduleView({ students }: { students: { name: string; class_sche
   const byDay: Record<string, { name: string; start: string; end: string }[]> = {}
   for (const day of DAYS) byDay[day] = []
   for (const s of students)
-    for (const slot of s.class_schedule)
+    for (const slot of s.classSchedule)
       byDay[slot.day]?.push({ name: s.name, start: slot.start, end: slot.end })
 
-  if (!students.some(s => s.class_schedule.length > 0))
+  if (!students.some(s => s.classSchedule.length > 0))
     return <p className="text-sm text-slate-400 text-center py-8">No classes scheduled yet.</p>
 
   return (
@@ -148,7 +148,7 @@ function WeeklyScheduleView({ students }: { students: { name: string; class_sche
 }
 
 interface Props {
-  students: { name: string; class_schedule: ClassSlot[] }[]
+  students: { name: string; classSchedule: ClassSlot[] }[]
   initialRules?: string
   initialBufferMins?: number
 }
@@ -169,7 +169,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
   const [aiError, setAiError] = useState<string | null>(null)
 
   const bookedSet = useMemo(() => buildBookedSet(students), [students])
-  const bookedSlots = useMemo(() => students.flatMap(s => s.class_schedule), [students])
+  const bookedSlots = useMemo(() => students.flatMap(s => s.classSchedule), [students])
 
   useEffect(() => {
     const stop = () => { isDragging.current = false }
@@ -190,7 +190,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(decamelizeKeys(payload)),
       })
       if (res.ok) {
         setSaveStatus(prev => ({ ...prev, [key]: 'saved' }))
@@ -216,7 +216,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
       const res = await fetch('/api/timetable/generate-slots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rules, studentAvailability, bookedSlots, bufferMins }),
+        body: JSON.stringify(decamelizeKeys({ rules, studentAvailability, bookedSlots, bufferMins })),
       })
       const data = await res.json()
       if (!res.ok) { setAiError(data.error ?? 'Generation failed'); return }
