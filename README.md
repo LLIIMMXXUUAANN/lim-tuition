@@ -15,7 +15,7 @@ Public landing page + private admin dashboard for managing tuition students, cla
 | `claude/google.md` | Google Drive + Calendar integration (frontend side) |
 | `claude/agent.md` | AgentChat UI, SSE handling, `[student_id:NAME:UUID]` token protocol |
 
-For backend documentation see `tuition-api/README.md` and `tuition-api/CLAUDE.md`.
+Backend repo: https://github.com/LLIIMMXXUUAANN/tuition-api — for backend documentation see `README.md` and `CLAUDE.md`.
 
 ## Stack
 
