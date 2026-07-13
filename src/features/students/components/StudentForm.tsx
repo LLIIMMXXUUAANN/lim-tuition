@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -55,6 +55,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
         }
       : emptyForm
   )
+  const isSubmittingRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [googleWarning, setGoogleWarning] = useState('')
@@ -68,6 +69,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
 
   async function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault()
+    if (isSubmittingRef.current) return
+    isSubmittingRef.current = true
     setError('')
     setGoogleWarning('')
     setSaving(true)
@@ -117,6 +120,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
       setSaving(false)
+    } finally {
+      isSubmittingRef.current = false
     }
   }
 
