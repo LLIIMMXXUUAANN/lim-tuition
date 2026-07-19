@@ -20,6 +20,8 @@ async function proxy(req: NextRequest, segments: string[]): Promise<Response> {
   const headers: Record<string, string> = { 'X-Internal-Secret': SECRET }
   const contentType = req.headers.get('content-type')
   if (contentType) headers['Content-Type'] = contentType
+  const idempotencyKey = req.headers.get('idempotency-key')
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
 
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
 

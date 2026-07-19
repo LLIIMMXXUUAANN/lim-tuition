@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import equal from 'fast-deep-equal'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -56,6 +57,8 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
       : emptyForm
   )
   const isSubmittingRef = useRef(false)
+  const idempotencyKeyRef = useRef<string | null>(null)
+  const lastSubmittedPayloadRef = useRef<unknown>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [googleWarning, setGoogleWarning] = useState('')
@@ -102,13 +105,31 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           onSaved?.()
         }
       } else {
+        if (idempotencyKeyRef.current !== null && !equal(lastSubmittedPayloadRef.current, payload)) {
+          // Content changed since the last attempt under this key — this is a
+          // new logical request, not a retry. Rotate before sending so the
+          // backend never sees a stale-key/changed-payload mismatch at all.
+          idempotencyKeyRef.current = null
+        }
+        if (idempotencyKeyRef.current === null) {
+          idempotencyKeyRef.current = crypto.randomUUID()
+        }
+        lastSubmittedPayloadRef.current = payload
         const res = await fetch('/api/students', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKeyRef.current,
+          },
           body: JSON.stringify(payload),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+        // Rotate on success so a later resubmit from this same mounted form
+        // (e.g. editing fields after a googleWarning instead of Cancel) is a
+        // new create, not a replay of this one.
+        idempotencyKeyRef.current = null
+        lastSubmittedPayloadRef.current = null
         if (data.googleWarning) {
           setGoogleWarning(data.googleWarning)
           setSaving(false)

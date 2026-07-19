@@ -68,3 +68,12 @@ After create/update/setup operations, the backend appends `[student_id:NAME:UUID
 
 **`keepMounted` on the Slot Availability tab**
 The timetable's Slot Availability tab uses `keepMounted` on its tab panel so the interactive grid and student availability textarea are not unmounted when the user switches to the Weekly Schedule tab. Without this, every tab switch resets the drag-painted grid state and the availability text the user typed — both of which are expensive to regenerate.
+
+---
+
+## Students
+
+**Idempotency-Key rotation uses a deep-equal comparison, not `JSON.stringify`, and not a form-state-management library**
+`StudentForm.tsx` reuses the same `Idempotency-Key` across a manual retry (correct — the retry should reuse the key), but must rotate to a fresh key if the user edits the form before resubmitting (otherwise the backend correctly rejects the stale-key resubmission with a 422, wasting a round-trip). Detecting "did the payload change since the last attempt" uses `fast-deep-equal` against a stored snapshot of the last-submitted payload, rather than:
+- **`JSON.stringify(a) === JSON.stringify(b)`** — would work here (this payload's key order is stable across calls, no `undefined`/special-type fields), but only because of assumptions specific to this object's construction — it's key-order-sensitive, silently treats `undefined` as absent, and mishandles `Date`/`Map`/`Set`/`NaN` in general. A real equality check removes the need to rely on those assumptions holding.
+- **A form-state-management library (React Hook Form, Formik)** — ships a built-in `isDirty` concept that would solve this same comparison, but adopting one means replacing this component's entire state model (currently a single `useState<StudentInsert>` + a hand-rolled `set()` helper) with the library's field-registration/validation/array-field/submission-handling machinery — a much larger, unrelated rewrite to solve one narrow comparison. Worth reconsidering if this app grows to many forms with complex cross-field validation; not proportionate for one moderately-sized form today.
