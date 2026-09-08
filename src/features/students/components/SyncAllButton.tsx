@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { Button } from '@/shared/ui/button'
+import { HttpError, parseRetryAfterMs } from '@/shared/lib/httpError'
 
 interface Result {
   name: string
@@ -10,51 +11,49 @@ interface Result {
 }
 
 export default function SyncAllButton() {
-  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [results, setResults] = useState<Result[]>([])
-  const [errorMsg, setErrorMsg] = useState('')
-
-  async function handleClick() {
-    setState('loading')
-    setResults([])
-    setErrorMsg('')
-    try {
+  const syncMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/google/sync-all', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed')
-      setResults(data.results ?? [])
-      setState('done')
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
-      setState('error')
-    }
-  }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Failed', res.status, parseRetryAfterMs(res))
+      return (data.results ?? []) as Result[]
+    },
+  })
+
+  const results = syncMutation.data ?? []
+  const errorMsg =
+    syncMutation.error instanceof HttpError
+      ? syncMutation.error.message
+      : syncMutation.error
+        ? 'Unknown error'
+        : ''
 
   const needsReconnect = results.some(r => r.reason?.includes('reconnect'))
   const syncedCount = results.filter(r => r.status === 'synced').length
 
   const label =
-    state === 'idle' ? 'Sync all active students’ Google Calendar events and Drive Meet docs to match the DB schedule.'
-    : state === 'loading' ? 'Syncing Google Calendar and Drive…'
-    : `Done — ${syncedCount} of ${results.length} synced.`
+    syncMutation.isIdle ? 'Sync all active students’ Google Calendar events and Drive Meet docs to match the DB schedule.'
+    : syncMutation.isPending ? 'Syncing Google Calendar and Drive…'
+    : syncMutation.isSuccess ? `Done — ${syncedCount} of ${results.length} synced.`
+    : ''
 
   return (
     <div className="mt-6 rounded-lg border border-slate-200 bg-softBg px-4 py-3">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-slate-600">{label}</p>
-        {state === 'idle' && (
-          <Button variant="outline" size="sm" onClick={handleClick} className="shrink-0">
+        {syncMutation.isIdle && (
+          <Button variant="outline" size="sm" onClick={() => syncMutation.mutate()} className="shrink-0">
             Sync Google
           </Button>
         )}
-        {(state === 'done' || state === 'error') && (
-          <Button variant="outline" size="sm" onClick={() => setState('idle')} className="shrink-0">
+        {(syncMutation.isSuccess || syncMutation.isError) && (
+          <Button variant="outline" size="sm" onClick={() => syncMutation.reset()} className="shrink-0">
             Dismiss
           </Button>
         )}
       </div>
 
-      {state === 'error' && <p className="mt-2 text-xs text-red-600">{errorMsg}</p>}
+      {syncMutation.isError && <p className="mt-2 text-xs text-red-600">{errorMsg}</p>}
 
       {needsReconnect && (
         <p className="mt-2 text-xs text-red-600">
@@ -64,7 +63,7 @@ export default function SyncAllButton() {
         </p>
       )}
 
-      {state === 'done' && results.length > 0 && (
+      {syncMutation.isSuccess && results.length > 0 && (
         <ul className="mt-3 space-y-1 border-t border-navy/15 pt-3">
           {results.map((r) => (
             <li key={r.name} className="flex items-start gap-2 text-xs">

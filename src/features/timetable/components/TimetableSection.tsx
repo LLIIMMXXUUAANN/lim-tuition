@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import type { ClassSlot, WeekDay } from '@/lib/types'
 import { formatTime, DAYS, TIME_SLOTS, timeToMins, decamelizeKeys } from '@/lib/utils'
 import {
@@ -10,6 +11,7 @@ import {
   drawSlotsToCtx, drawScheduleToCtx, downloadCanvas,
 } from '@/shared/lib/timetable-canvas'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/ui/tabs'
+import { HttpError, parseRetryAfterMs } from '@/shared/lib/httpError'
 
 type SlotType = 'preferred' | 'normal'
 type CellKey = 'booked' | 'preferred' | 'normal' | 'empty'
@@ -157,16 +159,11 @@ export default function TimetableSection({ students, initialRules = '', initialB
   const [grid, setGrid] = useState<Map<string, SlotType>>(new Map())
   const isDragging = useRef(false)
   const paintType = useRef<SlotType | null>(null)
-  const saveTimers = useRef<Record<'rules' | 'buffer', ReturnType<typeof setTimeout> | null>>({ rules: null, buffer: null })
+  const saveTimersRef = useRef<Record<'rules' | 'buffer', ReturnType<typeof setTimeout> | null>>({ rules: null, buffer: null })
 
   const [rules, setRules] = useState(initialRules)
   const [bufferMins, setBufferMins] = useState(initialBufferMins)
   const [studentAvailability, setStudentAvailability] = useState('')
-  const [isSaving, setIsSaving] = useState<Record<'rules' | 'buffer', boolean>>({ rules: false, buffer: false })
-  const [saveStatus, setSaveStatus] = useState<Record<'rules' | 'buffer', SaveStatus>>({ rules: 'idle', buffer: 'idle' })
-  const [saveErrors, setSaveErrors] = useState<Record<'rules' | 'buffer', string>>({ rules: '', buffer: '' })
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [aiError, setAiError] = useState<string | null>(null)
 
   const bookedSet = useMemo(() => buildBookedSet(students), [students])
   const bookedSlots = useMemo(() => students.flatMap(s => s.classSchedule), [students])
@@ -174,7 +171,7 @@ export default function TimetableSection({ students, initialRules = '', initialB
   useEffect(() => {
     const stop = () => { isDragging.current = false }
     window.addEventListener('mouseup', stop)
-    const timers = saveTimers.current
+    const timers = saveTimersRef.current
     return () => {
       window.removeEventListener('mouseup', stop)
       if (timers.rules) clearTimeout(timers.rules)
@@ -182,56 +179,67 @@ export default function TimetableSection({ students, initialRules = '', initialB
     }
   }, [])
 
-  async function saveSetting(key: 'rules' | 'buffer', endpoint: string, payload: object) {
-    setIsSaving(prev => ({ ...prev, [key]: true }))
-    setSaveStatus(prev => ({ ...prev, [key]: 'idle' }))
-    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]!)
-    try {
-      const res = await fetch(endpoint, {
+  const rulesMutation = useMutation({
+    mutationFn: async (rulesValue: string) => {
+      const res = await fetch('/api/timetable/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(decamelizeKeys(payload)),
+        body: JSON.stringify(decamelizeKeys({ rules: rulesValue })),
       })
-      if (res.ok) {
-        setSaveStatus(prev => ({ ...prev, [key]: 'saved' }))
-        setSaveErrors(prev => ({ ...prev, [key]: '' }))
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setSaveStatus(prev => ({ ...prev, [key]: 'error' }))
-        setSaveErrors(prev => ({ ...prev, [key]: data.error ?? 'Save failed' }))
-      }
-    } catch {
-      setSaveStatus(prev => ({ ...prev, [key]: 'error' }))
-      setSaveErrors(prev => ({ ...prev, [key]: 'Network error' }))
-    } finally {
-      setIsSaving(prev => ({ ...prev, [key]: false }))
-      saveTimers.current[key] = setTimeout(() => setSaveStatus(prev => ({ ...prev, [key]: 'idle' })), 2500)
-    }
-  }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Save failed', res.status, parseRetryAfterMs(res))
+    },
+    onSettled: () => {
+      if (saveTimersRef.current.rules) clearTimeout(saveTimersRef.current.rules)
+      saveTimersRef.current.rules = setTimeout(() => rulesMutation.reset(), 2500)
+    },
+  })
 
-  async function generateSlots() {
-    setIsGenerating(true)
-    setAiError(null)
-    try {
+  const bufferMutation = useMutation({
+    mutationFn: async (bufferValue: number) => {
+      const res = await fetch('/api/timetable/buffer-mins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(decamelizeKeys({ bufferMins: bufferValue })),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Save failed', res.status, parseRetryAfterMs(res))
+    },
+    onSettled: () => {
+      if (saveTimersRef.current.buffer) clearTimeout(saveTimersRef.current.buffer)
+      saveTimersRef.current.buffer = setTimeout(() => bufferMutation.reset(), 2500)
+    },
+  })
+
+  const generateSlotsMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/timetable/generate-slots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(decamelizeKeys({ rules, studentAvailability, bookedSlots, bufferMins })),
       })
-      const data = await res.json()
-      if (!res.ok) { setAiError(data.error ?? 'Generation failed'); return }
-
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Generation failed', res.status, parseRetryAfterMs(res))
+      return data.slots as { day: string; time: string; state: string }[]
+    },
+    onSuccess: (slots) => {
       const newGrid = new Map<string, SlotType>()
-      for (const slot of data.slots as { day: string; time: string; state: string }[]) {
+      for (const slot of slots) {
         if (slot.state === 'preferred') newGrid.set(cellKey(slot.day, slot.time), 'preferred')
         else if (slot.state === 'normal') newGrid.set(cellKey(slot.day, slot.time), 'normal')
       }
       setGrid(newGrid)
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Unexpected error')
-    } finally {
-      setIsGenerating(false)
-    }
+    },
+  })
+
+  function saveStatusOf(mutation: { isSuccess: boolean; isError: boolean }): SaveStatus {
+    if (mutation.isSuccess) return 'saved'
+    if (mutation.isError) return 'error'
+    return 'idle'
+  }
+
+  function errorMessageOf(error: unknown): string {
+    return error instanceof HttpError ? error.message : 'Network error'
   }
 
   function applyPaint(day: WeekDay, ts: string, paint: SlotType | null) {
@@ -295,14 +303,14 @@ export default function TimetableSection({ students, initialRules = '', initialB
               />
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => saveSetting('rules', '/api/timetable/rules', { rules })}
-                  disabled={isSaving.rules}
+                  onClick={() => rulesMutation.mutate(rules)}
+                  disabled={rulesMutation.isPending}
                   className="px-3 py-1.5 text-xs bg-navy/8 hover:bg-navy/15 text-navy rounded-md transition-colors disabled:opacity-50"
                 >
-                  {saveLabel(isSaving.rules, saveStatus.rules, 'Save Rules')}
+                  {saveLabel(rulesMutation.isPending, saveStatusOf(rulesMutation), 'Save Rules')}
                 </button>
-                {saveStatus.rules === 'error' && saveErrors.rules && (
-                  <span className="text-xs text-red-500">{saveErrors.rules}</span>
+                {rulesMutation.isError && (
+                  <span className="text-xs text-red-500">{errorMessageOf(rulesMutation.error)}</span>
                 )}
                 <div className="flex items-center gap-1.5 ml-auto">
                   <label className="text-xs text-slate-500 whitespace-nowrap">Buffer between classes</label>
@@ -316,14 +324,14 @@ export default function TimetableSection({ students, initialRules = '', initialB
                   />
                   <span className="text-xs text-slate-500">mins</span>
                   <button
-                    onClick={() => saveSetting('buffer', '/api/timetable/buffer-mins', { bufferMins })}
-                    disabled={isSaving.buffer}
+                    onClick={() => bufferMutation.mutate(bufferMins)}
+                    disabled={bufferMutation.isPending}
                     className="px-3 py-1.5 text-xs bg-navy/8 hover:bg-navy/15 text-navy rounded-md transition-colors disabled:opacity-50"
                   >
-                    {saveLabel(isSaving.buffer, saveStatus.buffer, 'Save')}
+                    {saveLabel(bufferMutation.isPending, saveStatusOf(bufferMutation), 'Save')}
                   </button>
-                  {saveStatus.buffer === 'error' && saveErrors.buffer && (
-                    <span className="text-xs text-red-500">{saveErrors.buffer}</span>
+                  {bufferMutation.isError && (
+                    <span className="text-xs text-red-500">{errorMessageOf(bufferMutation.error)}</span>
                   )}
                 </div>
               </div>
@@ -339,13 +347,15 @@ export default function TimetableSection({ students, initialRules = '', initialB
               />
             </div>
           </div>
-          {aiError && <p className="text-xs text-red-500">{aiError}</p>}
+          {generateSlotsMutation.isError && (
+            <p className="text-xs text-red-500">{errorMessageOf(generateSlotsMutation.error)}</p>
+          )}
           <button
-            onClick={generateSlots}
-            disabled={isGenerating || !rules.trim()}
+            onClick={() => generateSlotsMutation.mutate()}
+            disabled={generateSlotsMutation.isPending || !rules.trim()}
             className="px-4 py-2 text-sm bg-navy text-white rounded-md hover:bg-navy/90 transition-colors disabled:opacity-50"
           >
-            {isGenerating ? 'Generating…' : 'Generate Slots'}
+            {generateSlotsMutation.isPending ? 'Generating…' : 'Generate Slots'}
           </button>
 
           <div className="border-t border-slate-100 pt-4 flex items-center justify-between flex-wrap gap-3">

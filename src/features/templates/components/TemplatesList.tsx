@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { useClipboard } from '@/hooks/useClipboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Button } from '@/shared/ui/button'
@@ -9,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/ui/tabs'
 import PaymentGenerator from './PaymentGenerator'
 import type { Student } from '@/lib/types'
 import { TEMPLATE_META } from '@/shared/lib/templates'
+import { HttpError, parseRetryAfterMs } from '@/shared/lib/httpError'
 
 const TEMPLATE_ROWS: Record<string, number> = {
   payment: 3,
@@ -34,25 +36,31 @@ function TemplateCard({
   const [saved, setSaved] = useState(initialContent)
   const [content, setContent] = useState(initialContent)
   const [editing, setEditing] = useState(false)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const { copied, copy } = useClipboard()
 
-  async function handleSave() {
-    setSaveState('saving')
-    const res = await fetch(`/api/templates/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    })
-    if (!res.ok) {
-      setSaveState('error')
-      setTimeout(() => setSaveState('idle'), 3000)
-      return
-    }
-    setSaved(content)
-    setSaveState('saved')
-    setEditing(false)
-    setTimeout(() => setSaveState('idle'), 2000)
+  const saveMutation = useMutation({
+    mutationFn: async (newContent: string) => {
+      const res = await fetch(`/api/templates/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newContent }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Failed', res.status, parseRetryAfterMs(res))
+      return newContent
+    },
+    onSuccess: (newContent) => {
+      setSaved(newContent)
+      setEditing(false)
+      setTimeout(() => saveMutation.reset(), 2000)
+    },
+    onError: () => {
+      setTimeout(() => saveMutation.reset(), 3000)
+    },
+  })
+
+  function handleSave() {
+    saveMutation.mutate(content)
   }
 
   function handleCancel() {
@@ -73,13 +81,13 @@ function TemplateCard({
             <p className="text-sm text-slate-500 mt-0.5">{description}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {saveState === 'saving' && <span className="text-xs text-slate-400">Saving…</span>}
-            {saveState === 'saved' && <span className="text-xs text-green-600">Saved</span>}
-            {saveState === 'error' && <span className="text-xs text-red-500">Save failed</span>}
+            {saveMutation.isPending && <span className="text-xs text-slate-400">Saving…</span>}
+            {saveMutation.isSuccess && <span className="text-xs text-green-600">Saved</span>}
+            {saveMutation.isError && <span className="text-xs text-red-500">Save failed</span>}
             {editing ? (
               <>
                 <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
-                <Button size="sm" onClick={handleSave} disabled={saveState === 'saving'}>Save</Button>
+                <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>Save</Button>
               </>
             ) : (
               <>

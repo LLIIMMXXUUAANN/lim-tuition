@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -76,13 +77,12 @@ function downloadSlotsPng(slotData: { day: string; time: string; state: string }
 
 export default function AgentChat() {
   const renderNow = new Date()
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
-  const [conversationId, setConversationId] = useState<string | null>(null)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const latestUserMsgId = useMemo(() =>
@@ -92,20 +92,23 @@ export default function AgentChat() {
     [...messages].reverse().find(m => m.role === 'agent')?.id ?? null,
   [messages])
 
+  const conversationQuery = useQuery({
+    queryKey: ['agent', 'conversation', 'current'],
+    queryFn: async () => {
+      const res = await fetch('/api/agent/conversations/current')
+      return res.json() as Promise<{ id: string; messages: ChatMessage[] }>
+    },
+    staleTime: Infinity, // driven by explicit invalidation after a turn completes, not time-based staleness
+  })
+  const conversationId = conversationQuery.data?.id ?? null
+  // hydrated == "the initial load attempt has settled, success or failure" —
+  // matches the original try/catch/finally-equivalent (chat stays usable even
+  // if the load failed, per the prior "non-fatal — chat stays empty" comment).
+  const hydrated = conversationQuery.isFetched
+
   useEffect(() => {
-    const init = async () => {
-      try {
-        const res = await fetch('/api/agent/conversations/current')
-        const { id, messages: loaded } = await res.json() as { id: string; messages: ChatMessage[] }
-        setConversationId(id)
-        setMessages(loaded)
-      } catch {
-        // non-fatal — chat stays empty
-      }
-      setHydrated(true)
-    }
-    void init()
-  }, [])
+    if (conversationQuery.data) setMessages(conversationQuery.data.messages)
+  }, [conversationQuery.data])
 
   useEffect(() => {
     setSpeechSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
@@ -134,13 +137,10 @@ export default function AgentChat() {
       inputRef.current?.focus()
       if (shouldReloadRef.current && conversationId) {
         shouldReloadRef.current = false
-        void fetch(`/api/agent/conversations/${conversationId}/messages`)
-          .then(r => r.json() as Promise<{ messages: ChatMessage[] }>)
-          .then(({ messages: loaded }) => setMessages(loaded))
-          .catch(() => {})
+        void queryClient.invalidateQueries({ queryKey: ['agent', 'conversation', 'current'] })
       }
     }
-  }, [loading, conversationId])
+  }, [loading, conversationId, queryClient])
 
   useEffect(() => () => { recognitionRef.current?.stop() }, [])
   useEffect(() => () => { stopTypewriter() }, [])
@@ -388,12 +388,30 @@ export default function AgentChat() {
     }
   }
 
+  const clearMutation = useMutation({
+    mutationFn: async (convId: string) => {
+      await fetch(`/api/agent/conversations/${convId}/clear`, { method: 'POST' })
+    },
+    onMutate: () => {
+      setMessages([])
+      setEditingMsgId(null)
+      setEditDraft('')
+    },
+  })
+
+  const stopMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      await fetch('/api/agent/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId }),
+      })
+    },
+  })
+
   function clearChat() {
     if (!conversationId) return
-    setMessages([])
-    setEditingMsgId(null)
-    setEditDraft('')
-    fetch(`/api/agent/conversations/${conversationId}/clear`, { method: 'POST' }).catch(() => {})
+    clearMutation.mutate(conversationId)
   }
 
   function stop() {
@@ -404,11 +422,7 @@ export default function AgentChat() {
     if (receivedChunkRef.current) {
       abortControllerRef.current?.abort()
     } else {
-      fetch('/api/agent/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestIdRef.current }),
-      }).catch(() => {})
+      stopMutation.mutate(requestIdRef.current)
     }
   }
 

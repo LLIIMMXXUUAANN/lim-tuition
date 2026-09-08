@@ -33,6 +33,26 @@ Next.js 16 renamed the middleware file from `middleware.ts` to `proxy.ts` and th
 
 ---
 
+## Data fetching
+
+**React Query (TanStack Query) scoped to client-side mutations + `AgentChat`'s two reads — not a full rewrite of Server Component data loading**
+`StudentForm`, `TemplatesList`'s `TemplateCard`, `PaymentGenerator`, `TimetableSection`, `SyncAllButton`, and `AgentChat`'s two plain GET calls all use `useQuery`/`useMutation`. The students list/detail, templates, and timetable pages — which fetch their initial data via Server Components calling `fetchFastAPI` — were deliberately **not** converted to client-side `useQuery`. Two reasons, not one:
+
+1. **TanStack Query's own official Next.js App Router guidance recommends this split.** Their documented pattern is: fetch on the server, hydrate that data into the client query cache, and let `useQuery` own *subsequent* refetching/invalidation from there — not replace the initial server fetch with a client-side one.
+2. **Converting a Server Component to client-side fetching is treated as an anti-pattern in the Next.js App Router world**, not a legitimate alternative — it throws away the server-rendering benefits (no client-side loading spinner needed for first paint, less JS shipped) for no corresponding gain.
+
+**Consequence: `router.refresh()` stays exactly where it was on `StudentForm`'s three mutations.** Nothing in a React Query cache represents the students list/detail pages' data (they're not loaded via `useQuery`), so there's nothing for `invalidateQueries` to invalidate there — `router.refresh()` remains what actually causes those Server-Component-rendered pages to re-fetch fresh data from FastAPI after a create/update/delete.
+
+**Retry policy lives on the `QueryClient`'s default mutation options (`src/shared/components/QueryProvider.tsx`), not a per-call utility.** `shouldRetryMutation`/`mutationRetryDelay` (`src/shared/lib/httpError.ts`) implement exponential backoff + full jitter (AWS's documented algorithm) for network errors and `429`/`502`/`503`/`504` — never `409`/`422` (the idempotency-key conflict/mismatch codes from `StudentForm`'s create path; retrying those within this short budget can't resolve anything, and the existing manual-retry UI already handles them correctly). Every `mutationFn` in the app throws `HttpError` (carrying the HTTP status) rather than a bare `Error`, so this one shared policy applies uniformly without repeating retry config at each `useMutation` call site. This supersedes an earlier, separate `fetchWithRetry.ts` utility design that was considered but never built — `useMutation`'s built-in retry replaced the need for a bespoke fetch wrapper.
+
+**`500` is deliberately excluded from the retryable set — matches the general/conservative industry default, not our own backend's error shape.** An earlier version of this policy included `500` (reasoned from this specific backend's broad `except Exception: raise HTTPException(500)` handler, where many `500`s really are transient DB/Supabase blips). That's a defensible reading of this codebase, but it diverges from the more conservative default most API-client guidance recommends: a bare `500` can also mean a real, permanent application bug, and blindly retrying a broken request just wastes time. Reverted to only auto-retrying `502`/`503`/`504` — the statuses that are unambiguously infrastructure-layer, not application-layer.
+
+**`Retry-After` (RFC 7231) is respected for `429`, not just our own computed backoff.** `parseRetryAfterMs()` (`src/shared/lib/httpError.ts`) reads the header (numeric seconds or an HTTP-date) at the point each `mutationFn` throws `HttpError`, since React Query's `retry`/`retryDelay` callbacks only receive the thrown error, not the original `Response` — the value is carried on `HttpError.retryAfterMs` and preferred over the computed backoff in `mutationRetryDelay` when present. Matches what AWS's SDK and Stripe's client libraries do; previously this app computed its own backoff unconditionally, ignoring the header entirely.
+
+**`AgentChat`'s SSE chat stream (`POST /api/agent/chat`) is deliberately not migrated.** React Query's `useQuery`/`useMutation` are both built around a single request → single resolved value lifecycle; neither has a primitive for one HTTP connection emitting many incremental, differently-typed events over its lifetime (`step`/`chunk`/`done`/`stopped`/`error`/`ui_action`). Forcing it in would mean hiding the same hand-rolled `fetch` + `ReadableStream` reader loop inside a `mutationFn` for no benefit — the same reason Vercel's own AI SDK ships `useChat` as bespoke code rather than a `useQuery` wrapper. Only the two plain GET calls around the stream (initial conversation load, reload-after-turn) and the two simple POSTs (clear, stop) were migrated.
+
+---
+
 ## UI & Components
 
 **shadcn Select uses Base UI, not Radix**

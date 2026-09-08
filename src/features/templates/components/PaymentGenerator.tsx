@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { useClipboard } from '@/hooks/useClipboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Button } from '@/shared/ui/button'
@@ -13,7 +14,16 @@ import {
   SelectTrigger,
 } from '@/shared/ui/select'
 import { decamelizeKeys } from '@/lib/utils'
+import { HttpError, parseRetryAfterMs } from '@/shared/lib/httpError'
 import type { Student, ClassSlot } from '@/lib/types'
+
+interface GeneratePaymentVars {
+  studentId: string
+  month: number
+  year: number
+  templateType: 1 | 2
+  carryover?: number
+}
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -39,55 +49,46 @@ export default function PaymentGenerator({ students }: Props) {
   const [templateType, setTemplateType] = useState<'1' | '2'>('1')
   const [carryover, setCarryover]       = useState('1')
 
-  const [status, setStatus]     = useState<'idle' | 'loading' | 'error'>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [message, setMessage]   = useState('')
   const { copied, copy } = useClipboard()
 
-  async function handleGenerate() {
+  const generateMutation = useMutation({
+    mutationFn: async (vars: GeneratePaymentVars) => {
+      const res = await fetch('/api/payment/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(decamelizeKeys(vars)),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Unknown error', res.status, parseRetryAfterMs(res))
+      return data.message as string
+    },
+  })
+
+  function handleGenerate() {
     if (!studentId) return
     const parsedYear = parseInt(year, 10)
     if (!parsedYear || parsedYear < 2020 || parsedYear > 2100) return
 
-    setStatus('loading')
-    setMessage('')
-    setErrorMsg('')
-
-    try {
-      const res = await fetch('/api/payment/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(decamelizeKeys({
-          studentId,
-          month: parseInt(month, 10),
-          year: parsedYear,
-          templateType: parseInt(templateType, 10) as 1 | 2,
-          ...(templateType === '2' ? { carryover: parseInt(carryover, 10) || 0 } : {}),
-        })),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setErrorMsg(data.error ?? 'Unknown error')
-        setStatus('error')
-        return
-      }
-
-      setMessage(data.message)
-      setStatus('idle')
-    } catch {
-      setErrorMsg('Network error — could not reach the server.')
-      setStatus('error')
-    }
+    generateMutation.mutate({
+      studentId,
+      month: parseInt(month, 10),
+      year: parsedYear,
+      templateType: parseInt(templateType, 10) as 1 | 2,
+      ...(templateType === '2' ? { carryover: parseInt(carryover, 10) || 0 } : {}),
+    })
   }
 
   function handleCopy() {
-    if (!message) return
-    copy(message)
+    if (!generateMutation.data) return
+    copy(generateMutation.data)
   }
 
   const isValid = !!studentId && !!month && !!year
+  const errorMsg = generateMutation.error
+    ? generateMutation.error instanceof HttpError
+      ? generateMutation.error.message
+      : 'Network error — could not reach the server.'
+    : ''
 
   return (
     <Card>
@@ -184,20 +185,20 @@ export default function PaymentGenerator({ students }: Props) {
 
         <Button
           onClick={handleGenerate}
-          disabled={!isValid || status === 'loading'}
+          disabled={!isValid || generateMutation.isPending}
           className="w-full"
         >
-          {status === 'loading' ? 'Generating…' : 'Generate'}
+          {generateMutation.isPending ? 'Generating…' : 'Generate'}
         </Button>
 
-        {status === 'error' && (
+        {generateMutation.isError && (
           <p className="text-sm text-red-500">{errorMsg}</p>
         )}
 
-        {message && (
+        {generateMutation.data && (
           <div className="space-y-2">
             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-softBg rounded-lg p-3 border border-navy/10">
-              {message}
+              {generateMutation.data}
             </p>
             <Button
               size="sm"

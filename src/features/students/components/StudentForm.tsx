@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import equal from 'fast-deep-equal'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/shared/ui/button'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import ClassScheduleEditor from './ClassScheduleEditor'
 import { ExternalLink } from '@/shared/components/student-fields'
 import { decamelizeKeys } from '@/lib/utils'
+import { HttpError, parseRetryAfterMs } from '@/shared/lib/httpError'
 import type { Student, StudentInsert, StudentMode, PaymentMethod, StudentStatus } from '@/lib/types'
 
 interface StudentFormProps {
@@ -59,16 +61,88 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
   const isSubmittingRef = useRef(false)
   const idempotencyKeyRef = useRef<string | null>(null)
   const lastSubmittedPayloadRef = useRef<unknown>(null)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [googleWarning, setGoogleWarning] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [deleteGoogleError, setDeleteGoogleError] = useState('')
 
   function set<K extends keyof StudentInsert>(key: K, value: StudentInsert[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+
+  function navigateAfterDelete() {
+    router.push('/admin/students')
+    router.refresh()
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: unknown) => {
+      const res = await fetch(`/api/students/${student!.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Failed to save', res.status, parseRetryAfterMs(res))
+      return data
+    },
+    onSuccess: (data) => {
+      router.refresh()
+      if (data.googleWarning) setGoogleWarning(data.googleWarning)
+      else onSaved?.()
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : 'Failed to save. Try again.'),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: unknown) => {
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKeyRef.current!,
+        },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'Failed to save', res.status, parseRetryAfterMs(res))
+      return data
+    },
+    onSuccess: (data) => {
+      // Rotate on success so a later resubmit from this same mounted form
+      // (e.g. editing fields after a googleWarning instead of Cancel) is a
+      // new create, not a replay of this one.
+      idempotencyKeyRef.current = null
+      lastSubmittedPayloadRef.current = null
+      if (data.googleWarning) {
+        setGoogleWarning(data.googleWarning)
+      } else {
+        router.push('/admin/students')
+        router.refresh()
+      }
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : 'Failed to save. Try again.'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/students/${student!.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new HttpError(data.error ?? 'unknown error', res.status, parseRetryAfterMs(res))
+      return data
+    },
+    onSuccess: (data) => {
+      const googleError = [data.driveError, data.calendarError].filter(Boolean).join(' | ')
+      if (googleError) setDeleteGoogleError(googleError)
+      else navigateAfterDelete()
+    },
+    onError: (err) => {
+      setError(`Failed to delete student: ${err instanceof Error ? err.message : 'unknown error'}`)
+      setShowDeleteDialog(false)
+    },
+  })
+
+  const saving = updateMutation.isPending || createMutation.isPending
 
   async function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault()
@@ -76,7 +150,6 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
     isSubmittingRef.current = true
     setError('')
     setGoogleWarning('')
-    setSaving(true)
     const payload = decamelizeKeys({
       ...form,
       accessEmails: (form.accessEmails ?? []).filter(e => e.trim() !== ''),
@@ -90,20 +163,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
 
     try {
       if (student) {
-        const res = await fetch(`/api/students/${student.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error ?? 'Failed to save')
-        router.refresh()
-        if (data.googleWarning) {
-          setGoogleWarning(data.googleWarning)
-          setSaving(false)
-        } else {
-          onSaved?.()
-        }
+        await updateMutation.mutateAsync(payload)
       } else {
         if (idempotencyKeyRef.current !== null && !equal(lastSubmittedPayloadRef.current, payload)) {
           // Content changed since the last attempt under this key — this is a
@@ -115,68 +175,19 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
           idempotencyKeyRef.current = crypto.randomUUID()
         }
         lastSubmittedPayloadRef.current = payload
-        const res = await fetch('/api/students', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKeyRef.current,
-          },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error ?? 'Failed to save')
-        // Rotate on success so a later resubmit from this same mounted form
-        // (e.g. editing fields after a googleWarning instead of Cancel) is a
-        // new create, not a replay of this one.
-        idempotencyKeyRef.current = null
-        lastSubmittedPayloadRef.current = null
-        if (data.googleWarning) {
-          setGoogleWarning(data.googleWarning)
-          setSaving(false)
-        } else {
-          router.push('/admin/students')
-          router.refresh()
-        }
+        await createMutation.mutateAsync(payload)
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save. Try again.')
-      setSaving(false)
+    } catch {
+      // error state already set by the mutation's onError above
     } finally {
       isSubmittingRef.current = false
     }
   }
 
-  function navigateAfterDelete() {
-    router.push('/admin/students')
-    router.refresh()
-  }
-
-  async function handleDelete() {
-    if (!student) return
-    setDeleting(true)
+  function handleDelete() {
     setError('')
     setDeleteGoogleError('')
-
-    try {
-      const delRes = await fetch(`/api/students/${student.id}`, { method: 'DELETE' })
-      const data = await delRes.json().catch(() => ({}))
-
-      if (!delRes.ok) {
-        setError(`Failed to delete student: ${data.error ?? 'unknown error'}`)
-        setShowDeleteDialog(false)
-        return
-      }
-
-      const googleError = [data.driveError, data.calendarError].filter(Boolean).join(' | ')
-      if (googleError) {
-        setDeleteGoogleError(googleError)
-        return
-      }
-
-      navigateAfterDelete()
-    } finally {
-      setDeleting(false)
-    }
+    deleteMutation.mutate()
   }
 
   return (
@@ -366,7 +377,7 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
                   type="button"
                   variant="outline"
                   onClick={() => setShowDeleteDialog(false)}
-                  disabled={deleting}
+                  disabled={deleteMutation.isPending}
                 >
                   Cancel
                 </Button>
@@ -374,9 +385,9 @@ export default function StudentForm({ student, onSaved }: StudentFormProps) {
                   type="button"
                   variant="destructive"
                   onClick={handleDelete}
-                  disabled={deleting}
+                  disabled={deleteMutation.isPending}
                 >
-                  {deleting ? 'Deleting...' : 'Delete Student'}
+                  {deleteMutation.isPending ? 'Deleting...' : 'Delete Student'}
                 </Button>
               </div>
             </>
