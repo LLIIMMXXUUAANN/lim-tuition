@@ -31,7 +31,7 @@ export default function Hero() {
           <div className="inline-flex items-center gap-2 bg-black/50 border border-slate-600 rounded-full px-3 py-1 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-accentGold flex-shrink-0" />
             <span className="text-accentGold text-[10px] font-semibold uppercase tracking-widest">
-              1-to-1 Online Programming Lessons
+              1-to-1 Online & Physical Programming Lessons
             </span>
           </div>
 
@@ -68,7 +68,7 @@ export default function Hero() {
             <div className="flex flex-col gap-2.5 text-sm text-slate-200">
               <div className="flex items-center gap-2.5">
                 <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
-                <span>1-to-1 online lessons designed around your pace</span>
+                <span>1-to-1 online & physical lessons designed around your pace</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
