@@ -31,7 +31,6 @@ export default function StudentLevelsLanguages() {
               <li>Primary and secondary school students</li>
               <li>SPM, IGCSE, O-Level, STPM, and foundation students</li>
               <li>Undergraduate and diploma degree students</li>
-              <li>Working adults or beginners switching to tech</li>
               <li>Overseas learners seeking structured guidance</li>
             </ul>
             <p className="text-sm md:text-base text-slate-700 mt-4">

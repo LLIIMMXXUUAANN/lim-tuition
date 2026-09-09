@@ -4,10 +4,9 @@ export default function About() {
       <div className="max-w-3xl mx-auto px-4">
         <h2 className="text-2xl md:text-3xl font-semibold mb-6 text-center">About Me</h2>
         <p className="text-base md:text-lg leading-relaxed text-slate-700 text-left">
-          I am <span className="text-accentGold font-semibold">Lim</span>, a Master&apos;s graduate in
-          Computer Science specializing in Artificial Intelligence. I have taught students from
-          primary school to university, working adults transitioning into tech, and overseas
-          learners who need structured programming support.
+          I am <span className="text-accentGold font-semibold">Lim</span>, an AI Engineer at a
+          multinational company. I have taught students from primary school to university and
+          overseas learners who need structured programming support.
         </p>
         <p className="text-base md:text-lg leading-relaxed text-slate-700 mt-5 text-left">
           My teaching emphasises clarity, logic, and real problem-solving. I break down complex

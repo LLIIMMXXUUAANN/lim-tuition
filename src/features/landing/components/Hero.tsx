@@ -59,7 +59,7 @@ export default function Hero() {
                 ))}
               </div>
               <span className="text-slate-300 text-xs">
-                Trusted by 25+ students with consistent 5-star reviews.
+                Trusted by 30+ students with consistent 5-star reviews.
               </span>
             </div>
 
@@ -76,7 +76,7 @@ export default function Hero() {
               </div>
               <div className="flex items-center gap-2.5">
                 <CheckCircleIcon className="h-5 w-5 text-accentGold flex-shrink-0" />
-                <span>Suitable for school, university, and adult learners</span>
+                <span>Suitable for school and university students</span>
               </div>
             </div>
           </div>
